@@ -19,11 +19,12 @@ public class PasswordManagementTests
     private readonly Mock<IEmailService> _emailService = new();
     private readonly Mock<IPasswordResetTokenRepository> _resetTokenRepo = new();
     private readonly Mock<IPasswordHistoryRepository> _historyRepo = new();
+    private readonly Mock<IFieldEncryptionService> _fieldEncryption = new();
 
     private AuthService CreateService() => new(
         _userRepo.Object, _refreshRepo.Object, _loginAttemptRepo.Object,
         _passwordHasher.Object, _jwtService.Object, _uow.Object,
-        _auditLog.Object, _emailService.Object);
+        _auditLog.Object, _emailService.Object, _fieldEncryption.Object);
 
     // ------------------------------------------------------------------
     // ForgotPassword
@@ -38,8 +39,8 @@ public class PasswordManagementTests
         var result = await service.ForgotPasswordAsync("nobody@test.com", "https://app.test", _resetTokenRepo.Object);
 
         result.IsSuccess.Should().BeTrue();
-        // Ambiguous message — does NOT reveal whether email exists
-        result.Message.Should().Contain("If email exists");
+        // Both branches return the same message to prevent user enumeration
+        result.Message.Should().Be("If this email is registered, a reset link has been sent.");
         _emailService.Verify(e => e.SendPasswordResetAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 
@@ -57,6 +58,8 @@ public class PasswordManagementTests
         var result = await service.ForgotPasswordAsync("user@test.com", "https://app.test", _resetTokenRepo.Object);
 
         result.IsSuccess.Should().BeTrue();
+        // Known-email path returns the SAME message as unknown-email — prevents user enumeration
+        result.Message.Should().Be("If this email is registered, a reset link has been sent.");
         _resetTokenRepo.Verify(r => r.InvalidateAllByUserIdAsync(user.Id), Times.Once);
         _resetTokenRepo.Verify(r => r.AddAsync(It.IsAny<PasswordResetToken>()), Times.Once);
         _emailService.Verify(e => e.SendPasswordResetAsync(user.Email, It.IsAny<string>()), Times.Once);

@@ -17,10 +17,11 @@ public class AuthService(
     IJwtService jwtService,
     IUnitOfWork unitOfWork,
     IAuditLogService auditLogService,
-    IEmailService emailService)
+    IEmailService emailService,
+    IFieldEncryptionService fieldEncryption)
 {
     private static readonly Regex PasswordPolicy =
-        new(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*]).{8,}$", RegexOptions.Compiled);
+        new(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z\d]).{8,}$", RegexOptions.Compiled);
 
     public async Task<ResponseData<LoginResponse>> LoginAsync(
         LoginRequest request, string ipAddress, string userAgent)
@@ -90,7 +91,7 @@ public class AuthService(
         if (user.MfaSettings is null || !user.MfaSettings.IsEnrolled)
             return ResponseData<LoginResponse>.Failure("MFA not configured.", 400);
 
-        var secret = user.MfaSettings.TotpSecretEncrypted!;
+        var secret = fieldEncryption.Decrypt(user.MfaSettings.TotpSecretEncrypted!);
         if (!totpService.Verify(secret, request.Code))
             return ResponseData<LoginResponse>.Failure("Invalid TOTP code.", 401);
 
@@ -165,7 +166,7 @@ public class AuthService(
     {
         var user = await userRepository.GetByEmailAsync(email);
         if (user is null)
-            return ResponseData<bool>.Success(true, "If email exists, reset link has been sent.");
+            return ResponseData<bool>.Success(true, "If this email is registered, a reset link has been sent.");
 
         await resetTokenRepo.InvalidateAllByUserIdAsync(user.Id);
 
@@ -184,7 +185,7 @@ public class AuthService(
         var resetLink = $"{baseUrl}/reset-password?token={Uri.EscapeDataString(rawToken)}";
         await emailService.SendPasswordResetAsync(user.Email, resetLink);
 
-        return ResponseData<bool>.Success(true, "Password reset email sent.");
+        return ResponseData<bool>.Success(true, "If this email is registered, a reset link has been sent.");
     }
 
     public async Task<ResponseData<bool>> ResetPasswordAsync(ResetPasswordRequest request,

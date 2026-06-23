@@ -18,11 +18,13 @@ public class AuthServiceTests
     private readonly Mock<IUnitOfWork> _uow = new();
     private readonly Mock<IAuditLogService> _auditLog = new();
     private readonly Mock<IEmailService> _emailService = new();
+    private readonly Mock<IFieldEncryptionService> _fieldEncryption = new();
+    private readonly Mock<ITotpService> _totpService = new();
 
     private AuthService CreateService() => new(
         _userRepo.Object, _refreshRepo.Object, _loginAttemptRepo.Object,
         _passwordHasher.Object, _jwtService.Object, _uow.Object,
-        _auditLog.Object, _emailService.Object);
+        _auditLog.Object, _emailService.Object, _fieldEncryption.Object);
 
     [Fact]
     public async Task LoginAsync_ValidCredentials_NonSuperAdmin_ReturnsTokens()
@@ -178,14 +180,84 @@ public class AuthServiceTests
     }
 
     [Fact]
+    public async Task LoginMfaAsync_DecryptsSecretBeforeVerify_RoundtripSucceeds()
+    {
+        // Arrange: mock fieldEncryption so Encrypt="enc:"+input, Decrypt strips "enc:"
+        // This proves the decrypted secret (not ciphertext) reaches totpService.Verify.
+        var userId = Guid.NewGuid();
+        const string rawSecret = "JBSWY3DPEHPK3PXP";
+        const string encryptedSecret = "enc:JBSWY3DPEHPK3PXP";
+
+        var mfaSettings = new UserMfaSettings
+        {
+            TotpSecretEncrypted = encryptedSecret,
+            IsEnabled = true,
+            IsEnrolled = true
+        };
+        var user = new User
+        {
+            Id = userId, Email = "superadmin@system.com",
+            PasswordHash = "hash", IsActive = true, TenantId = null,
+            MfaSettings = mfaSettings,
+            UserRoles = new List<UserRole>
+            {
+                new() { Role = new Role { Name = RoleType.SuperAdmin, Scope = RoleScope.Platform } }
+            }
+        };
+
+        _userRepo.Setup(r => r.GetByIdWithRolesAsync(userId)).ReturnsAsync(user);
+        // fieldEncryption.Decrypt must be called with the ciphertext and return the raw secret
+        _fieldEncryption.Setup(e => e.Decrypt(encryptedSecret)).Returns(rawSecret);
+        // totpService.Verify must be called with the RAW (decrypted) secret, not the ciphertext
+        _totpService.Setup(t => t.Verify(rawSecret, "123456")).Returns(true);
+        _jwtService.Setup(j => j.GenerateAccessToken(
+            user, It.IsAny<IList<string>>(), It.IsAny<string?>(), true)).Returns("access_token");
+        _jwtService.Setup(j => j.GenerateRefreshToken()).Returns("raw_refresh");
+        _passwordHasher.Setup(h => h.Hash("raw_refresh")).Returns("hashed_refresh");
+        _auditLog.Setup(a => a.LogAsync(It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<string>(),
+            It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<object?>(), It.IsAny<object?>(),
+            It.IsAny<string>(), It.IsAny<string>())).Returns(Task.CompletedTask);
+        _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
+
+        var totpServiceMock = new Mock<ITotpService>();
+        totpServiceMock.Setup(t => t.Verify(rawSecret, "123456")).Returns(true);
+
+        var service = CreateService();
+        var result = await service.LoginMfaAsync(
+            new LoginMfaRequest { UserId = userId, Code = "123456" },
+            totpServiceMock.Object, "127.0.0.1", "Mozilla");
+
+        // Assert: login succeeds proving the decrypted secret reached totpService.Verify
+        result.IsSuccess.Should().BeTrue();
+        result.Data!.AccessToken.Should().NotBeNull();
+        // Prove decrypt was called with the ciphertext
+        _fieldEncryption.Verify(e => e.Decrypt(encryptedSecret), Times.Once);
+        // Prove totpService.Verify was called with the DECRYPTED secret (not ciphertext)
+        totpServiceMock.Verify(t => t.Verify(rawSecret, "123456"), Times.Once);
+    }
+
+    [Fact]
     public async Task IsPasswordCompliant_WeakPassword_ReturnsFalse()
     {
         AuthService.IsPasswordCompliant("weak").Should().BeFalse();
     }
 
     [Fact]
-    public async Task IsPasswordCompliant_StrongPassword_ReturnsTrue()
+    public async Task IsPasswordCompliant_StrongPassword_AtSymbol_ReturnsTrue()
     {
         AuthService.IsPasswordCompliant("Password@1").Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task IsPasswordCompliant_StrongPassword_HyphenSpecial_ReturnsTrue()
+    {
+        // Hyphen was rejected by the old narrow regex — must be accepted now
+        AuthService.IsPasswordCompliant("MyPass1-").Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task IsPasswordCompliant_StrongPassword_UnderscoreSpecial_ReturnsTrue()
+    {
+        AuthService.IsPasswordCompliant("MyPass1_").Should().BeTrue();
     }
 }
