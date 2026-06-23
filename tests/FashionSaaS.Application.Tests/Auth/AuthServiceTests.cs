@@ -1,0 +1,189 @@
+using FashionSaaS.Application.Auth;
+using FashionSaaS.Application.Auth.DTOs;
+using FashionSaaS.Application.Interfaces;
+using FashionSaaS.Domain.Entities;
+using FashionSaaS.Domain.Enums;
+using FluentAssertions;
+using Moq;
+
+namespace FashionSaaS.Application.Tests.Auth;
+
+public class AuthServiceTests
+{
+    private readonly Mock<IUserRepository> _userRepo = new();
+    private readonly Mock<IRefreshTokenRepository> _refreshRepo = new();
+    private readonly Mock<ILoginAttemptRepository> _loginAttemptRepo = new();
+    private readonly Mock<IPasswordHasher> _passwordHasher = new();
+    private readonly Mock<IJwtService> _jwtService = new();
+    private readonly Mock<IUnitOfWork> _uow = new();
+    private readonly Mock<IAuditLogService> _auditLog = new();
+    private readonly Mock<IEmailService> _emailService = new();
+
+    private AuthService CreateService() => new(
+        _userRepo.Object, _refreshRepo.Object, _loginAttemptRepo.Object,
+        _passwordHasher.Object, _jwtService.Object, _uow.Object,
+        _auditLog.Object, _emailService.Object);
+
+    [Fact]
+    public async Task LoginAsync_ValidCredentials_NonSuperAdmin_ReturnsTokens()
+    {
+        var tenantId = Guid.NewGuid();
+        var tenant = new Tenant { Id = tenantId, Slug = "brand-slug" };
+        var user = new User
+        {
+            Id = Guid.NewGuid(), Email = "owner@brand.com",
+            PasswordHash = "hash", IsActive = true, TenantId = tenantId,
+            Tenant = tenant,
+            UserRoles = new List<UserRole>
+            {
+                new() { Role = new Role { Name = RoleType.AdminOwner, Scope = RoleScope.Tenant } }
+            }
+        };
+
+        _userRepo.Setup(r => r.GetByEmailAsync("owner@brand.com")).ReturnsAsync(user);
+        _userRepo.Setup(r => r.GetByIdWithRolesAsync(user.Id)).ReturnsAsync(user);
+        _passwordHasher.Setup(h => h.Verify("Password@1", "hash")).Returns(true);
+        _loginAttemptRepo.Setup(r => r.GetRecentFailureCountAsync("owner@brand.com", 15)).ReturnsAsync(0);
+
+        // Correct 4-arg signature: (user, roles, tenantSlug, mfaVerified)
+        _jwtService.Setup(j => j.GenerateAccessToken(
+            user,
+            It.IsAny<IList<string>>(),
+            It.IsAny<string?>(),
+            false)).Returns("access_token");
+        _jwtService.Setup(j => j.GenerateRefreshToken()).Returns("raw_refresh");
+        _passwordHasher.Setup(h => h.Hash("raw_refresh")).Returns("hashed_refresh");
+        _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
+
+        var service = CreateService();
+        var result = await service.LoginAsync(
+            new LoginRequest { Email = "owner@brand.com", Password = "Password@1" },
+            "127.0.0.1", "Mozilla");
+
+        result.IsSuccess.Should().BeTrue();
+        result.Data!.AccessToken.Should().Be("access_token");
+        result.Data.MfaRequired.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task LoginAsync_InvalidPassword_ReturnsFailure()
+    {
+        var user = new User
+        {
+            Id = Guid.NewGuid(), Email = "test@test.com",
+            PasswordHash = "hash", IsActive = true
+        };
+        _userRepo.Setup(r => r.GetByEmailAsync("test@test.com")).ReturnsAsync(user);
+        _userRepo.Setup(r => r.GetByIdWithRolesAsync(It.IsAny<Guid>())).ReturnsAsync(user);
+        _passwordHasher.Setup(h => h.Verify("wrong", "hash")).Returns(false);
+        _loginAttemptRepo.Setup(r => r.GetRecentFailureCountAsync("test@test.com", 15)).ReturnsAsync(0);
+        _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
+
+        var service = CreateService();
+        var result = await service.LoginAsync(
+            new LoginRequest { Email = "test@test.com", Password = "wrong" },
+            "127.0.0.1", "Mozilla");
+
+        result.IsSuccess.Should().BeFalse();
+        result.StatusCode.Should().Be(401);
+    }
+
+    [Fact]
+    public async Task LoginAsync_UnknownEmail_ReturnsFailure()
+    {
+        _userRepo.Setup(r => r.GetByEmailAsync("nobody@test.com")).ReturnsAsync((User?)null);
+        _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
+
+        var service = CreateService();
+        var result = await service.LoginAsync(
+            new LoginRequest { Email = "nobody@test.com", Password = "pass" },
+            "127.0.0.1", "Mozilla");
+
+        result.IsSuccess.Should().BeFalse();
+        result.StatusCode.Should().Be(401);
+    }
+
+    [Fact]
+    public async Task LoginAsync_SuperAdmin_ReturnsMfaRequired_NoJwtIssued()
+    {
+        var user = new User
+        {
+            Id = Guid.NewGuid(), Email = "superadmin@system.com",
+            PasswordHash = "hash", IsActive = true, TenantId = null,
+            UserRoles = new List<UserRole>
+            {
+                new() { Role = new Role { Name = RoleType.SuperAdmin, Scope = RoleScope.Platform } }
+            }
+        };
+
+        _userRepo.Setup(r => r.GetByEmailAsync("superadmin@system.com")).ReturnsAsync(user);
+        _userRepo.Setup(r => r.GetByIdWithRolesAsync(user.Id)).ReturnsAsync(user);
+        _passwordHasher.Setup(h => h.Verify("Password@1", "hash")).Returns(true);
+        _loginAttemptRepo.Setup(r => r.GetRecentFailureCountAsync("superadmin@system.com", 15)).ReturnsAsync(0);
+        _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
+
+        var service = CreateService();
+        var result = await service.LoginAsync(
+            new LoginRequest { Email = "superadmin@system.com", Password = "Password@1" },
+            "127.0.0.1", "Mozilla");
+
+        result.IsSuccess.Should().BeTrue();
+        result.Data!.MfaRequired.Should().BeTrue();
+        result.Data.MfaUserId.Should().Be(user.Id);
+        // No JWT should be issued at this step
+        result.Data.AccessToken.Should().BeNull();
+        _jwtService.Verify(j => j.GenerateAccessToken(
+            It.IsAny<User>(), It.IsAny<IList<string>>(), It.IsAny<string?>(), It.IsAny<bool>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task LoginAsync_AccountLocked_Returns423()
+    {
+        var user = new User
+        {
+            Id = Guid.NewGuid(), Email = "locked@test.com",
+            PasswordHash = "hash", IsActive = true
+        };
+        _userRepo.Setup(r => r.GetByEmailAsync("locked@test.com")).ReturnsAsync(user);
+        _passwordHasher.Setup(h => h.Verify("Password@1", "hash")).Returns(true);
+        _loginAttemptRepo.Setup(r => r.GetRecentFailureCountAsync("locked@test.com", 15)).ReturnsAsync(5);
+        _emailService.Setup(e => e.SendAccountLockedAsync(user.Email)).Returns(Task.CompletedTask);
+        _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
+
+        var service = CreateService();
+        var result = await service.LoginAsync(
+            new LoginRequest { Email = "locked@test.com", Password = "Password@1" },
+            "127.0.0.1", "Mozilla");
+
+        result.IsSuccess.Should().BeFalse();
+        result.StatusCode.Should().Be(423);
+    }
+
+    [Fact]
+    public async Task LogoutAsync_RevokesTokens_ReturnsSuccess()
+    {
+        var userId = Guid.NewGuid();
+        _refreshRepo.Setup(r => r.RevokeAllByUserIdAsync(userId)).Returns(Task.CompletedTask);
+        _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
+
+        var service = CreateService();
+        var result = await service.LogoutAsync(userId);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Data.Should().BeTrue();
+        _refreshRepo.Verify(r => r.RevokeAllByUserIdAsync(userId), Times.Once);
+    }
+
+    [Fact]
+    public async Task IsPasswordCompliant_WeakPassword_ReturnsFalse()
+    {
+        AuthService.IsPasswordCompliant("weak").Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task IsPasswordCompliant_StrongPassword_ReturnsTrue()
+    {
+        AuthService.IsPasswordCompliant("Password@1").Should().BeTrue();
+    }
+}
