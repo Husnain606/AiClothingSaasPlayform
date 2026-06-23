@@ -49,6 +49,7 @@ public static class DependencyInjection
         services.AddScoped<IBankAccountRepository, BankAccountRepository>();
         services.AddScoped<IAuditLogRepository, AuditLogRepository>();
         services.AddScoped<ILoginAttemptRepository, LoginAttemptRepository>();
+        services.AddScoped<IRoleRepository, RoleRepository>();
 
         return services;
     }

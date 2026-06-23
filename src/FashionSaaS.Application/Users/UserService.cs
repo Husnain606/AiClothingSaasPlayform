@@ -13,13 +13,20 @@ public class UserService(
     IPasswordHasher passwordHasher,
     IEmailService emailService,
     IAuditLogService auditLogService,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    IRoleRepository roleRepository,
+    ILoginAttemptRepository loginAttemptRepository)
 {
     public async Task<ResponseData<UserResponse>> CreateAsync(CreateUserRequest request,
         Guid createdByUserId, string ipAddress, string userAgent)
     {
         if (await userRepository.EmailExistsAsync(request.Email))
             return ResponseData<UserResponse>.Failure("Email already registered.", 409);
+
+        // Fix 1 (CreateAsync): resolve the seeded role by RoleType, not construct a new Role.
+        var roleEntity = await roleRepository.GetByRoleTypeAsync(request.Role);
+        if (roleEntity is null)
+            return ResponseData<UserResponse>.Failure("Role not found.", 404);
 
         var tempPassword = GenerateTempPassword();
         var user = new User
@@ -32,6 +39,13 @@ public class UserService(
             IsActive = true
         };
 
+        // Fix 2 (CreateAsync): assign the role using the real seeded RoleId.
+        user.UserRoles.Add(new UserRole
+        {
+            UserId = user.Id,
+            RoleId = roleEntity.Id
+        });
+
         user.AddDomainEvent(new UserCreatedEvent(user.Id, user.Email, tempPassword, user.TenantId));
         await userRepository.AddAsync(user);
         await unitOfWork.SaveChangesAsync();
@@ -40,7 +54,8 @@ public class UserService(
         await auditLogService.LogAsync(createdByUserId, user.TenantId, "UserCreated", "User", user.Id,
             null, new { user.Email, user.TenantId }, ipAddress, userAgent);
 
-        return ResponseData<UserResponse>.Success(MapToResponse(user, new List<string>()), "User created.", 201);
+        var roles = new List<string> { roleEntity.Name.ToString() };
+        return ResponseData<UserResponse>.Success(MapToResponse(user, roles), "User created.", 201);
     }
 
     public async Task<ResponseData<UserResponse>> UpdateAsync(Guid userId, UpdateUserRequest request,
@@ -102,13 +117,17 @@ public class UserService(
         if (user is null)
             return ResponseData<bool>.Failure("User not found.", 404);
 
-        // Replace existing roles by clearing and adding the new one
+        // Fix 1 (AssignRole): look up the existing seeded Role row by RoleType.
+        var roleEntity = await roleRepository.GetByRoleTypeAsync(role);
+        if (roleEntity is null)
+            return ResponseData<bool>.Failure("Role not found.", 404);
+
+        // Replace existing roles; use real seeded RoleId — do NOT set navigation object.
         user.UserRoles.Clear();
         user.UserRoles.Add(new UserRole
         {
             UserId = userId,
-            RoleId = Guid.Empty, // resolved by infrastructure/EF via Role navigation
-            Role = new Role { Name = role, Scope = RoleScope.Tenant }
+            RoleId = roleEntity.Id
         });
 
         await userRepository.UpdateAsync(user);
@@ -127,12 +146,14 @@ public class UserService(
         if (user is null)
             return ResponseData<bool>.Failure("User not found.", 404);
 
+        // Fix 4: capture actual state before mutation.
+        bool wasActive = user.IsActive;
         user.IsActive = false;
         await userRepository.UpdateAsync(user);
         await unitOfWork.SaveChangesAsync();
 
         await auditLogService.LogAsync(adminId, user.TenantId, "UserDeactivated", "User", userId,
-            new { WasActive = true }, new { IsActive = false }, ipAddress, userAgent);
+            new { WasActive = wasActive }, new { IsActive = false }, ipAddress, userAgent);
 
         return ResponseData<bool>.Success(true, "User deactivated.");
     }
@@ -143,6 +164,9 @@ public class UserService(
         var user = await userRepository.GetByIdAsync(userId);
         if (user is null)
             return ResponseData<bool>.Failure("User not found.", 404);
+
+        // Fix 3: reset the failed-attempt-based lockout so login succeeds again.
+        await loginAttemptRepository.ResetRecentFailedAttemptsAsync(user.Email);
 
         user.IsActive = true;
         await userRepository.UpdateAsync(user);

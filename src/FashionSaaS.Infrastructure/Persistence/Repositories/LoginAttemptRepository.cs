@@ -25,4 +25,14 @@ public class LoginAttemptRepository(ApplicationDbContext context)
         return await DbSet.Where(a => a.Email == email && !a.IsSuccess && a.CreatedAt >= since)
             .CountAsync();
     }
+
+    public async Task ResetRecentFailedAttemptsAsync(string email, CancellationToken cancellationToken = default)
+    {
+        // Use the same 15-minute window that AuthService uses for lockout evaluation.
+        var since = DateTime.UtcNow.AddMinutes(-15);
+        var failedAttempts = await DbSet
+            .Where(a => a.Email == email && !a.IsSuccess && a.CreatedAt >= since)
+            .ToListAsync(cancellationToken);
+        DbSet.RemoveRange(failedAttempts);
+    }
 }
