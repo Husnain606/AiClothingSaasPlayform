@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.RegularExpressions;
 using FashionSaaS.Application.Auth.DTOs;
 using FashionSaaS.Application.Common;
@@ -152,6 +154,102 @@ public class AuthService(
         await refreshTokenRepository.RevokeAllByUserIdAsync(userId);
         await unitOfWork.SaveChangesAsync();
         return ResponseData<bool>.Success(true, "Logged out successfully.");
+    }
+
+    // -------------------------------------------------------------------------
+    // Password management
+    // -------------------------------------------------------------------------
+
+    public async Task<ResponseData<bool>> ForgotPasswordAsync(string email, string baseUrl,
+        IPasswordResetTokenRepository resetTokenRepo)
+    {
+        var user = await userRepository.GetByEmailAsync(email);
+        if (user is null)
+            return ResponseData<bool>.Success(true, "If email exists, reset link has been sent.");
+
+        await resetTokenRepo.InvalidateAllByUserIdAsync(user.Id);
+
+        var rawToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
+        var tokenHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(rawToken)));
+
+        var resetToken = new PasswordResetToken
+        {
+            UserId = user.Id,
+            TokenHash = tokenHash,
+            ExpiresAt = DateTime.UtcNow.AddHours(1)
+        };
+        await resetTokenRepo.AddAsync(resetToken);
+        await unitOfWork.SaveChangesAsync();
+
+        var resetLink = $"{baseUrl}/reset-password?token={Uri.EscapeDataString(rawToken)}";
+        await emailService.SendPasswordResetAsync(user.Email, resetLink);
+
+        return ResponseData<bool>.Success(true, "Password reset email sent.");
+    }
+
+    public async Task<ResponseData<bool>> ResetPasswordAsync(ResetPasswordRequest request,
+        IPasswordResetTokenRepository resetTokenRepo, IPasswordHistoryRepository historyRepo)
+    {
+        if (!IsPasswordCompliant(request.NewPassword))
+            return ResponseData<bool>.Failure("Password does not meet complexity requirements.", 400);
+
+        var tokenHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(request.Token)));
+        var resetToken = await resetTokenRepo.GetValidByHashAsync(tokenHash);
+        if (resetToken is null)
+            return ResponseData<bool>.Failure("Invalid or expired reset token.", 400);
+
+        var user = await userRepository.GetByIdAsync(resetToken.UserId);
+        if (user is null)
+            return ResponseData<bool>.Failure("User not found.", 404);
+
+        // Check last 5 passwords
+        var history = await historyRepo.GetLastNAsync(user.Id, 5);
+        if (history.Any(h => passwordHasher.Verify(request.NewPassword, h.PasswordHash)))
+            return ResponseData<bool>.Failure("Cannot reuse one of your last 5 passwords.", 400);
+
+        user.PasswordHash = passwordHasher.Hash(request.NewPassword);
+        resetToken.IsUsed = true;
+
+        await userRepository.UpdateAsync(user);
+        await resetTokenRepo.UpdateAsync(resetToken);
+
+        var newHistory = new PasswordHistory { UserId = user.Id, PasswordHash = user.PasswordHash };
+        await historyRepo.AddAsync(newHistory);
+
+        // Revoke all refresh tokens on password change
+        await refreshTokenRepository.RevokeAllByUserIdAsync(user.Id);
+        await unitOfWork.SaveChangesAsync();
+
+        return ResponseData<bool>.Success(true, "Password reset successfully.");
+    }
+
+    public async Task<ResponseData<bool>> ChangePasswordAsync(Guid userId, ChangePasswordRequest request,
+        IPasswordHistoryRepository historyRepo)
+    {
+        if (!IsPasswordCompliant(request.NewPassword))
+            return ResponseData<bool>.Failure("Password does not meet complexity requirements.", 400);
+
+        var user = await userRepository.GetByIdAsync(userId);
+        if (user is null)
+            return ResponseData<bool>.Failure("User not found.", 404);
+
+        if (!passwordHasher.Verify(request.CurrentPassword, user.PasswordHash))
+            return ResponseData<bool>.Failure("Current password is incorrect.", 401);
+
+        var history = await historyRepo.GetLastNAsync(userId, 5);
+        if (history.Any(h => passwordHasher.Verify(request.NewPassword, h.PasswordHash)))
+            return ResponseData<bool>.Failure("Cannot reuse one of your last 5 passwords.", 400);
+
+        user.PasswordHash = passwordHasher.Hash(request.NewPassword);
+        await userRepository.UpdateAsync(user);
+
+        var newHistory = new PasswordHistory { UserId = userId, PasswordHash = user.PasswordHash };
+        await historyRepo.AddAsync(newHistory);
+
+        await refreshTokenRepository.RevokeAllByUserIdAsync(userId);
+        await unitOfWork.SaveChangesAsync();
+
+        return ResponseData<bool>.Success(true, "Password changed. All sessions revoked.");
     }
 
     // -------------------------------------------------------------------------
