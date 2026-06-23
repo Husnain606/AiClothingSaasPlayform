@@ -146,7 +146,7 @@ public class AuthServiceTests
             PasswordHash = "hash", IsActive = true
         };
         _userRepo.Setup(r => r.GetByEmailAsync("locked@test.com")).ReturnsAsync(user);
-        _passwordHasher.Setup(h => h.Verify("Password@1", "hash")).Returns(true);
+        // Lockout is checked BEFORE password verification; Verify must never be called.
         _loginAttemptRepo.Setup(r => r.GetRecentFailureCountAsync("locked@test.com", 15)).ReturnsAsync(5);
         _emailService.Setup(e => e.SendAccountLockedAsync(user.Email)).Returns(Task.CompletedTask);
         _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
@@ -158,6 +158,8 @@ public class AuthServiceTests
 
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Should().Be(423);
+        // Prove the lockout short-circuits before any password verification
+        _passwordHasher.Verify(h => h.Verify(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 
     [Fact]

@@ -23,9 +23,19 @@ public class AuthService(
     public async Task<ResponseData<LoginResponse>> LoginAsync(
         LoginRequest request, string ipAddress, string userAgent)
     {
-        await RecordAttemptAsync(request.Email, false, "Login initiated", ipAddress, userAgent);
-
         var user = await userRepository.GetByEmailAsync(request.Email);
+
+        // Check lockout FIRST — before verifying the password — so a locked account
+        // cannot be probed for valid credentials and no extra failure row is recorded.
+        var recentFailures = await loginAttemptRepository.GetRecentFailureCountAsync(request.Email, 15);
+        if (recentFailures >= 5)
+        {
+            if (user is not null)
+                await emailService.SendAccountLockedAsync(user.Email);
+            return ResponseData<LoginResponse>.Failure("Account temporarily locked. Try again in 15 minutes.", 423);
+        }
+
+        // Now verify credentials; record a failure row only on actual bad credentials.
         if (user is null || !passwordHasher.Verify(request.Password, user.PasswordHash))
         {
             await RecordAttemptAsync(request.Email, false, "Invalid credentials", ipAddress, userAgent);
@@ -34,14 +44,6 @@ public class AuthService(
 
         if (!user.IsActive)
             return ResponseData<LoginResponse>.Failure("Account is disabled.", 403);
-
-        // Check lockout: 5 failures in 15 min → lock 15 min
-        var recentFailures = await loginAttemptRepository.GetRecentFailureCountAsync(request.Email, 15);
-        if (recentFailures >= 5)
-        {
-            await emailService.SendAccountLockedAsync(user.Email);
-            return ResponseData<LoginResponse>.Failure("Account temporarily locked. Try again in 15 minutes.", 423);
-        }
 
         // Load with roles + Tenant navigation (needed for tenantSlug and role check)
         var userWithRoles = await userRepository.GetByIdWithRolesAsync(user.Id);
@@ -79,6 +81,9 @@ public class AuthService(
         var user = await userRepository.GetByIdWithRolesAsync(request.UserId);
         if (user is null)
             return ResponseData<LoginResponse>.Failure("User not found.", 404);
+
+        if (!user.IsActive)
+            return ResponseData<LoginResponse>.Failure("Account is disabled.", 403);
 
         if (user.MfaSettings is null || !user.MfaSettings.IsEnrolled)
             return ResponseData<LoginResponse>.Failure("MFA not configured.", 400);
@@ -130,10 +135,11 @@ public class AuthService(
         var tenantSlug = userWithRoles.Tenant?.Slug;
 
         // SuperAdmin refresh preserves mfa_verified=true (they already completed TOTP)
+        // IssueTokensAsync stages the new token and calls SaveChangesAsync once, covering
+        // both the revocation (staged above via UpdateAsync) and the new token — single commit.
         var (accessToken, newRawToken) = await IssueTokensAsync(
             userWithRoles, roles, tenantSlug, mfaVerified: isSuperAdmin);
 
-        await unitOfWork.SaveChangesAsync();
         return ResponseData<LoginResponse>.Success(new LoginResponse
         {
             AccessToken = accessToken,
