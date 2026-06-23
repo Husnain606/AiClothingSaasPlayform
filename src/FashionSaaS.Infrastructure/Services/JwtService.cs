@@ -11,7 +11,7 @@ namespace FashionSaaS.Infrastructure.Services;
 
 public class JwtService(IConfiguration configuration) : IJwtService
 {
-    public string GenerateAccessToken(User user, IList<string> roles, bool mfaVerified = false)
+    public string GenerateAccessToken(User user, IList<string> roles, string? tenantSlug = null, bool mfaVerified = false)
     {
         var secret = configuration["JwtSettings:Secret"]
             ?? throw new InvalidOperationException("JwtSettings:Secret not set.");
@@ -29,6 +29,12 @@ public class JwtService(IConfiguration configuration) : IJwtService
             new("tenant_id", user.TenantId?.ToString() ?? string.Empty),
             new("mfa_verified", mfaVerified.ToString().ToLower())
         };
+
+        if (!string.IsNullOrEmpty(tenantSlug))
+        {
+            claims.Add(new Claim("tenant_slug", tenantSlug));
+        }
+
         claims.AddRange(roles.Select(r => new Claim(ClaimTypes.Role, r)));
 
         var token = new JwtSecurityToken(
