@@ -60,4 +60,34 @@ public class TenantServiceTests
         result.IsSuccess.Should().BeTrue();
         tenant.IsActive.Should().BeFalse();
     }
+
+    [Fact]
+    public async Task CreateAsync_MalformedSlug_Returns400BeforeUniquenessCheck()
+    {
+        // "My Brand!" contains uppercase, spaces and special characters — TenantSlug should reject it
+        var service = CreateService();
+        var result = await service.CreateAsync(new CreateTenantRequest
+        {
+            Name = "My Brand", Slug = "My Brand!", Email = "admin@mybrand.com"
+        }, Guid.NewGuid(), "127.0.0.1", "Mozilla");
+
+        result.IsSuccess.Should().BeFalse();
+        result.StatusCode.Should().Be(400);
+        // The slug uniqueness check must NOT have been called
+        _tenantRepo.Verify(r => r.SlugExistsAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SuspendAsync_AlreadySuspendedTenant_Returns409()
+    {
+        var tenant = new Tenant { Id = Guid.NewGuid(), IsActive = false, Email = "admin@nike.com", Name = "Nike" };
+        _tenantRepo.Setup(r => r.GetByIdAsync(tenant.Id)).ReturnsAsync(tenant);
+
+        var service = CreateService();
+        var result = await service.SuspendAsync(tenant.Id, Guid.NewGuid(), "127.0.0.1", "Mozilla");
+
+        result.IsSuccess.Should().BeFalse();
+        result.StatusCode.Should().Be(409);
+        _tenantRepo.Verify(r => r.UpdateAsync(It.IsAny<Tenant>()), Times.Never);
+    }
 }

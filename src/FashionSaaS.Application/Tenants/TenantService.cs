@@ -3,6 +3,7 @@ using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Application.Tenants.DTOs;
 using FashionSaaS.Domain.Entities;
 using FashionSaaS.Domain.Events;
+using FashionSaaS.Domain.ValueObjects;
 
 namespace FashionSaaS.Application.Tenants;
 
@@ -15,6 +16,12 @@ public class TenantService(
     public async Task<ResponseData<TenantResponse>> CreateAsync(CreateTenantRequest request,
         Guid createdByUserId, string ipAddress, string userAgent)
     {
+        try { _ = new TenantSlug(request.Slug); }
+        catch (ArgumentException)
+        {
+            return ResponseData<TenantResponse>.Failure("Slug must be lowercase alphanumeric with hyphens.", 400);
+        }
+
         if (await tenantRepository.SlugExistsAsync(request.Slug))
             return ResponseData<TenantResponse>.Failure($"Slug '{request.Slug}' is already taken.", 409);
 
@@ -101,13 +108,17 @@ public class TenantService(
         if (tenant is null)
             return ResponseData<bool>.Failure("Tenant not found.", 404);
 
+        if (!tenant.IsActive)
+            return ResponseData<bool>.Failure("Tenant is already suspended.", 409);
+
+        bool wasActive = tenant.IsActive;
         tenant.IsActive = false;
         tenant.AddDomainEvent(new TenantSuspendedEvent(tenant.Id, tenant.Email));
         await tenantRepository.UpdateAsync(tenant);
         await unitOfWork.SaveChangesAsync();
 
         await auditLogService.LogAsync(adminUserId, null, "TenantSuspended", "Tenant", tenant.Id,
-            new { WasActive = true }, new { IsActive = false }, ipAddress, userAgent);
+            new { WasActive = wasActive }, new { IsActive = false }, ipAddress, userAgent);
         await emailService.SendTenantSuspendedAsync(tenant.Email, "Administrative action");
 
         return ResponseData<bool>.Success(true, "Tenant suspended.");
@@ -120,13 +131,17 @@ public class TenantService(
         if (tenant is null)
             return ResponseData<bool>.Failure("Tenant not found.", 404);
 
+        if (tenant.IsActive)
+            return ResponseData<bool>.Failure("Tenant is already active.", 409);
+
+        bool wasActive = tenant.IsActive;
         tenant.IsActive = true;
         tenant.AddDomainEvent(new TenantActivatedEvent(tenant.Id, tenant.Email));
         await tenantRepository.UpdateAsync(tenant);
         await unitOfWork.SaveChangesAsync();
 
         await auditLogService.LogAsync(adminUserId, null, "TenantActivated", "Tenant", tenant.Id,
-            new { WasActive = false }, new { IsActive = true }, ipAddress, userAgent);
+            new { WasActive = wasActive }, new { IsActive = true }, ipAddress, userAgent);
 
         return ResponseData<bool>.Success(true, "Tenant activated.");
     }
