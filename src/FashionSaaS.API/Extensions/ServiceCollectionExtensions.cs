@@ -11,6 +11,7 @@ using FashionSaaS.Application.SubscriptionPlans;
 using FashionSaaS.Application.Subscriptions;
 using FashionSaaS.Application.Tenants;
 using FashionSaaS.Application.Users;
+using FashionSaaS.Infrastructure.EventHandlers;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -30,6 +31,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<BankAccountService>();
         services.AddScoped<AuditLogQueryService>();
         services.AddScoped<LoginAttemptService>();
+        services.AddScoped<SuperAdminIpGuardService>();
         return services;
     }
 
@@ -121,7 +123,10 @@ public static class ServiceCollectionExtensions
     {
         services.AddMediatR(cfg =>
         {
+            // Application layer: AuthService, behaviours, etc.
             cfg.RegisterServicesFromAssembly(typeof(AuthService).Assembly);
+            // Infrastructure layer: domain event handlers (e.g. SuperAdminLoginFromNewIpEventHandler)
+            cfg.RegisterServicesFromAssembly(typeof(SuperAdminLoginFromNewIpEventHandler).Assembly);
             cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
             cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
         });

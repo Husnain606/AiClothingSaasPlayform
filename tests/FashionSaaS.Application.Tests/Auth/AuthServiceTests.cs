@@ -21,10 +21,14 @@ public class AuthServiceTests
     private readonly Mock<IFieldEncryptionService> _fieldEncryption = new();
     private readonly Mock<ITotpService> _totpService = new();
 
+    private SuperAdminIpGuardService CreateIpGuardService() =>
+        new(_loginAttemptRepo.Object);
+
     private AuthService CreateService() => new(
         _userRepo.Object, _refreshRepo.Object, _loginAttemptRepo.Object,
         _passwordHasher.Object, _jwtService.Object, _uow.Object,
-        _auditLog.Object, _emailService.Object, _fieldEncryption.Object);
+        _auditLog.Object, _emailService.Object, _fieldEncryption.Object,
+        CreateIpGuardService());
 
     [Fact]
     public async Task LoginAsync_ValidCredentials_NonSuperAdmin_ReturnsTokens()
@@ -206,6 +210,9 @@ public class AuthServiceTests
         };
 
         _userRepo.Setup(r => r.GetByIdWithRolesAsync(userId)).ReturnsAsync(user);
+        // IP guard: known IP so no new-IP event is raised (keeps test focused)
+        _loginAttemptRepo.Setup(r => r.GetRecentIpsByUserEmailAsync("superadmin@system.com", 20))
+            .ReturnsAsync(new List<string> { "127.0.0.1" });
         // fieldEncryption.Decrypt must be called with the ciphertext and return the raw secret
         _fieldEncryption.Setup(e => e.Decrypt(encryptedSecret)).Returns(rawSecret);
         // totpService.Verify must be called with the RAW (decrypted) secret, not the ciphertext
