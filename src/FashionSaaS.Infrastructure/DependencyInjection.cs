@@ -1,4 +1,5 @@
 using FashionSaaS.Application.Interfaces;
+using FashionSaaS.Infrastructure.BackgroundJobs;
 using FashionSaaS.Infrastructure.Persistence;
 using FashionSaaS.Infrastructure.Persistence.Repositories;
 using FashionSaaS.Infrastructure.Services;
@@ -50,6 +51,9 @@ public static class DependencyInjection
         services.AddScoped<IAuditLogRepository, AuditLogRepository>();
         services.AddScoped<ILoginAttemptRepository, LoginAttemptRepository>();
         services.AddScoped<IRoleRepository, RoleRepository>();
+
+        // Background jobs
+        services.AddHostedService<SubscriptionExpiryJob>();
 
         return services;
     }
