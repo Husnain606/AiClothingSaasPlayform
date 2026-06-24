@@ -13,7 +13,6 @@ using FashionSaaS.Application.Tenants;
 using FashionSaaS.Application.Users;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 
 namespace FashionSaaS.API.Extensions;
