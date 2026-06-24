@@ -71,6 +71,7 @@ public static class ApiUrl
     public static class AdminBankAccount
     {
         public const string Get = "api/admin/bank-account";
+        public const string GetFull = "api/admin/bank-account/full";
         public const string Create = "api/admin/bank-account";
         public const string Update = "api/admin/bank-account";
     }
