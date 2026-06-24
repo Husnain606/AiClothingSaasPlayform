@@ -3,7 +3,7 @@ using FashionSaaS.Application.Interfaces;
 
 namespace FashionSaaS.API.Middleware;
 
-public class AuditLoggingMiddleware(RequestDelegate next)
+public class AuditLoggingMiddleware(RequestDelegate next, ILogger<AuditLoggingMiddleware> logger)
 {
     private static readonly HashSet<string> WriteMethods =
         new(StringComparer.OrdinalIgnoreCase) { "POST", "PUT", "DELETE", "PATCH" };
@@ -22,14 +22,25 @@ public class AuditLoggingMiddleware(RequestDelegate next)
         var path = context.Request.Path.Value ?? string.Empty;
         var method = context.Request.Method;
 
-        await auditLogService.LogAsync(
-            userId is not null ? Guid.Parse(userId) : null,
-            tenantId is not null && Guid.TryParse(tenantId, out var tid) ? tid : null,
-            $"{method} {path}",
-            "HttpRequest",
-            Guid.NewGuid(),
-            null,
-            new { Path = path, StatusCode = context.Response.StatusCode },
-            ip, ua);
+        // I1: guard against missing or non-GUID NameIdentifier claim
+        Guid? uid = Guid.TryParse(userId, out var parsedUid) ? parsedUid : null;
+
+        try
+        {
+            // I2: isolate audit failures — a DB/audit error must never surface on an otherwise-successful response
+            await auditLogService.LogAsync(
+                uid,
+                tenantId is not null && Guid.TryParse(tenantId, out var tid) ? tid : null,
+                $"{method} {path}",
+                "HttpRequest",
+                Guid.NewGuid(),
+                null,
+                new { Path = path, StatusCode = context.Response.StatusCode },
+                ip, ua);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Audit logging failed for {Method} {Path}", method, path);
+        }
     }
 }
