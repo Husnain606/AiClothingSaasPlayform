@@ -2,7 +2,6 @@ using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Domain.Events;
 using FashionSaaS.Infrastructure.EventHandlers;
 using FashionSaaS.Infrastructure.Persistence;
-using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
