@@ -174,14 +174,18 @@ public class SubscriptionService(
         payment.PaidAt = DateTime.UtcNow;
         payment.ConfirmedByAdminId = adminId;
 
-        await paymentRepository.UpdateAsync(payment);
-        await unitOfWork.SaveChangesAsync();
-
         var tenant = await tenantRepository.GetByIdAsync(payment.TenantId);
         if (tenant is not null)
         {
-            await emailService.SendPaymentConfirmedAsync(tenant.Email, payment.Amount);
             payment.AddDomainEvent(new PaymentConfirmedEvent(tenant.Id, tenant.Email, payment.Amount));
+        }
+
+        await paymentRepository.UpdateAsync(payment);
+        await unitOfWork.SaveChangesAsync();
+
+        if (tenant is not null)
+        {
+            await emailService.SendPaymentConfirmedAsync(tenant.Email, payment.Amount);
         }
 
         await auditLogService.LogAsync(adminId, payment.TenantId, "PaymentConfirmed", "SubscriptionPayment",
