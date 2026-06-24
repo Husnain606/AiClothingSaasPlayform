@@ -1,43 +1,125 @@
-using FashionSaaS.Application.Interfaces;
-using FashionSaaS.Infrastructure.Persistence;
-using Microsoft.EntityFrameworkCore;
+using FashionSaaS.API.Extensions;
+using FashionSaaS.API.Middleware;
+using FashionSaaS.Infrastructure;
+using FluentValidation.AspNetCore;
+using Microsoft.OpenApi;
+using Serilog;
+using Serilog.Events;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// ── Serilog ──────────────────────────────────────────────────────────────────
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information()
+    .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+    .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Information)
+    .Enrich.FromLogContext()
+    .WriteTo.Console()
+    .WriteTo.File("logs/fashionsaas-.txt", rollingInterval: RollingInterval.Day)
+    .CreateLogger();
 
-// Stub CurrentTenantService for design time (temporary, will be replaced in Task 10)
-builder.Services.AddScoped<ICurrentTenantService>(_ => new StubCurrentTenantService());
+builder.Host.UseSerilog();
 
-// Add DbContext
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection") ?? "Server=.;Database=FashionSaaS;Trusted_Connection=true;TrustServerCertificate=true;"));
+// ── Services ─────────────────────────────────────────────────────────────────
 
+// Infrastructure: DbContext, repos, UoW, security services, email, audit, hosted jobs
+builder.Services.AddInfrastructure(builder.Configuration);
+
+// Application services (AuthService, TenantService, UserService, etc.)
+builder.Services.AddApplicationServices();
+
+// JWT bearer auth (HS256)
+builder.Services.AddJwtAuthentication(builder.Configuration);
+
+// Rate limiting: PublicPolicy / AuthenticatedPolicy / SuperAdminPolicy
+builder.Services.AddRateLimiting();
+
+// MediatR + ValidationBehavior + LoggingBehavior
+builder.Services.AddMediatRWithBehaviors();
+
+// FluentValidation auto-validation on controllers
+builder.Services.AddFluentValidationAutoValidation();
+
+// AutoMapper — profiles will be scanned via AddAutoMapper(cfg => cfg.AddMaps(...)) in Tasks 22-25
+// Register with empty config for now; profiles added per controller assembly later
+builder.Services.AddAutoMapper(cfg => { });
+
+// Controllers + Swagger
 builder.Services.AddControllers();
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new() { Title = "FashionSaaS API", Version = "v1" });
+
+    // Swashbuckle 10 / OpenApi 2.x: AddSecurityDefinition takes IOpenApiSecurityScheme
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Enter your JWT token (without the 'Bearer ' prefix)."
+    });
+
+    // AddSecurityRequirement takes Func<OpenApiDocument, OpenApiSecurityRequirement>
+    // OpenApiSecurityRequirement is Dictionary<OpenApiSecuritySchemeReference, List<string>>
+    c.AddSecurityRequirement(_ => new OpenApiSecurityRequirement
+    {
+        [new OpenApiSecuritySchemeReference("Bearer")] = []
+    });
+});
+
+// CORS — allowed origins from config, fall back to local Angular dev server
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("FashionSaaSCors", policy =>
+    {
+        var allowed = builder.Configuration
+            .GetSection("Cors:AllowedOrigins")
+            .Get<string[]>() ?? ["http://localhost:4200"];
+
+        policy.WithOrigins(allowed)
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
+    });
+});
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// ── Middleware pipeline — ORDER MATTERS ───────────────────────────────────────
+app.UseHttpsRedirection();
+app.UseHsts();
+
+// 1. Security headers (X-Frame-Options, CSP, HSTS etc.)   — Task 21 completes
+app.UseMiddleware<SecurityHeadersMiddleware>();
+
+// 2. Global exception → RFC 7807 ProblemDetails            — Task 21 completes
+app.UseMiddleware<ExceptionHandlingMiddleware>();
+
+// 3. CORS
+app.UseCors("FashionSaaSCors");
+
+// 4. Rate limiting
+app.UseRateLimiter();
+
+// 5. Tenant resolution from JWT claim / X-Tenant-Slug      — Task 21 completes
+app.UseMiddleware<TenantResolutionMiddleware>();
+
+// 6. Authentication + Authorization
+app.UseAuthentication();
+app.UseAuthorization();
+
+// 7. Audit logging (write AuditLog row after response)     — Task 21 completes
+app.UseMiddleware<AuditLoggingMiddleware>();
+
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
-
-app.UseHttpsRedirection();
-
-app.UseAuthorization();
 
 app.MapControllers();
 
 app.Run();
-
-// Temporary stub for design time — will be replaced in Task 10
-class StubCurrentTenantService : ICurrentTenantService
-{
-    public Guid? TenantId => null;
-    public string? TenantSlug => null;
-    public bool IsResolved => false;
-    public void SetTenant(Guid tenantId, string slug) { }
-}
