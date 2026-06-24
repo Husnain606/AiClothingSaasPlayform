@@ -1,7 +1,6 @@
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Domain.Entities;
 using MediatR;
-using Microsoft.EntityFrameworkCore;
 
 namespace FashionSaaS.Infrastructure.Persistence;
 
