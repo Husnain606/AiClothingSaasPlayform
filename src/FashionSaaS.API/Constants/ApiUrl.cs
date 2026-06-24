@@ -112,6 +112,7 @@ public static class ApiUrl
     public static class TenantBankAccount
     {
         public const string Get = "api/tenant/bank-account";
+        public const string GetFull = "api/tenant/bank-account/full";
         public const string Create = "api/tenant/bank-account";
         public const string Update = "api/tenant/bank-account";
     }
