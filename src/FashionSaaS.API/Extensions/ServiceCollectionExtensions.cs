@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Text;
 using System.Threading.RateLimiting;
 using FashionSaaS.Application.AuditLogs;
@@ -62,32 +63,53 @@ public static class ServiceCollectionExtensions
     {
         services.AddRateLimiter(options =>
         {
-            // Public endpoints: 10 req/min per IP (fixed window)
-            options.AddFixedWindowLimiter("PublicPolicy", cfg =>
+            // Public endpoints: 10 req/min per client IP (fixed window, partitioned)
+            options.AddPolicy("PublicPolicy", httpContext =>
             {
-                cfg.PermitLimit = 10;
-                cfg.Window = TimeSpan.FromMinutes(1);
-                cfg.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-                cfg.QueueLimit = 0;
+                var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                return RateLimitPartition.GetFixedWindowLimiter(ip, _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 10,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                    QueueLimit = 0
+                });
             });
 
-            // Authenticated endpoints: 300 req/min per TenantId (sliding window)
-            options.AddSlidingWindowLimiter("AuthenticatedPolicy", cfg =>
+            // Authenticated endpoints: 300 req/min per TenantId (sliding window, partitioned)
+            options.AddPolicy("AuthenticatedPolicy", httpContext =>
             {
-                cfg.PermitLimit = 300;
-                cfg.Window = TimeSpan.FromMinutes(1);
-                cfg.SegmentsPerWindow = 6;
-                cfg.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-                cfg.QueueLimit = 0;
+                var tenantId = httpContext.User.FindFirst("tenant_id")?.Value;
+                var key = string.IsNullOrEmpty(tenantId)
+                    ? httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown"
+                    : tenantId;
+                return RateLimitPartition.GetSlidingWindowLimiter(key, _ => new SlidingWindowRateLimiterOptions
+                {
+                    PermitLimit = 300,
+                    Window = TimeSpan.FromMinutes(1),
+                    SegmentsPerWindow = 6,
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                    QueueLimit = 0
+                });
             });
 
-            // Super Admin: 60 req/min per UserId (token bucket)
-            options.AddTokenBucketLimiter("SuperAdminPolicy", cfg =>
+            // Super Admin: 60 req/min per UserId (token bucket, partitioned)
+            options.AddPolicy("SuperAdminPolicy", httpContext =>
             {
-                cfg.TokenLimit = 60;
-                cfg.ReplenishmentPeriod = TimeSpan.FromMinutes(1);
-                cfg.TokensPerPeriod = 60;
-                cfg.AutoReplenishment = true;
+                var userId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                    ?? httpContext.User.FindFirst("sub")?.Value;
+                var key = string.IsNullOrEmpty(userId)
+                    ? httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown"
+                    : userId;
+                return RateLimitPartition.GetTokenBucketLimiter(key, _ => new TokenBucketRateLimiterOptions
+                {
+                    TokenLimit = 60,
+                    ReplenishmentPeriod = TimeSpan.FromMinutes(1),
+                    TokensPerPeriod = 60,
+                    AutoReplenishment = true,
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                    QueueLimit = 0
+                });
             });
 
             options.RejectionStatusCode = 429;
