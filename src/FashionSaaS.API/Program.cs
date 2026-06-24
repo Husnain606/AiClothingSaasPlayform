@@ -1,4 +1,5 @@
 using FashionSaaS.API.Extensions;
+using FashionSaaS.API.Logging;
 using FashionSaaS.API.Middleware;
 using FashionSaaS.Infrastructure;
 using FluentValidation.AspNetCore;
@@ -14,6 +15,7 @@ Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
     .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Information)
     .Enrich.FromLogContext()
+    .Destructure.With(new SensitiveDataDestructuringPolicy())
     .WriteTo.Console()
     .WriteTo.File("logs/fashionsaas-.txt", rollingInterval: RollingInterval.Day)
     .CreateLogger();

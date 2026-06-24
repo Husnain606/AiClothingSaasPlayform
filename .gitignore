@@ -4,4 +4,6 @@ obj/
 .vs/
 *.suo
 appsettings.*.local.json
+appsettings.Development.json
+**/appsettings.Development.json
 .env

@@ -40,32 +40,5 @@ public class UnitOfWork(ApplicationDbContext context, IPublisher publisher) : IU
         return result;
     }
 
-    /// <summary>
-    /// Explicit dispatch — kept for backward compatibility.
-    /// SaveChangesAsync now dispatches automatically, so callers that previously
-    /// called PublishDomainEventsAsync manually no longer need to do so.
-    /// </summary>
-    public async Task PublishDomainEventsAsync(IMediator mediator)
-    {
-        var entities = context.ChangeTracker.Entries<BaseEntity>()
-            .Where(e => e.Entity.DomainEvents.Any())
-            .Select(e => e.Entity)
-            .ToList();
-
-        var events = entities.SelectMany(e => e.DomainEvents).ToList();
-        entities.ForEach(e => e.ClearDomainEvents());
-
-        foreach (var domainEvent in events)
-        {
-            var notificationType = typeof(DomainEventNotification<>)
-                .MakeGenericType(domainEvent.GetType());
-            var notification = Activator.CreateInstance(notificationType, domainEvent)
-                as INotification;
-
-            if (notification is not null)
-                await mediator.Publish(notification);
-        }
-    }
-
     public void Dispose() => context.Dispose();
 }
