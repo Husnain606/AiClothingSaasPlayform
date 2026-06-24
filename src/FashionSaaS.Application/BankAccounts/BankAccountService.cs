@@ -27,6 +27,26 @@ public class BankAccountService(
         return ResponseData<BankAccountResponse>.Success(MapMasked(account));
     }
 
+    /// <summary>
+    /// Returns the bank account with the AccountNumber FULLY DECRYPTED and UNMASKED.
+    /// <para>
+    /// SENSITIVE: The returned <see cref="BankAccountFullResponse.AccountNumber"/> is the
+    /// raw plaintext value. Callers MUST enforce AdminOwner / SuperAdmin authorization before
+    /// invoking this method and MUST NOT expose the result to lower-privileged callers.
+    /// </para>
+    /// </summary>
+    public async Task<ResponseData<BankAccountFullResponse>> GetFullAsync(Guid? tenantId)
+    {
+        var account = tenantId.HasValue
+            ? await bankAccountRepository.GetByTenantIdAsync(tenantId.Value)
+            : await bankAccountRepository.GetPlatformAccountAsync();
+
+        if (account is null)
+            return ResponseData<BankAccountFullResponse>.Failure("Bank account not found.", 404);
+
+        return ResponseData<BankAccountFullResponse>.Success(MapFull(account));
+    }
+
     public async Task<ResponseData<BankAccountResponse>> CreateAsync(CreateBankAccountRequest request,
         Guid userId, Guid? tenantId, string ip, string ua)
     {
@@ -101,6 +121,17 @@ public class BankAccountService(
         Id = a.Id, TenantId = a.TenantId, IsActive = a.IsActive,
         AccountTitle = fieldEncryption.Decrypt(a.AccountTitleEncrypted),
         AccountNumber = fieldEncryption.MaskAccountNumber(fieldEncryption.Decrypt(a.AccountNumberEncrypted)),
+        BankName = fieldEncryption.Decrypt(a.BankNameEncrypted),
+        BranchCode = fieldEncryption.Decrypt(a.BranchCodeEncrypted),
+        Iban = fieldEncryption.Decrypt(a.IbanEncrypted)
+    };
+
+    // NOTE: Do NOT log the return value of this mapper — AccountNumber is plaintext.
+    private BankAccountFullResponse MapFull(BankAccount a) => new()
+    {
+        Id = a.Id, TenantId = a.TenantId, IsActive = a.IsActive,
+        AccountTitle = fieldEncryption.Decrypt(a.AccountTitleEncrypted),
+        AccountNumber = fieldEncryption.Decrypt(a.AccountNumberEncrypted),
         BankName = fieldEncryption.Decrypt(a.BankNameEncrypted),
         BranchCode = fieldEncryption.Decrypt(a.BranchCodeEncrypted),
         Iban = fieldEncryption.Decrypt(a.IbanEncrypted)

@@ -320,6 +320,109 @@ public class BankAccountServiceTests
         oldValStr.Should().NotContain("12345678");
     }
 
+    // ── GetFullAsync: returns unmasked AccountNumber ─────────────────────────
+
+    [Fact]
+    public async Task GetFullAsync_ReturnsFullDecryptedAccountNumber_NotMasked()
+    {
+        var account = new BankAccount
+        {
+            Id = Guid.NewGuid(),
+            TenantId = null,
+            AccountTitleEncrypted = "ENC(ACME)",
+            AccountNumberEncrypted = "ENC(12345678)",
+            BankNameEncrypted = "ENC(HBL)",
+            BranchCodeEncrypted = "ENC(0012)",
+            IbanEncrypted = "ENC(PK36SCBL)",
+            IsActive = true
+        };
+        _bankRepo.Setup(r => r.GetPlatformAccountAsync()).ReturnsAsync(account);
+        _encryption.Setup(e => e.Decrypt(It.IsAny<string>())).Returns<string>(s =>
+            s.StartsWith("ENC(") ? s[4..^1] : s);
+
+        var result = await CreateService().GetFullAsync(null);
+
+        result.IsSuccess.Should().BeTrue();
+        // Must be full plaintext, not masked
+        result.Data!.AccountNumber.Should().Be("12345678");
+        result.Data.AccountNumber.Should().NotStartWith("****");
+
+        // MaskAccountNumber must NEVER be called for the full-fetch path
+        _encryption.Verify(e => e.MaskAccountNumber(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetFullAsync_NoAccount_ReturnsNotFound()
+    {
+        _bankRepo.Setup(r => r.GetPlatformAccountAsync()).ReturnsAsync((BankAccount?)null);
+        var result = await CreateService().GetFullAsync(null);
+        result.IsSuccess.Should().BeFalse();
+        result.StatusCode.Should().Be(404);
+    }
+
+    [Fact]
+    public async Task GetFullAsync_TenantAccount_ReturnsFullDecryptedAccountNumber()
+    {
+        var tenantId = Guid.NewGuid();
+        var account = new BankAccount
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            AccountTitleEncrypted = "ENC(TenantCorp)",
+            AccountNumberEncrypted = "ENC(98765432)",
+            BankNameEncrypted = "ENC(MCB)",
+            BranchCodeEncrypted = "ENC(0099)",
+            IbanEncrypted = "ENC(PK36MCB)",
+            IsActive = true
+        };
+        _bankRepo.Setup(r => r.GetByTenantIdAsync(tenantId)).ReturnsAsync(account);
+        _encryption.Setup(e => e.Decrypt(It.IsAny<string>())).Returns<string>(s =>
+            s.StartsWith("ENC(") ? s[4..^1] : s);
+
+        var result = await CreateService().GetFullAsync(tenantId);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Data!.AccountNumber.Should().Be("98765432");
+        result.Data.AccountNumber.Should().NotStartWith("****");
+        _encryption.Verify(e => e.MaskAccountNumber(It.IsAny<string>()), Times.Never);
+    }
+
+    // ── UpdateAsync: domain event raised ────────────────────────────────────
+
+    [Fact]
+    public async Task UpdateAsync_RaisesBankAccountChangedEvent()
+    {
+        var user = new User { Id = Guid.NewGuid(), PasswordHash = "hash", Email = "admin@x.com" };
+        var account = new BankAccount
+        {
+            Id = Guid.NewGuid(), TenantId = null,
+            AccountTitleEncrypted = "ENC(T)", AccountNumberEncrypted = "ENC(11111111)",
+            BankNameEncrypted = "ENC(B)", BranchCodeEncrypted = "ENC(C)",
+            IbanEncrypted = "ENC(I)", IsActive = true
+        };
+
+        _userRepo.Setup(r => r.GetByIdAsync(user.Id)).ReturnsAsync(user);
+        _hasher.Setup(h => h.Verify("pwd", "hash")).Returns(true);
+        _bankRepo.Setup(r => r.GetPlatformAccountAsync()).ReturnsAsync(account);
+        _bankRepo.Setup(r => r.UpdateAsync(account)).Returns(Task.CompletedTask);
+        _encryption.Setup(e => e.Encrypt(It.IsAny<string>())).Returns("cipher");
+        _encryption.Setup(e => e.Decrypt(It.IsAny<string>())).Returns("plain");
+        _encryption.Setup(e => e.MaskAccountNumber(It.IsAny<string>())).Returns("****0000");
+        _email.Setup(e => e.SendBankAccountChangedAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
+        SetupUow();
+        SetupAudit();
+
+        await CreateService().UpdateAsync(
+            new UpdateBankAccountRequest
+            {
+                AccountTitle = "T", AccountNumber = "1234", BankName = "B",
+                BranchCode = "C", Iban = "I", CurrentPassword = "pwd"
+            },
+            user.Id, null, Ip, Ua);
+
+        account.DomainEvents.Should().ContainSingle(e => e.GetType().Name == "BankAccountChangedEvent");
+    }
+
     // ── CreateAsync: domain event raised ────────────────────────────────────
 
     [Fact]
