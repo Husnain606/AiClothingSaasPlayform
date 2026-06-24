@@ -1,4 +1,6 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Text;
 using FashionSaaS.API.Constants;
 using FashionSaaS.Application.Auth;
 using FashionSaaS.Application.Auth.DTOs;
@@ -7,16 +9,18 @@ using FashionSaaS.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.IdentityModel.Tokens;
 
 namespace FashionSaaS.API.Controllers.Auth;
 
 [ApiController]
 public class AuthController(AuthService authService, IPasswordResetTokenRepository resetTokenRepo,
-    IPasswordHistoryRepository historyRepo) : ControllerBase
+    IPasswordHistoryRepository historyRepo, IConfiguration configuration) : ControllerBase
 {
     private string Ip => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
     private string Ua => Request.Headers.UserAgent.ToString();
 
+    [AllowAnonymous]
     [HttpPost(ApiUrl.Auth.Login)]
     [EnableRateLimiting("PublicPolicy")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -32,7 +36,9 @@ public class AuthController(AuthService authService, IPasswordResetTokenReposito
         return StatusCode(response.StatusCode, response);
     }
 
+    [AllowAnonymous]
     [HttpPost(ApiUrl.Auth.LoginMfa)]
+    [EnableRateLimiting("PublicPolicy")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
@@ -47,6 +53,7 @@ public class AuthController(AuthService authService, IPasswordResetTokenReposito
         return StatusCode(response.StatusCode, response);
     }
 
+    [AllowAnonymous]
     [HttpPost(ApiUrl.Auth.Refresh)]
     [EnableRateLimiting("PublicPolicy")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -55,9 +62,47 @@ public class AuthController(AuthService authService, IPasswordResetTokenReposito
     public async Task<IActionResult> Refresh()
     {
         var rawToken = Request.Cookies["refreshToken"];
-        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var bearerToken = Request.Headers.Authorization.ToString();
 
-        if (string.IsNullOrEmpty(rawToken) || !Guid.TryParse(userId, out var uid))
+        if (string.IsNullOrEmpty(rawToken))
+            return StatusCode(401, ResponseData<string>.Failure("Invalid session.", 401));
+
+        // Extract userId from the access token by validating its SIGNATURE but ignoring lifetime.
+        // This allows refresh to work when the access token is expired (the primary use case).
+        // The security gate remains the HttpOnly+Secure+SameSite=Strict refresh cookie.
+        var accessToken = bearerToken.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+            ? bearerToken["Bearer ".Length..].Trim()
+            : null;
+
+        if (string.IsNullOrEmpty(accessToken))
+            return StatusCode(401, ResponseData<string>.Failure("Invalid session.", 401));
+
+        var secret = configuration["JwtSettings:Secret"];
+        if (string.IsNullOrEmpty(secret))
+            return StatusCode(401, ResponseData<string>.Failure("Invalid session.", 401));
+
+        ClaimsPrincipal principal;
+        try
+        {
+            var handler = new JwtSecurityTokenHandler();
+            principal = handler.ValidateToken(accessToken, new TokenValidationParameters
+            {
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret)),
+                ValidateIssuer = true,
+                ValidIssuer = configuration["JwtSettings:Issuer"],
+                ValidateAudience = true,
+                ValidAudience = configuration["JwtSettings:Audience"],
+                ValidateLifetime = false  // intentionally ignore expiry — cookie is the credential
+            }, out _);
+        }
+        catch
+        {
+            return StatusCode(401, ResponseData<string>.Failure("Invalid session.", 401));
+        }
+
+        var userId = principal.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!Guid.TryParse(userId, out var uid))
             return StatusCode(401, ResponseData<string>.Failure("Invalid session.", 401));
 
         var response = await authService.RefreshTokenByUserIdAsync(uid, rawToken, Ip, Ua);
@@ -81,6 +126,7 @@ public class AuthController(AuthService authService, IPasswordResetTokenReposito
         return StatusCode(response.StatusCode, response);
     }
 
+    [AllowAnonymous]
     [HttpPost(ApiUrl.Auth.ForgotPassword)]
     [EnableRateLimiting("PublicPolicy")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -93,6 +139,7 @@ public class AuthController(AuthService authService, IPasswordResetTokenReposito
         return StatusCode(response.StatusCode, response);
     }
 
+    [AllowAnonymous]
     [HttpPost(ApiUrl.Auth.ResetPassword)]
     [EnableRateLimiting("PublicPolicy")]
     [ProducesResponseType(StatusCodes.Status200OK)]
