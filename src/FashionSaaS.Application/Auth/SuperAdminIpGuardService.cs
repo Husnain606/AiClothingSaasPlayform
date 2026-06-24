@@ -7,6 +7,7 @@ namespace FashionSaaS.Application.Auth;
 /// Detection only — alerting is handled by the domain event handler after the event is raised.
 /// </summary>
 public class SuperAdminIpGuardService(ILoginAttemptRepository loginAttemptRepository)
+    : ISuperAdminIpGuardService
 {
     /// <summary>
     /// Returns true if <paramref name="currentIp"/> is NOT in the user's recent known IPs.

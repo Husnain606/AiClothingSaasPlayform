@@ -20,7 +20,7 @@ public class AuthService(
     IAuditLogService auditLogService,
     IEmailService emailService,
     IFieldEncryptionService fieldEncryption,
-    SuperAdminIpGuardService ipGuardService)
+    ISuperAdminIpGuardService ipGuardService)
 {
     private static readonly Regex PasswordPolicy =
         new(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z\d]).{8,}$", RegexOptions.Compiled);
@@ -102,8 +102,10 @@ public class AuthService(
         // tenantSlug from navigation property (null for SuperAdmin who has no TenantId)
         var tenantSlug = user.Tenant?.Slug;
 
-        // Anomaly detection — raise domain event before SaveChangesAsync so UnitOfWork dispatches it
-        if (await ipGuardService.IsNewIpAsync(user.Email, ipAddress))
+        // Anomaly detection — raise domain event before SaveChangesAsync so UnitOfWork dispatches it.
+        // Guard: only SuperAdmins should trigger this alert; non-SuperAdmin MFA enrollees must not.
+        var isSuperAdmin = roles.Contains(nameof(RoleType.SuperAdmin));
+        if (isSuperAdmin && await ipGuardService.IsNewIpAsync(user.Email, ipAddress))
         {
             var newIpEvent = new SuperAdminLoginFromNewIpEvent(user.Id, user.Email, ipAddress, DateTime.UtcNow);
             user.AddDomainEvent(newIpEvent);

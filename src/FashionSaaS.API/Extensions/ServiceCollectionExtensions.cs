@@ -3,6 +3,7 @@ using System.Text;
 using System.Threading.RateLimiting;
 using FashionSaaS.Application.AuditLogs;
 using FashionSaaS.Application.Auth;
+using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Application.Behaviors;
 using FashionSaaS.Application.BankAccounts;
 using FashionSaaS.Application.LoginAttempts;
@@ -31,7 +32,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<BankAccountService>();
         services.AddScoped<AuditLogQueryService>();
         services.AddScoped<LoginAttemptService>();
-        services.AddScoped<SuperAdminIpGuardService>();
+        services.AddScoped<ISuperAdminIpGuardService, SuperAdminIpGuardService>();
         return services;
     }
 

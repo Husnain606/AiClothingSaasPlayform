@@ -20,15 +20,13 @@ public class PasswordManagementTests
     private readonly Mock<IPasswordResetTokenRepository> _resetTokenRepo = new();
     private readonly Mock<IPasswordHistoryRepository> _historyRepo = new();
     private readonly Mock<IFieldEncryptionService> _fieldEncryption = new();
-
-    private SuperAdminIpGuardService CreateIpGuardService() =>
-        new(_loginAttemptRepo.Object);
+    private readonly Mock<ISuperAdminIpGuardService> _ipGuardService = new();
 
     private AuthService CreateService() => new(
         _userRepo.Object, _refreshRepo.Object, _loginAttemptRepo.Object,
         _passwordHasher.Object, _jwtService.Object, _uow.Object,
         _auditLog.Object, _emailService.Object, _fieldEncryption.Object,
-        CreateIpGuardService());
+        _ipGuardService.Object);
 
     // ------------------------------------------------------------------
     // ForgotPassword

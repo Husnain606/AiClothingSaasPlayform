@@ -3,6 +3,7 @@ using FashionSaaS.Application.Auth.DTOs;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Domain.Entities;
 using FashionSaaS.Domain.Enums;
+using FashionSaaS.Domain.Events;
 using FluentAssertions;
 using Moq;
 
@@ -20,15 +21,13 @@ public class AuthServiceTests
     private readonly Mock<IEmailService> _emailService = new();
     private readonly Mock<IFieldEncryptionService> _fieldEncryption = new();
     private readonly Mock<ITotpService> _totpService = new();
-
-    private SuperAdminIpGuardService CreateIpGuardService() =>
-        new(_loginAttemptRepo.Object);
+    private readonly Mock<ISuperAdminIpGuardService> _ipGuardService = new();
 
     private AuthService CreateService() => new(
         _userRepo.Object, _refreshRepo.Object, _loginAttemptRepo.Object,
         _passwordHasher.Object, _jwtService.Object, _uow.Object,
         _auditLog.Object, _emailService.Object, _fieldEncryption.Object,
-        CreateIpGuardService());
+        _ipGuardService.Object);
 
     [Fact]
     public async Task LoginAsync_ValidCredentials_NonSuperAdmin_ReturnsTokens()
@@ -211,8 +210,8 @@ public class AuthServiceTests
 
         _userRepo.Setup(r => r.GetByIdWithRolesAsync(userId)).ReturnsAsync(user);
         // IP guard: known IP so no new-IP event is raised (keeps test focused)
-        _loginAttemptRepo.Setup(r => r.GetRecentIpsByUserEmailAsync("superadmin@system.com", 20))
-            .ReturnsAsync(new List<string> { "127.0.0.1" });
+        _ipGuardService.Setup(g => g.IsNewIpAsync("superadmin@system.com", "127.0.0.1"))
+            .ReturnsAsync(false);
         // fieldEncryption.Decrypt must be called with the ciphertext and return the raw secret
         _fieldEncryption.Setup(e => e.Decrypt(encryptedSecret)).Returns(rawSecret);
         // totpService.Verify must be called with the RAW (decrypted) secret, not the ciphertext
@@ -266,5 +265,122 @@ public class AuthServiceTests
     public async Task IsPasswordCompliant_StrongPassword_UnderscoreSpecial_ReturnsTrue()
     {
         AuthService.IsPasswordCompliant("MyPass1_").Should().BeTrue();
+    }
+
+    // -------------------------------------------------------------------------
+    // Fix 1 — new-IP event gated on SuperAdmin role
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task LoginMfaAsync_SuperAdmin_NewIp_RaisesSuperAdminLoginFromNewIpEvent()
+    {
+        // Arrange: SuperAdmin user with valid TOTP + a new (unknown) IP
+        var userId = Guid.NewGuid();
+        const string rawSecret = "JBSWY3DPEHPK3PXP";
+        const string encryptedSecret = "enc:JBSWY3DPEHPK3PXP";
+
+        var mfaSettings = new UserMfaSettings
+        {
+            TotpSecretEncrypted = encryptedSecret,
+            IsEnabled = true,
+            IsEnrolled = true
+        };
+        var user = new User
+        {
+            Id = userId, Email = "superadmin@system.com",
+            PasswordHash = "hash", IsActive = true, TenantId = null,
+            MfaSettings = mfaSettings,
+            UserRoles = new List<UserRole>
+            {
+                new() { Role = new Role { Name = RoleType.SuperAdmin, Scope = RoleScope.Platform } }
+            }
+        };
+
+        var mockTotp = new Mock<ITotpService>();
+        mockTotp.Setup(t => t.Verify(rawSecret, "123456")).Returns(true);
+        _userRepo.Setup(r => r.GetByIdWithRolesAsync(userId)).ReturnsAsync(user);
+        _fieldEncryption.Setup(e => e.Decrypt(encryptedSecret)).Returns(rawSecret);
+        // IP guard reports a new IP
+        _ipGuardService.Setup(g => g.IsNewIpAsync("superadmin@system.com", "192.168.1.99"))
+            .ReturnsAsync(true);
+        _jwtService.Setup(j => j.GenerateAccessToken(user, It.IsAny<IList<string>>(), It.IsAny<string?>(), true))
+            .Returns("access_token");
+        _jwtService.Setup(j => j.GenerateRefreshToken()).Returns("raw_refresh");
+        _passwordHasher.Setup(h => h.Hash("raw_refresh")).Returns("hashed_refresh");
+        _auditLog.Setup(a => a.LogAsync(It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<string>(),
+            It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<object?>(), It.IsAny<object?>(),
+            It.IsAny<string>(), It.IsAny<string>())).Returns(Task.CompletedTask);
+        _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
+
+        var service = CreateService();
+
+        // Act
+        var result = await service.LoginMfaAsync(
+            new LoginMfaRequest { UserId = userId, Code = "123456" },
+            mockTotp.Object, "192.168.1.99", "Mozilla");
+
+        // Assert: login succeeds AND the user entity carries the domain event
+        result.IsSuccess.Should().BeTrue();
+        user.DomainEvents.Should().ContainSingle(e => e is SuperAdminLoginFromNewIpEvent)
+            .Which.As<SuperAdminLoginFromNewIpEvent>()
+            .NewIpAddress.Should().Be("192.168.1.99");
+    }
+
+    [Fact]
+    public async Task LoginMfaAsync_NonSuperAdmin_NewIp_DoesNotRaiseSuperAdminLoginFromNewIpEvent()
+    {
+        // Arrange: non-SuperAdmin (AdminOwner) with valid TOTP + a new (unknown) IP — must NOT get event
+        var userId = Guid.NewGuid();
+        const string rawSecret = "JBSWY3DPEHPK3PXP";
+        const string encryptedSecret = "enc:JBSWY3DPEHPK3PXP";
+        var tenantId = Guid.NewGuid();
+        var tenant = new Tenant { Id = tenantId, Slug = "brand-slug" };
+
+        var mfaSettings = new UserMfaSettings
+        {
+            TotpSecretEncrypted = encryptedSecret,
+            IsEnabled = true,
+            IsEnrolled = true
+        };
+        var user = new User
+        {
+            Id = userId, Email = "owner@brand.com",
+            PasswordHash = "hash", IsActive = true, TenantId = tenantId,
+            Tenant = tenant,
+            MfaSettings = mfaSettings,
+            UserRoles = new List<UserRole>
+            {
+                new() { Role = new Role { Name = RoleType.AdminOwner, Scope = RoleScope.Tenant } }
+            }
+        };
+
+        var mockTotp = new Mock<ITotpService>();
+        mockTotp.Setup(t => t.Verify(rawSecret, "654321")).Returns(true);
+        _userRepo.Setup(r => r.GetByIdWithRolesAsync(userId)).ReturnsAsync(user);
+        _fieldEncryption.Setup(e => e.Decrypt(encryptedSecret)).Returns(rawSecret);
+        // IP guard would report a new IP if called — but it should NOT be called for non-SuperAdmin
+        _ipGuardService.Setup(g => g.IsNewIpAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(true);
+        _jwtService.Setup(j => j.GenerateAccessToken(user, It.IsAny<IList<string>>(), It.IsAny<string?>(), true))
+            .Returns("access_token");
+        _jwtService.Setup(j => j.GenerateRefreshToken()).Returns("raw_refresh");
+        _passwordHasher.Setup(h => h.Hash("raw_refresh")).Returns("hashed_refresh");
+        _auditLog.Setup(a => a.LogAsync(It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<string>(),
+            It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<object?>(), It.IsAny<object?>(),
+            It.IsAny<string>(), It.IsAny<string>())).Returns(Task.CompletedTask);
+        _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
+
+        var service = CreateService();
+
+        // Act
+        var result = await service.LoginMfaAsync(
+            new LoginMfaRequest { UserId = userId, Code = "654321" },
+            mockTotp.Object, "192.168.1.99", "Mozilla");
+
+        // Assert: login succeeds but NO SuperAdminLoginFromNewIpEvent is present
+        result.IsSuccess.Should().BeTrue();
+        user.DomainEvents.Should().NotContain(e => e is SuperAdminLoginFromNewIpEvent);
+        // Also verify the IP guard was never queried for a non-SuperAdmin
+        _ipGuardService.Verify(g => g.IsNewIpAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 }
