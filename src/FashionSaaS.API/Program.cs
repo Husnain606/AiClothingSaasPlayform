@@ -33,6 +33,13 @@ builder.Services.AddApplicationServices();
 // JWT bearer auth (HS256)
 builder.Services.AddJwtAuthentication(builder.Configuration);
 
+// Authorization policies — MfaVerified requires mfa_verified=true claim in JWT
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("MfaVerified", policy =>
+        policy.RequireClaim("mfa_verified", "true"));
+});
+
 // Rate limiting: PublicPolicy / AuthenticatedPolicy / SuperAdminPolicy
 builder.Services.AddRateLimiting();
 
