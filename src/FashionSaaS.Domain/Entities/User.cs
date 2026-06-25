@@ -9,6 +9,7 @@ public class User : BaseEntity
     public string PasswordHash { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;
     public bool IsEmailVerified { get; set; } = false;
+    public bool IsLocked { get; set; } = false;
 
     public Tenant? Tenant { get; set; }
     public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();

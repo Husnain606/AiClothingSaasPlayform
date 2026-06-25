@@ -9,6 +9,7 @@ public class TenantSubscriptionConfiguration : IEntityTypeConfiguration<TenantSu
     public void Configure(EntityTypeBuilder<TenantSubscription> builder)
     {
         builder.HasKey(s => s.Id);
+        builder.HasIndex(s => new { s.TenantId, s.Status });
         builder.HasOne(s => s.Tenant).WithMany(t => t.Subscriptions)
             .HasForeignKey(s => s.TenantId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(s => s.Plan).WithMany(p => p.TenantSubscriptions)

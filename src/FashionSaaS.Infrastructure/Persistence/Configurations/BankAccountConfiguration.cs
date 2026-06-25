@@ -9,6 +9,7 @@ public class BankAccountConfiguration : IEntityTypeConfiguration<BankAccount>
     public void Configure(EntityTypeBuilder<BankAccount> builder)
     {
         builder.HasKey(b => b.Id);
+        builder.HasIndex(b => b.TenantId);
         builder.Property(b => b.TenantId).IsRequired(false);
         builder.Property(b => b.AccountTitleEncrypted).HasMaxLength(2000).IsRequired();
         builder.Property(b => b.AccountNumberEncrypted).HasMaxLength(2000).IsRequired();

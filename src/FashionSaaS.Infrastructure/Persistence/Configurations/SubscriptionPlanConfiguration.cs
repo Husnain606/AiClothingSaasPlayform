@@ -9,6 +9,7 @@ public class SubscriptionPlanConfiguration : IEntityTypeConfiguration<Subscripti
     public void Configure(EntityTypeBuilder<SubscriptionPlan> builder)
     {
         builder.HasKey(p => p.Id);
+        builder.HasIndex(p => p.IsActive);
         builder.Property(p => p.Name).HasMaxLength(100).IsRequired();
         builder.Property(p => p.Price).HasPrecision(18, 2);
     }
