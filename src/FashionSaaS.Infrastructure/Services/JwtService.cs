@@ -55,7 +55,8 @@ public class JwtService(IOptions<JwtSettings> jwtOptions) : IJwtService
 
     public ClaimsPrincipal? GetPrincipalFromExpiredToken(string token)
     {
-        var secret = _jwt.Secret;
+        var secret = _jwt.Secret is { Length: > 0 } s ? s
+            : throw new InvalidOperationException("JwtSettings:Secret not set.");
         var validationParameters = new TokenValidationParameters
         {
             ValidateIssuerSigningKey = true,

@@ -14,10 +14,16 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
-        // Options bindings (CONVENTIONS §2)
-        services.Configure<JwtSettings>(configuration.GetSection(JwtSettings.SectionName));
+        // Options bindings (CONVENTIONS §2) — JWT and Encryption fail fast at startup; SMTP is lazy
+        services.AddOptions<JwtSettings>()
+            .Bind(configuration.GetSection(JwtSettings.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+        services.AddOptions<EncryptionSettings>()
+            .Bind(configuration.GetSection(EncryptionSettings.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
         services.Configure<SmtpSettings>(configuration.GetSection(SmtpSettings.SectionName));
-        services.Configure<EncryptionSettings>(configuration.GetSection(EncryptionSettings.SectionName));
 
         // DbContext
         services.AddDbContext<ApplicationDbContext>(options =>
