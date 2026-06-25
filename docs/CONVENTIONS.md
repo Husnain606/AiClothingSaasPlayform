@@ -52,4 +52,33 @@ Use ASP.NET Core's built-in global exception handling (`IExceptionHandler` + `Ad
 
 ---
 
-_Conventions added 2026-06-24. Applies to Phase 1 code (refactored to comply) and all subsequent phases._
+## 4. Index read-heavy / low-write entities by their real query patterns
+
+Any column frequently used in a `WHERE`, `JOIN`, or `ORDER BY` must have an appropriate EF Core index declared in that entity's `IEntityTypeConfiguration`. Drive index choices from the **actual repository query methods**, not guesses.
+
+**Rules:**
+- Entities read far more than written (lookups/catalogs — e.g. `Tenant` by slug, `SubscriptionPlan` catalog, `Role` by name) should be liberally indexed: index-maintenance cost on writes is negligible because writes are rare, and the read speedup is large.
+- Use **composite indexes** that match the predicate shape, in selectivity order. Examples grounded in this codebase's queries:
+  - `SubscriptionPayment` → `(Status, DueDate)` for the overdue / due-soon background-job queries; plus `SubscriptionId`, `TenantId`.
+  - `TenantSubscription` → `(TenantId, Status)` for active-subscription-by-tenant lookups.
+  - `User` → unique index on `Email` (login), index on `TenantId` (per-tenant listing).
+  - `BankAccount` → `TenantId`.
+  - Append-only / high-write tables already indexed for their read paths: `AuditLog` `(EntityName, EntityId)` + `CreatedAt`; `UserLoginAttempt` `(Email, CreatedAt)`.
+- Don't over-index hot write paths — every index adds write cost. Index where reads dominate or the predicate is on the critical path.
+- Unique constraints (slug, email, role name) are both correctness guards and indexes — keep them.
+
+## 5. Use the lightest collection type the consumer actually needs
+
+Keep the codebase lightweight: pick the smallest-capability collection abstraction for each signature, by demand.
+
+**Rules:**
+- **Method parameters** that only iterate → `IEnumerable<T>`.
+- **Return values** the caller only reads → `IReadOnlyList<T>` / `IReadOnlyCollection<T>` (or `IEnumerable<T>` when streaming/lazy is intended).
+- **Public mutable collections** (caller must `Add`/`Remove`) → `ICollection<T>` / `IList<T>` — only when mutation is genuinely required.
+- Avoid exposing concrete `List<T>` in public/service/DTO signatures unless `List`-specific behaviour is needed.
+- Materialize a lazy query once at the boundary (`ToList()`/`ToArray()`) and pass `IReadOnlyList<T>` downstream — never re-enumerate an `IEnumerable<T>` multiple times (guards against multiple-enumeration of deferred EF queries).
+- **EF Core exception:** entity **navigation collections** must stay `ICollection<T>` (or `List<T>`) — EF needs `Add` support for change tracking. Do **not** downgrade navigation properties to `IEnumerable<T>`.
+
+---
+
+_Conventions added 2026-06-24 (§1–3); §4–5 added 2026-06-24. Applies to Phase 1 code (refactored to comply) and all subsequent phases._
