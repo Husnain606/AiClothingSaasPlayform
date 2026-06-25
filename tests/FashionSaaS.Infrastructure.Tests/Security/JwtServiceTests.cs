@@ -1,4 +1,3 @@
-using System.IdentityModel.Tokens.Jwt;
 using FashionSaaS.Application.Configuration;
 using FashionSaaS.Infrastructure.Services;
 using FluentAssertions;
