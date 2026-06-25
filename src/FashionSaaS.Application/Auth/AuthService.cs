@@ -306,17 +306,20 @@ public class AuthService(
     // -------------------------------------------------------------------------
 
     private async Task<(string accessToken, string rawRefreshToken)> IssueTokensAsync(
-        User user, IList<string> roles, string? tenantSlug, bool mfaVerified)
+        User user, IEnumerable<string> roles, string? tenantSlug, bool mfaVerified)
     {
+        // Materialize once — roles is used for both JWT generation and SuperAdmin check below.
+        var roleList = roles as IReadOnlyList<string> ?? roles.ToList();
+
         // Pass tenantSlug so the JWT carries the tenant_slug claim (security requirement)
-        var accessToken = jwtService.GenerateAccessToken(user, roles, tenantSlug, mfaVerified);
+        var accessToken = jwtService.GenerateAccessToken(user, roleList, tenantSlug, mfaVerified);
         var rawRefreshToken = jwtService.GenerateRefreshToken();
         var hashedToken = passwordHasher.Hash(rawRefreshToken);
 
         // Revoke any existing tokens before issuing new one (rotation)
         await refreshTokenRepository.RevokeAllByUserIdAsync(user.Id);
 
-        var isSuperAdmin = roles.Contains(RoleType.SuperAdmin.ToString());
+        var isSuperAdmin = roleList.Contains(RoleType.SuperAdmin.ToString());
         // SuperAdmin gets 24-hour refresh window; all others get 7 days
         var expiry = isSuperAdmin ? DateTime.UtcNow.AddHours(24) : DateTime.UtcNow.AddDays(7);
 

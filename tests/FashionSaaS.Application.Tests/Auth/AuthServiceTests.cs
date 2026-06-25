@@ -53,7 +53,7 @@ public class AuthServiceTests
         // Correct 4-arg signature: (user, roles, tenantSlug, mfaVerified)
         _jwtService.Setup(j => j.GenerateAccessToken(
             user,
-            It.IsAny<IList<string>>(),
+            It.IsAny<IEnumerable<string>>(),
             It.IsAny<string?>(),
             false)).Returns("access_token");
         _jwtService.Setup(j => j.GenerateRefreshToken()).Returns("raw_refresh");
@@ -140,7 +140,7 @@ public class AuthServiceTests
         // No JWT should be issued at this step
         result.Data.AccessToken.Should().BeNull();
         _jwtService.Verify(j => j.GenerateAccessToken(
-            It.IsAny<User>(), It.IsAny<IList<string>>(), It.IsAny<string?>(), It.IsAny<bool>()),
+            It.IsAny<User>(), It.IsAny<IEnumerable<string>>(), It.IsAny<string?>(), It.IsAny<bool>()),
             Times.Never);
         _jwtService.Verify(j => j.GenerateMfaChallengeToken(user.Id), Times.Once);
     }
@@ -220,7 +220,7 @@ public class AuthServiceTests
         // totpService.Verify must be called with the RAW (decrypted) secret, not the ciphertext
         _totpService.Setup(t => t.Verify(rawSecret, "123456")).Returns(true);
         _jwtService.Setup(j => j.GenerateAccessToken(
-            user, It.IsAny<IList<string>>(), It.IsAny<string?>(), true)).Returns("access_token");
+            user, It.IsAny<IEnumerable<string>>(), It.IsAny<string?>(), true)).Returns("access_token");
         _jwtService.Setup(j => j.GenerateRefreshToken()).Returns("raw_refresh");
         _passwordHasher.Setup(h => h.Hash("raw_refresh")).Returns("hashed_refresh");
         _auditLog.Setup(a => a.LogAsync(It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<string>(),
@@ -309,7 +309,7 @@ public class AuthServiceTests
         // IP guard reports a new IP
         _ipGuardService.Setup(g => g.IsNewIpAsync("superadmin@system.com", "192.168.1.99"))
             .ReturnsAsync(true);
-        _jwtService.Setup(j => j.GenerateAccessToken(user, It.IsAny<IList<string>>(), It.IsAny<string?>(), true))
+        _jwtService.Setup(j => j.GenerateAccessToken(user, It.IsAny<IEnumerable<string>>(), It.IsAny<string?>(), true))
             .Returns("access_token");
         _jwtService.Setup(j => j.GenerateRefreshToken()).Returns("raw_refresh");
         _jwtService.Setup(j => j.ValidateMfaChallengeToken("mfa_challenge_token")).Returns(userId);
@@ -369,7 +369,7 @@ public class AuthServiceTests
         // IP guard would report a new IP if called — but it should NOT be called for non-SuperAdmin
         _ipGuardService.Setup(g => g.IsNewIpAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(true);
-        _jwtService.Setup(j => j.GenerateAccessToken(user, It.IsAny<IList<string>>(), It.IsAny<string?>(), true))
+        _jwtService.Setup(j => j.GenerateAccessToken(user, It.IsAny<IEnumerable<string>>(), It.IsAny<string?>(), true))
             .Returns("access_token");
         _jwtService.Setup(j => j.GenerateRefreshToken()).Returns("raw_refresh");
         _jwtService.Setup(j => j.ValidateMfaChallengeToken("mfa_challenge_token")).Returns(userId);

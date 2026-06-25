@@ -14,14 +14,17 @@ public class JwtService(IOptions<JwtSettings> jwtOptions) : IJwtService
 {
     private readonly JwtSettings _jwt = jwtOptions.Value;
 
-    public string GenerateAccessToken(User user, IList<string> roles, string? tenantSlug = null, bool mfaVerified = false)
+    public string GenerateAccessToken(User user, IEnumerable<string> roles, string? tenantSlug = null, bool mfaVerified = false)
     {
         var secret = _jwt.Secret is { Length: > 0 } s ? s
             : throw new InvalidOperationException("JwtSettings:Secret not set.");
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
-        var isSuperAdmin = roles.Contains(nameof(Domain.Enums.RoleType.SuperAdmin));
+        // Materialize once so we don't enumerate the IEnumerable twice (Contains + Select below).
+        var roleList = roles as IReadOnlyList<string> ?? roles.ToList();
+
+        var isSuperAdmin = roleList.Contains(nameof(Domain.Enums.RoleType.SuperAdmin));
         var expiryMinutes = isSuperAdmin ? 10 : 15;
 
         var claims = new List<Claim>
@@ -38,7 +41,7 @@ public class JwtService(IOptions<JwtSettings> jwtOptions) : IJwtService
             claims.Add(new Claim("tenant_slug", tenantSlug));
         }
 
-        claims.AddRange(roles.Select(r => new Claim(ClaimTypes.Role, r)));
+        claims.AddRange(roleList.Select(r => new Claim(ClaimTypes.Role, r)));
 
         var token = new JwtSecurityToken(
             issuer: _jwt.Issuer,

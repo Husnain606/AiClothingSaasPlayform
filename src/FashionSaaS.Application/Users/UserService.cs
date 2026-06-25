@@ -202,7 +202,7 @@ public class UserService(
         return new string(bytes.Select(b => chars[b % chars.Length]).ToArray());
     }
 
-    private static UserResponse MapToResponse(User u, IList<string> roles) => new()
+    private static UserResponse MapToResponse(User u, IReadOnlyList<string> roles) => new()
     {
         Id = u.Id, FirstName = u.FirstName, LastName = u.LastName,
         Email = u.Email, TenantId = u.TenantId, IsActive = u.IsActive,
