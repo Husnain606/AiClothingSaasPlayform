@@ -169,6 +169,7 @@ public class UserService(
         await loginAttemptRepository.ResetRecentFailedAttemptsAsync(user.Email);
 
         user.IsActive = true;
+        user.IsLocked = false;  // B3: clear persistent lock set by 10-failure tier
         await userRepository.UpdateAsync(user);
         await unitOfWork.SaveChangesAsync();
 

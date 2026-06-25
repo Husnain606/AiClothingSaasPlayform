@@ -125,6 +125,7 @@ public class AuthServiceTests
         _userRepo.Setup(r => r.GetByIdWithRolesAsync(user.Id)).ReturnsAsync(user);
         _passwordHasher.Setup(h => h.Verify("Password@1", "hash")).Returns(true);
         _loginAttemptRepo.Setup(r => r.GetRecentFailureCountAsync("superadmin@system.com", 15)).ReturnsAsync(0);
+        _jwtService.Setup(j => j.GenerateMfaChallengeToken(user.Id)).Returns("mfa_challenge_token");
         _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
 
         var service = CreateService();
@@ -134,12 +135,14 @@ public class AuthServiceTests
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.MfaRequired.Should().BeTrue();
-        result.Data.MfaUserId.Should().Be(user.Id);
+        // B1: MfaToken replaces raw MfaUserId — the user GUID is no longer exposed
+        result.Data.MfaToken.Should().Be("mfa_challenge_token");
         // No JWT should be issued at this step
         result.Data.AccessToken.Should().BeNull();
         _jwtService.Verify(j => j.GenerateAccessToken(
             It.IsAny<User>(), It.IsAny<IList<string>>(), It.IsAny<string?>(), It.IsAny<bool>()),
             Times.Never);
+        _jwtService.Verify(j => j.GenerateMfaChallengeToken(user.Id), Times.Once);
     }
 
     [Fact]
@@ -225,12 +228,15 @@ public class AuthServiceTests
             It.IsAny<string>(), It.IsAny<string>())).Returns(Task.CompletedTask);
         _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
 
+        // B1: set up challenge-token validation to return the userId
+        _jwtService.Setup(j => j.ValidateMfaChallengeToken("mfa_challenge_token")).Returns(userId);
+
         var totpServiceMock = new Mock<ITotpService>();
         totpServiceMock.Setup(t => t.Verify(rawSecret, "123456")).Returns(true);
 
         var service = CreateService();
         var result = await service.LoginMfaAsync(
-            new LoginMfaRequest { UserId = userId, Code = "123456" },
+            new LoginMfaRequest { MfaToken = "mfa_challenge_token", Code = "123456" },
             totpServiceMock.Object, "127.0.0.1", "Mozilla");
 
         // Assert: login succeeds proving the decrypted secret reached totpService.Verify
@@ -306,17 +312,19 @@ public class AuthServiceTests
         _jwtService.Setup(j => j.GenerateAccessToken(user, It.IsAny<IList<string>>(), It.IsAny<string?>(), true))
             .Returns("access_token");
         _jwtService.Setup(j => j.GenerateRefreshToken()).Returns("raw_refresh");
+        _jwtService.Setup(j => j.ValidateMfaChallengeToken("mfa_challenge_token")).Returns(userId);
         _passwordHasher.Setup(h => h.Hash("raw_refresh")).Returns("hashed_refresh");
         _auditLog.Setup(a => a.LogAsync(It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<string>(),
             It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<object?>(), It.IsAny<object?>(),
             It.IsAny<string>(), It.IsAny<string>())).Returns(Task.CompletedTask);
+        _loginAttemptRepo.Setup(r => r.GetRecentFailureCountAsync(user.Email, 15)).ReturnsAsync(0);
         _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
 
         var service = CreateService();
 
         // Act
         var result = await service.LoginMfaAsync(
-            new LoginMfaRequest { UserId = userId, Code = "123456" },
+            new LoginMfaRequest { MfaToken = "mfa_challenge_token", Code = "123456" },
             mockTotp.Object, "192.168.1.99", "Mozilla");
 
         // Assert: login succeeds AND the user entity carries the domain event
@@ -364,17 +372,19 @@ public class AuthServiceTests
         _jwtService.Setup(j => j.GenerateAccessToken(user, It.IsAny<IList<string>>(), It.IsAny<string?>(), true))
             .Returns("access_token");
         _jwtService.Setup(j => j.GenerateRefreshToken()).Returns("raw_refresh");
+        _jwtService.Setup(j => j.ValidateMfaChallengeToken("mfa_challenge_token")).Returns(userId);
         _passwordHasher.Setup(h => h.Hash("raw_refresh")).Returns("hashed_refresh");
         _auditLog.Setup(a => a.LogAsync(It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<string>(),
             It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<object?>(), It.IsAny<object?>(),
             It.IsAny<string>(), It.IsAny<string>())).Returns(Task.CompletedTask);
+        _loginAttemptRepo.Setup(r => r.GetRecentFailureCountAsync(user.Email, 15)).ReturnsAsync(0);
         _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
 
         var service = CreateService();
 
         // Act
         var result = await service.LoginMfaAsync(
-            new LoginMfaRequest { UserId = userId, Code = "654321" },
+            new LoginMfaRequest { MfaToken = "mfa_challenge_token", Code = "654321" },
             mockTotp.Object, "192.168.1.99", "Mozilla");
 
         // Assert: login succeeds but NO SuperAdminLoginFromNewIpEvent is present
@@ -382,5 +392,126 @@ public class AuthServiceTests
         user.DomainEvents.Should().NotContain(e => e is SuperAdminLoginFromNewIpEvent);
         // Also verify the IP guard was never queried for a non-SuperAdmin
         _ipGuardService.Verify(g => g.IsNewIpAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+    }
+
+    // -------------------------------------------------------------------------
+    // B1 — MFA-challenge token binds step 2 to step 1
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task LoginMfaAsync_InvalidChallengeToken_Returns401()
+    {
+        // ValidateMfaChallengeToken returns null → 401 without touching the user store
+        _jwtService.Setup(j => j.ValidateMfaChallengeToken("bad_token")).Returns((Guid?)null);
+
+        var service = CreateService();
+        var result = await service.LoginMfaAsync(
+            new LoginMfaRequest { MfaToken = "bad_token", Code = "123456" },
+            _totpService.Object, "127.0.0.1", "Mozilla");
+
+        result.IsSuccess.Should().BeFalse();
+        result.StatusCode.Should().Be(401);
+        // No user lookup should occur when the challenge token is invalid
+        _userRepo.Verify(r => r.GetByIdWithRolesAsync(It.IsAny<Guid>()), Times.Never);
+    }
+
+    // -------------------------------------------------------------------------
+    // B2 — TOTP failures recorded toward lockout
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task LoginMfaAsync_WrongTotpCode_RecordsFailureAttempt()
+    {
+        var userId = Guid.NewGuid();
+        const string rawSecret = "JBSWY3DPEHPK3PXP";
+        const string encryptedSecret = "enc:JBSWY3DPEHPK3PXP";
+
+        var mfaSettings = new UserMfaSettings
+        {
+            TotpSecretEncrypted = encryptedSecret, IsEnabled = true, IsEnrolled = true
+        };
+        var user = new User
+        {
+            Id = userId, Email = "superadmin@system.com",
+            PasswordHash = "hash", IsActive = true,
+            MfaSettings = mfaSettings,
+            UserRoles = new List<UserRole>
+            {
+                new() { Role = new Role { Name = RoleType.SuperAdmin, Scope = RoleScope.Platform } }
+            }
+        };
+
+        _jwtService.Setup(j => j.ValidateMfaChallengeToken("mfa_token")).Returns(userId);
+        _userRepo.Setup(r => r.GetByIdWithRolesAsync(userId)).ReturnsAsync(user);
+        _loginAttemptRepo.Setup(r => r.GetRecentFailureCountAsync(user.Email, 15)).ReturnsAsync(0);
+        _fieldEncryption.Setup(e => e.Decrypt(encryptedSecret)).Returns(rawSecret);
+        // Wrong TOTP code
+        _totpService.Setup(t => t.Verify(rawSecret, "wrong")).Returns(false);
+        _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
+
+        var service = CreateService();
+        var result = await service.LoginMfaAsync(
+            new LoginMfaRequest { MfaToken = "mfa_token", Code = "wrong" },
+            _totpService.Object, "127.0.0.1", "Mozilla");
+
+        result.IsSuccess.Should().BeFalse();
+        result.StatusCode.Should().Be(401);
+        // Failure attempt must be recorded so it counts toward the lockout window
+        _loginAttemptRepo.Verify(r => r.AddAsync(It.Is<UserLoginAttempt>(
+            a => !a.IsSuccess && a.FailureReason == "Invalid MFA code")), Times.Once);
+    }
+
+    // -------------------------------------------------------------------------
+    // B3 — Persistent lock (IsLocked) checks
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task LoginAsync_IsLockedTrue_Returns423_WithoutCheckingPassword()
+    {
+        var user = new User
+        {
+            Id = Guid.NewGuid(), Email = "locked@system.com",
+            PasswordHash = "hash", IsActive = true, IsLocked = true
+        };
+        _userRepo.Setup(r => r.GetByEmailAsync(user.Email)).ReturnsAsync(user);
+        // recentFailures check must NOT be needed; IsLocked should short-circuit
+        _loginAttemptRepo.Setup(r => r.GetRecentFailureCountAsync(user.Email, 15)).ReturnsAsync(0);
+
+        var service = CreateService();
+        var result = await service.LoginAsync(
+            new LoginRequest { Email = user.Email, Password = "any" },
+            "127.0.0.1", "Mozilla");
+
+        result.IsSuccess.Should().BeFalse();
+        result.StatusCode.Should().Be(423);
+        result.Message.Should().Contain("administrator");
+        _passwordHasher.Verify(h => h.Verify(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task LoginAsync_TenFailures_SetsIsLockedAndReturns423()
+    {
+        var user = new User
+        {
+            Id = Guid.NewGuid(), Email = "target@system.com",
+            PasswordHash = "hash", IsActive = true, IsLocked = false
+        };
+        _userRepo.Setup(r => r.GetByEmailAsync(user.Email)).ReturnsAsync(user);
+        // 10 failures triggers the persistent lock tier
+        _loginAttemptRepo.Setup(r => r.GetRecentFailureCountAsync(user.Email, 15)).ReturnsAsync(10);
+        _userRepo.Setup(r => r.UpdateAsync(user)).Returns(Task.CompletedTask);
+        _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
+
+        var service = CreateService();
+        var result = await service.LoginAsync(
+            new LoginRequest { Email = user.Email, Password = "any" },
+            "127.0.0.1", "Mozilla");
+
+        result.IsSuccess.Should().BeFalse();
+        result.StatusCode.Should().Be(423);
+        // IsLocked must be set to true and persisted
+        user.IsLocked.Should().BeTrue();
+        _userRepo.Verify(r => r.UpdateAsync(user), Times.Once);
+        _uow.Verify(u => u.SaveChangesAsync(default), Times.Once);
     }
 }

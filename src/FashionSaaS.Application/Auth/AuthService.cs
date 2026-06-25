@@ -30,9 +30,23 @@ public class AuthService(
     {
         var user = await userRepository.GetByEmailAsync(request.Email);
 
-        // Check lockout FIRST — before verifying the password — so a locked account
+        // B3 — Persistent lock check: a SuperAdmin unlock is required to clear this.
+        if (user is not null && user.IsLocked)
+            return ResponseData<LoginResponse>.Failure("Account locked. Contact an administrator.", 423);
+
+        // Check rate-based lockout FIRST — before verifying the password — so a locked account
         // cannot be probed for valid credentials and no extra failure row is recorded.
         var recentFailures = await loginAttemptRepository.GetRecentFailureCountAsync(request.Email, 15);
+
+        // B3 — 10-failure tier: set persistent lock and persist before returning.
+        if (recentFailures >= 10 && user is not null && !user.IsLocked)
+        {
+            user.IsLocked = true;
+            await userRepository.UpdateAsync(user);
+            await unitOfWork.SaveChangesAsync();
+            return ResponseData<LoginResponse>.Failure("Account locked. Contact an administrator.", 423);
+        }
+
         if (recentFailures >= 5)
         {
             if (user is not null)
@@ -60,12 +74,14 @@ public class AuthService(
 
         if (isSuperAdmin)
         {
-            // Step 1 of 2: password verified; TOTP required next.
+            // B1 — Step 1 of 2: password verified; issue a short-lived MFA-challenge token.
             // No JWT issued until MFA is complete (security requirement: mfa_verified=true).
+            // The raw user GUID is no longer exposed in the response.
+            var mfaToken = jwtService.GenerateMfaChallengeToken(user.Id);
             return ResponseData<LoginResponse>.Success(new LoginResponse
             {
                 MfaRequired = true,
-                MfaUserId = user.Id
+                MfaToken = mfaToken
             }, "MFA verification required.");
         }
 
@@ -83,19 +99,40 @@ public class AuthService(
     public async Task<ResponseData<LoginResponse>> LoginMfaAsync(
         LoginMfaRequest request, ITotpService totpService, string ipAddress, string userAgent)
     {
-        var user = await userRepository.GetByIdWithRolesAsync(request.UserId);
+        // B1 — Validate the MFA-challenge token issued by the password step.
+        // Returns null if the token is invalid, expired, or has the wrong purpose.
+        var userId = jwtService.ValidateMfaChallengeToken(request.MfaToken);
+        if (userId is null)
+            return ResponseData<LoginResponse>.Failure("Invalid or expired MFA challenge.", 401);
+
+        var user = await userRepository.GetByIdWithRolesAsync(userId.Value);
         if (user is null)
             return ResponseData<LoginResponse>.Failure("User not found.", 404);
 
         if (!user.IsActive)
             return ResponseData<LoginResponse>.Failure("Account is disabled.", 403);
 
+        // B3 — Persistent lock check also applies to MFA step.
+        if (user.IsLocked)
+            return ResponseData<LoginResponse>.Failure("Account locked. Contact an administrator.", 423);
+
+        // B2 — Pre-check rate-based lockout before verifying TOTP so brute-forcing the
+        // TOTP code is subject to the same 5-fail/15-min window as the password step.
+        var recentFailures = await loginAttemptRepository.GetRecentFailureCountAsync(user.Email, 15);
+        if (recentFailures >= 5)
+            return ResponseData<LoginResponse>.Failure("Account temporarily locked. Try again in 15 minutes.", 423);
+
         if (user.MfaSettings is null || !user.MfaSettings.IsEnrolled)
             return ResponseData<LoginResponse>.Failure("MFA not configured.", 400);
 
         var secret = fieldEncryption.Decrypt(user.MfaSettings.TotpSecretEncrypted!);
+
+        // B2 — Wrong TOTP: record a failure attempt so it counts toward the lockout window.
         if (!totpService.Verify(secret, request.Code))
+        {
+            await RecordAttemptAsync(user.Email, false, "Invalid MFA code", ipAddress, userAgent);
             return ResponseData<LoginResponse>.Failure("Invalid TOTP code.", 401);
+        }
 
         var roles = user.UserRoles.Select(ur => ur.Role.Name.ToString()).ToList();
 

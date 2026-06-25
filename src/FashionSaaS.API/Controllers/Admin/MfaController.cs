@@ -34,6 +34,7 @@ public class MfaController(MfaService mfaService) : ControllerBase
     }
 
     [HttpPost(ApiUrl.AdminMfa.RegenerateBackupCodes)]
+    [Authorize(Policy = "MfaVerified")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
