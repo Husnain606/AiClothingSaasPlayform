@@ -60,7 +60,7 @@ public class TenantResolutionMiddleware(RequestDelegate next)
         await next(context);
     }
 
-    // I3: use ResponseData<string>.Failure so error shape matches ExceptionHandlingMiddleware
+    // Use ResponseData<string>.Failure so error shape matches the global exception handler
     private static async Task WriteError(HttpContext context, int statusCode, string message)
     {
         context.Response.StatusCode = statusCode;
