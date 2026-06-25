@@ -24,6 +24,7 @@ public static class DependencyInjection
             .ValidateDataAnnotations()
             .ValidateOnStart();
         services.Configure<SmtpSettings>(configuration.GetSection(SmtpSettings.SectionName));
+        services.Configure<CorsSettings>(configuration.GetSection(CorsSettings.SectionName));
 
         // DbContext
         services.AddDbContext<ApplicationDbContext>(options =>

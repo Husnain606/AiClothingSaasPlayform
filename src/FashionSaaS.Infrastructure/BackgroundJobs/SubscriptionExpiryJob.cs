@@ -20,6 +20,10 @@ public class SubscriptionExpiryJob(
             {
                 await RunAsync(stoppingToken);
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 logger.LogError(ex, "SubscriptionExpiryJob failed");

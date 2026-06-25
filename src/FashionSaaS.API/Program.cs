@@ -2,6 +2,7 @@ using FashionSaaS.API.Extensions;
 using FashionSaaS.API.Handlers;
 using FashionSaaS.API.Logging;
 using FashionSaaS.API.Middleware;
+using FashionSaaS.Application.Configuration;
 using FashionSaaS.Infrastructure;
 using FluentValidation.AspNetCore;
 using Microsoft.OpenApi;
@@ -50,10 +51,6 @@ builder.Services.AddMediatRWithBehaviors();
 // FluentValidation auto-validation on controllers
 builder.Services.AddFluentValidationAutoValidation();
 
-// AutoMapper — profiles will be scanned via AddAutoMapper(cfg => cfg.AddMaps(...)) in Tasks 22-25
-// Register with empty config for now; profiles added per controller assembly later
-builder.Services.AddAutoMapper(cfg => { });
-
 // Global exception handler (CONVENTIONS §3)
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
@@ -84,14 +81,17 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// CORS — allowed origins from config, fall back to local Angular dev server
+// CORS — allowed origins from config (CONVENTIONS §2: Options pattern), fall back to local Angular dev server
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("FashionSaaSCors", policy =>
     {
-        var allowed = builder.Configuration
-            .GetSection("Cors:AllowedOrigins")
-            .Get<string[]>() ?? ["http://localhost:4200"];
+        var corsSettings = builder.Configuration
+            .GetSection(CorsSettings.SectionName)
+            .Get<CorsSettings>();
+        var allowed = corsSettings?.AllowedOrigins is { Length: > 0 }
+            ? corsSettings.AllowedOrigins
+            : ["http://localhost:4200"];
 
         policy.WithOrigins(allowed)
               .AllowAnyHeader()
