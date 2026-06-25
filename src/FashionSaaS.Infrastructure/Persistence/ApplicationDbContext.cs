@@ -23,6 +23,18 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<UserLoginAttempt> UserLoginAttempts => Set<UserLoginAttempt>();
 
+    // Phase 2 catalog
+    public DbSet<Category> Categories => Set<Category>();
+    public DbSet<Product> Products => Set<Product>();
+    public DbSet<ProductVariant> ProductVariants => Set<ProductVariant>();
+    public DbSet<ProductImage> ProductImages => Set<ProductImage>();
+    public DbSet<StockAdjustment> StockAdjustments => Set<StockAdjustment>();
+    public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<Discount> Discounts => Set<Discount>();
+    public DbSet<Review> Reviews => Set<Review>();
+    public DbSet<Wishlist> Wishlists => Set<Wishlist>();
+    public DbSet<WishlistItem> WishlistItems => Set<WishlistItem>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -36,5 +48,30 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         // specific tenant must call .IgnoreQueryFilters() (see BankAccountRepository).
         modelBuilder.Entity<BankAccount>()
             .HasQueryFilter(b => b.TenantId == currentTenantService.TenantId);
+
+        // Phase 2 catalog — same dynamic tenant filter. The lambda references the injected
+        // currentTenantService instance (not a captured local) so EF re-evaluates TenantId per query.
+        // EF requires consistent filters across required relationships, so every tenant-owned entity
+        // in the catalog graph is filtered (filtered principal ↔ filtered dependent).
+        modelBuilder.Entity<Category>()
+            .HasQueryFilter(c => c.TenantId == currentTenantService.TenantId);
+        modelBuilder.Entity<Product>()
+            .HasQueryFilter(p => p.TenantId == currentTenantService.TenantId);
+        modelBuilder.Entity<ProductVariant>()
+            .HasQueryFilter(v => v.TenantId == currentTenantService.TenantId);
+        modelBuilder.Entity<ProductImage>()
+            .HasQueryFilter(i => i.TenantId == currentTenantService.TenantId);
+        modelBuilder.Entity<StockAdjustment>()
+            .HasQueryFilter(s => s.TenantId == currentTenantService.TenantId);
+        modelBuilder.Entity<Customer>()
+            .HasQueryFilter(c => c.TenantId == currentTenantService.TenantId);
+        modelBuilder.Entity<Discount>()
+            .HasQueryFilter(d => d.TenantId == currentTenantService.TenantId);
+        modelBuilder.Entity<Review>()
+            .HasQueryFilter(r => r.TenantId == currentTenantService.TenantId);
+        modelBuilder.Entity<Wishlist>()
+            .HasQueryFilter(w => w.TenantId == currentTenantService.TenantId);
+        modelBuilder.Entity<WishlistItem>()
+            .HasQueryFilter(i => i.TenantId == currentTenantService.TenantId);
     }
 }

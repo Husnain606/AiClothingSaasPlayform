@@ -4,6 +4,7 @@ using FashionSaaS.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace FashionSaaS.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260625163638_Phase2Catalog")]
+    partial class Phase2Catalog
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -75,7 +78,7 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("EntityName", "EntityId");
 
-                    b.ToTable("AuditLogs", (string)null);
+                    b.ToTable("AuditLogs");
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.BankAccount", b =>
@@ -125,7 +128,7 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("TenantId");
 
-                    b.ToTable("BankAccounts", (string)null);
+                    b.ToTable("BankAccounts");
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.Category", b =>
@@ -173,7 +176,7 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
                     b.HasIndex("TenantId", "Slug")
                         .IsUnique();
 
-                    b.ToTable("Categories", (string)null);
+                    b.ToTable("Categories");
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.Customer", b =>
@@ -218,7 +221,7 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
                     b.HasIndex("TenantId", "Email")
                         .IsUnique();
 
-                    b.ToTable("Customers", (string)null);
+                    b.ToTable("Customers");
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.Discount", b =>
@@ -272,7 +275,7 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
                     b.HasIndex("TenantId", "Code")
                         .IsUnique();
 
-                    b.ToTable("Discounts", (string)null);
+                    b.ToTable("Discounts");
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.MfaBackupCode", b =>
@@ -305,7 +308,7 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("UserMfaSettingsId");
 
-                    b.ToTable("MfaBackupCodes", (string)null);
+                    b.ToTable("MfaBackupCodes");
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.PasswordHistory", b =>
@@ -332,7 +335,7 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("PasswordHistories", (string)null);
+                    b.ToTable("PasswordHistories");
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.PasswordResetToken", b =>
@@ -367,7 +370,7 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("PasswordResetTokens", (string)null);
+                    b.ToTable("PasswordResetTokens");
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.Product", b =>
@@ -422,7 +425,7 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
                     b.HasIndex("TenantId", "Slug")
                         .IsUnique();
 
-                    b.ToTable("Products", (string)null);
+                    b.ToTable("Products");
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.ProductImage", b =>
@@ -470,7 +473,7 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ProductId");
 
-                    b.ToTable("ProductImages", (string)null);
+                    b.ToTable("ProductImages");
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.ProductVariant", b =>
@@ -526,7 +529,7 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
                     b.HasIndex("ProductId", "Size", "Color")
                         .IsUnique();
 
-                    b.ToTable("ProductVariants", (string)null);
+                    b.ToTable("ProductVariants");
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.RefreshToken", b =>
@@ -562,7 +565,7 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("UserId", "IsRevoked");
 
-                    b.ToTable("RefreshTokens", (string)null);
+                    b.ToTable("RefreshTokens");
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.Review", b =>
@@ -607,7 +610,7 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ProductId", "Status");
 
-                    b.ToTable("Reviews", null, t =>
+                    b.ToTable("Reviews", t =>
                         {
                             t.HasCheckConstraint("CK_Review_Rating", "[Rating] BETWEEN 1 AND 5");
                         });
@@ -636,7 +639,7 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("Roles", (string)null);
+                    b.ToTable("Roles");
 
                     b.HasData(
                         new
@@ -733,7 +736,7 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ProductVariantId");
 
-                    b.ToTable("StockAdjustments", (string)null);
+                    b.ToTable("StockAdjustments");
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.SubscriptionPayment", b =>
@@ -778,7 +781,7 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Status", "DueDate");
 
-                    b.ToTable("SubscriptionPayments", (string)null);
+                    b.ToTable("SubscriptionPayments");
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.SubscriptionPlan", b =>
@@ -830,7 +833,7 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("IsActive");
 
-                    b.ToTable("SubscriptionPlans", (string)null);
+                    b.ToTable("SubscriptionPlans");
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.Tenant", b =>
@@ -883,7 +886,7 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
                     b.HasIndex("Slug")
                         .IsUnique();
 
-                    b.ToTable("Tenants", (string)null);
+                    b.ToTable("Tenants");
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.TenantSubscription", b =>
@@ -919,7 +922,7 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("TenantId", "Status");
 
-                    b.ToTable("TenantSubscriptions", (string)null);
+                    b.ToTable("TenantSubscriptions");
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.User", b =>
@@ -973,7 +976,7 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("TenantId");
 
-                    b.ToTable("Users", (string)null);
+                    b.ToTable("Users");
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.UserLoginAttempt", b =>
@@ -1014,7 +1017,7 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Email", "CreatedAt");
 
-                    b.ToTable("UserLoginAttempts", (string)null);
+                    b.ToTable("UserLoginAttempts");
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.UserMfaSettings", b =>
@@ -1047,7 +1050,7 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
                     b.HasIndex("UserId")
                         .IsUnique();
 
-                    b.ToTable("UserMfaSettings", (string)null);
+                    b.ToTable("UserMfaSettings");
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.UserRole", b =>
@@ -1062,7 +1065,7 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("RoleId");
 
-                    b.ToTable("UserRoles", (string)null);
+                    b.ToTable("UserRoles");
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.Wishlist", b =>
@@ -1088,7 +1091,7 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
                     b.HasIndex("CustomerId")
                         .IsUnique();
 
-                    b.ToTable("Wishlists", (string)null);
+                    b.ToTable("Wishlists");
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.WishlistItem", b =>
@@ -1121,7 +1124,7 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasFilter("[ProductVariantId] IS NOT NULL");
 
-                    b.ToTable("WishlistItems", (string)null);
+                    b.ToTable("WishlistItems");
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.BankAccount", b =>
