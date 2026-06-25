@@ -5,17 +5,19 @@ using FashionSaaS.API.Constants;
 using FashionSaaS.Application.Auth;
 using FashionSaaS.Application.Auth.DTOs;
 using FashionSaaS.Application.Common;
+using FashionSaaS.Application.Configuration;
 using FashionSaaS.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
 namespace FashionSaaS.API.Controllers.Auth;
 
 [ApiController]
 public class AuthController(AuthService authService, IPasswordResetTokenRepository resetTokenRepo,
-    IPasswordHistoryRepository historyRepo, IConfiguration configuration) : ControllerBase
+    IPasswordHistoryRepository historyRepo, IOptions<JwtSettings> jwtOptions) : ControllerBase
 {
     private string Ip => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
     private string Ua => Request.Headers.UserAgent.ToString();
@@ -77,8 +79,8 @@ public class AuthController(AuthService authService, IPasswordResetTokenReposito
         if (string.IsNullOrEmpty(accessToken))
             return StatusCode(401, ResponseData<string>.Failure("Invalid session.", 401));
 
-        var secret = configuration["JwtSettings:Secret"];
-        if (string.IsNullOrEmpty(secret))
+        var jwt = jwtOptions.Value;
+        if (string.IsNullOrEmpty(jwt.Secret))
             return StatusCode(401, ResponseData<string>.Failure("Invalid session.", 401));
 
         ClaimsPrincipal principal;
@@ -88,11 +90,11 @@ public class AuthController(AuthService authService, IPasswordResetTokenReposito
             principal = handler.ValidateToken(accessToken, new TokenValidationParameters
             {
                 ValidateIssuerSigningKey = true,
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret)),
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.Secret)),
                 ValidateIssuer = true,
-                ValidIssuer = configuration["JwtSettings:Issuer"],
+                ValidIssuer = jwt.Issuer,
                 ValidateAudience = true,
-                ValidAudience = configuration["JwtSettings:Audience"],
+                ValidAudience = jwt.Audience,
                 ValidateLifetime = false  // intentionally ignore expiry — cookie is the credential
             }, out _);
         }

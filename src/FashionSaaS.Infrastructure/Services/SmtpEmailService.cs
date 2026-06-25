@@ -1,32 +1,35 @@
+using FashionSaaS.Application.Configuration;
 using FashionSaaS.Application.Interfaces;
 using MailKit.Net.Smtp;
 using MailKit.Security;
-using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using MimeKit;
 
 namespace FashionSaaS.Infrastructure.Services;
 
-public class SmtpEmailService(IConfiguration configuration) : IEmailService
+public class SmtpEmailService(IOptions<SmtpSettings> smtpOptions) : IEmailService
 {
+    private readonly SmtpSettings _smtp = smtpOptions.Value;
+
     private async Task SendEmailAsync(string to, string subject, string htmlBody)
     {
         var message = new MimeMessage();
-        message.From.Add(MailboxAddress.Parse(configuration["SmtpSettings:From"]
-            ?? throw new InvalidOperationException("SmtpSettings:From not configured.")));
+        message.From.Add(MailboxAddress.Parse(_smtp.From is { Length: > 0 } f ? f
+            : throw new InvalidOperationException("SmtpSettings:From not configured.")));
         message.To.Add(MailboxAddress.Parse(to));
         message.Subject = subject;
         message.Body = new TextPart("html") { Text = htmlBody };
 
         using var client = new SmtpClient();
         await client.ConnectAsync(
-            configuration["SmtpSettings:Host"] ?? "smtp.gmail.com",
-            int.Parse(configuration["SmtpSettings:Port"] ?? "587"),
+            _smtp.Host,
+            _smtp.Port,
             SecureSocketOptions.StartTls);
 
-        var username = configuration["SmtpSettings:Username"]
-            ?? throw new InvalidOperationException("SmtpSettings:Username not configured.");
-        var password = configuration["SmtpSettings:Password"]
-            ?? throw new InvalidOperationException("SmtpSettings:Password not configured.");
+        var username = _smtp.Username is { Length: > 0 } u ? u
+            : throw new InvalidOperationException("SmtpSettings:Username not configured.");
+        var password = _smtp.Password is { Length: > 0 } p ? p
+            : throw new InvalidOperationException("SmtpSettings:Password not configured.");
 
         await client.AuthenticateAsync(username, password);
         await client.SendAsync(message);

@@ -1,3 +1,4 @@
+using FashionSaaS.Application.Configuration;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Infrastructure.BackgroundJobs;
 using FashionSaaS.Infrastructure.Persistence;
@@ -13,6 +14,11 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
+        // Options bindings (CONVENTIONS §2)
+        services.Configure<JwtSettings>(configuration.GetSection(JwtSettings.SectionName));
+        services.Configure<SmtpSettings>(configuration.GetSection(SmtpSettings.SectionName));
+        services.Configure<EncryptionSettings>(configuration.GetSection(EncryptionSettings.SectionName));
+
         // DbContext
         services.AddDbContext<ApplicationDbContext>(options =>
             options.UseSqlServer(

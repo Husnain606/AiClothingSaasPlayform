@@ -1,8 +1,9 @@
 using FashionSaaS.Application.Common;
+using FashionSaaS.Application.Configuration;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Application.Mfa.DTOs;
 using FashionSaaS.Domain.Entities;
-using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 
 namespace FashionSaaS.Application.Mfa;
 
@@ -12,7 +13,7 @@ public class MfaService(
     IPasswordHasher passwordHasher,
     IFieldEncryptionService fieldEncryption,
     IUnitOfWork unitOfWork,
-    IConfiguration configuration)
+    IOptions<JwtSettings> jwtOptions)
 {
     public async Task<ResponseData<MfaSetupResponse>> SetupAsync(Guid userId)
     {
@@ -20,7 +21,7 @@ public class MfaService(
         if (user is null)
             return ResponseData<MfaSetupResponse>.Failure("User not found.", 404);
 
-        var issuer = configuration["JwtSettings:Issuer"] ?? "FashionSaaS";
+        var issuer = jwtOptions.Value.Issuer is { Length: > 0 } iss ? iss : "FashionSaaS";
         var (secret, qrUrl) = totpService.GenerateSetup(user.Email, issuer);
 
         if (user.MfaSettings is null)

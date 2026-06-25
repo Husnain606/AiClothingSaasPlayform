@@ -2,19 +2,22 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using FashionSaaS.Application.Configuration;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Domain.Entities;
-using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
 namespace FashionSaaS.Infrastructure.Services;
 
-public class JwtService(IConfiguration configuration) : IJwtService
+public class JwtService(IOptions<JwtSettings> jwtOptions) : IJwtService
 {
+    private readonly JwtSettings _jwt = jwtOptions.Value;
+
     public string GenerateAccessToken(User user, IList<string> roles, string? tenantSlug = null, bool mfaVerified = false)
     {
-        var secret = configuration["JwtSettings:Secret"]
-            ?? throw new InvalidOperationException("JwtSettings:Secret not set.");
+        var secret = _jwt.Secret is { Length: > 0 } s ? s
+            : throw new InvalidOperationException("JwtSettings:Secret not set.");
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
@@ -38,8 +41,8 @@ public class JwtService(IConfiguration configuration) : IJwtService
         claims.AddRange(roles.Select(r => new Claim(ClaimTypes.Role, r)));
 
         var token = new JwtSecurityToken(
-            issuer: configuration["JwtSettings:Issuer"],
-            audience: configuration["JwtSettings:Audience"],
+            issuer: _jwt.Issuer,
+            audience: _jwt.Audience,
             claims: claims,
             expires: DateTime.UtcNow.AddMinutes(expiryMinutes),
             signingCredentials: credentials);
@@ -52,7 +55,7 @@ public class JwtService(IConfiguration configuration) : IJwtService
 
     public ClaimsPrincipal? GetPrincipalFromExpiredToken(string token)
     {
-        var secret = configuration["JwtSettings:Secret"]!;
+        var secret = _jwt.Secret;
         var validationParameters = new TokenValidationParameters
         {
             ValidateIssuerSigningKey = true,

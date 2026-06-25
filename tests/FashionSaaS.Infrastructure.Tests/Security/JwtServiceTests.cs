@@ -1,7 +1,8 @@
 using System.IdentityModel.Tokens.Jwt;
+using FashionSaaS.Application.Configuration;
 using FashionSaaS.Infrastructure.Services;
 using FluentAssertions;
-using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 
 namespace FashionSaaS.Infrastructure.Tests.Security;
 
@@ -11,15 +12,12 @@ public class JwtServiceTests
 
     public JwtServiceTests()
     {
-        var config = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["JwtSettings:Secret"] = "ThisIsAVeryLongSecretKeyThatIsAtLeast32CharactersLongForHS256",
-                ["JwtSettings:Issuer"] = "FashionSaaS",
-                ["JwtSettings:Audience"] = "FashionSaaS"
-            })
-            .Build();
-        _service = new JwtService(config);
+        _service = new JwtService(Options.Create(new JwtSettings
+        {
+            Secret = "ThisIsAVeryLongSecretKeyThatIsAtLeast32CharactersLongForHS256",
+            Issuer = "FashionSaaS",
+            Audience = "FashionSaaS"
+        }));
     }
 
     [Fact]

@@ -3,9 +3,10 @@ using System.Text;
 using System.Threading.RateLimiting;
 using FashionSaaS.Application.AuditLogs;
 using FashionSaaS.Application.Auth;
-using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Application.Behaviors;
 using FashionSaaS.Application.BankAccounts;
+using FashionSaaS.Application.Configuration;
+using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Application.LoginAttempts;
 using FashionSaaS.Application.Mfa;
 using FashionSaaS.Application.SubscriptionPlans;
@@ -39,8 +40,10 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddJwtAuthentication(this IServiceCollection services,
         IConfiguration configuration)
     {
-        var secret = configuration["JwtSettings:Secret"]
-            ?? throw new InvalidOperationException("JwtSettings:Secret is not set.");
+        var jwtSettings = configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>()
+            ?? throw new InvalidOperationException("JwtSettings section is missing from configuration.");
+        if (string.IsNullOrEmpty(jwtSettings.Secret))
+            throw new InvalidOperationException("JwtSettings:Secret is not set.");
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
@@ -48,11 +51,11 @@ public static class ServiceCollectionExtensions
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuerSigningKey = true,
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret)),
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.Secret)),
                     ValidateIssuer = true,
-                    ValidIssuer = configuration["JwtSettings:Issuer"],
+                    ValidIssuer = jwtSettings.Issuer,
                     ValidateAudience = true,
-                    ValidAudience = configuration["JwtSettings:Audience"],
+                    ValidAudience = jwtSettings.Audience,
                     ValidateLifetime = true,
                     ClockSkew = TimeSpan.Zero
                 };

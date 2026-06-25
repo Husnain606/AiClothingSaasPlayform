@@ -1,7 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
+using FashionSaaS.Application.Configuration;
 using FashionSaaS.Application.Interfaces;
-using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 
 namespace FashionSaaS.Infrastructure.Services;
 
@@ -9,10 +10,10 @@ public class FieldEncryptionService : IFieldEncryptionService
 {
     private readonly byte[] _key;
 
-    public FieldEncryptionService(IConfiguration configuration)
+    public FieldEncryptionService(IOptions<EncryptionSettings> encryptionOptions)
     {
-        var keyBase64 = configuration["EncryptionSettings:BankFieldKey"]
-            ?? throw new InvalidOperationException("EncryptionSettings:BankFieldKey environment variable not set.");
+        var keyBase64 = encryptionOptions.Value.BankFieldKey is { Length: > 0 } k ? k
+            : throw new InvalidOperationException("EncryptionSettings:BankFieldKey environment variable not set.");
         _key = Convert.FromBase64String(keyBase64);
         if (_key.Length != 32)
             throw new InvalidOperationException("BankFieldKey must be exactly 32 bytes (256-bit AES key).");

@@ -1,8 +1,9 @@
+using FashionSaaS.Application.Configuration;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Application.Mfa;
 using FashionSaaS.Domain.Entities;
 using FluentAssertions;
-using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using Moq;
 
 namespace FashionSaaS.Application.Tests.Mfa;
@@ -14,17 +15,16 @@ public class MfaServiceTests
     private readonly Mock<IPasswordHasher> _passwordHasher = new();
     private readonly Mock<IFieldEncryptionService> _fieldEncryption = new();
     private readonly Mock<IUnitOfWork> _uow = new();
-    private readonly IConfiguration _configuration;
+    private readonly IOptions<JwtSettings> _jwtOptions;
 
     public MfaServiceTests()
     {
-        var inMemory = new Dictionary<string, string?> { ["JwtSettings:Issuer"] = "FashionSaaS" };
-        _configuration = new ConfigurationBuilder().AddInMemoryCollection(inMemory).Build();
+        _jwtOptions = Options.Create(new JwtSettings { Issuer = "FashionSaaS" });
     }
 
     private MfaService CreateService() => new(
         _userRepo.Object, _totpService.Object, _passwordHasher.Object,
-        _fieldEncryption.Object, _uow.Object, _configuration);
+        _fieldEncryption.Object, _uow.Object, _jwtOptions);
 
     // ------------------------------------------------------------------
     // SetupAsync

@@ -1,6 +1,7 @@
+using FashionSaaS.Application.Configuration;
 using FashionSaaS.Infrastructure.Services;
 using FluentAssertions;
-using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 
 namespace FashionSaaS.Infrastructure.Tests.Security;
 
@@ -10,13 +11,10 @@ public class FieldEncryptionServiceTests
 
     public FieldEncryptionServiceTests()
     {
-        var config = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["EncryptionSettings:BankFieldKey"] = Convert.ToBase64String(new byte[32])
-            })
-            .Build();
-        _service = new FieldEncryptionService(config);
+        _service = new FieldEncryptionService(Options.Create(new EncryptionSettings
+        {
+            BankFieldKey = Convert.ToBase64String(new byte[32])
+        }));
     }
 
     [Fact]
