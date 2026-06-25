@@ -36,10 +36,15 @@ public class AuditLogService(ApplicationDbContext context) : IAuditLogService
         var json = JsonSerializer.Serialize(obj, JsonOptions);
         var dict = JsonSerializer.Deserialize<Dictionary<string, object>>(json) ?? new();
 
-        foreach (var key in new[] { "Password", "PasswordHash", "Token", "TokenHash",
-                     "AccountNumber", "IBAN", "TotpSecret" })
+        var sensitiveKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            if (dict.ContainsKey(key))
+            "Password", "PasswordHash", "Token", "TokenHash",
+            "AccountNumber", "Iban", "TotpSecret", "Secret"
+        };
+
+        foreach (var key in dict.Keys.ToList())
+        {
+            if (sensitiveKeys.Contains(key))
                 dict[key] = "***MASKED***";
         }
 

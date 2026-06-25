@@ -20,6 +20,7 @@ public sealed class SensitiveDataDestructuringPolicy : IDestructuringPolicy
         "Iban",
         "TotpSecret",
         "Secret",
+        "SecretBase32",
     };
 
     private const string MaskedValue = "***MASKED***";

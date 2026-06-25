@@ -116,15 +116,23 @@ public class BankAccountService(
         return ResponseData<BankAccountResponse>.Success(MapMasked(account));
     }
 
-    private BankAccountResponse MapMasked(BankAccount a) => new()
+    private BankAccountResponse MapMasked(BankAccount a)
     {
-        Id = a.Id, TenantId = a.TenantId, IsActive = a.IsActive,
-        AccountTitle = fieldEncryption.Decrypt(a.AccountTitleEncrypted),
-        AccountNumber = fieldEncryption.MaskAccountNumber(fieldEncryption.Decrypt(a.AccountNumberEncrypted)),
-        BankName = fieldEncryption.Decrypt(a.BankNameEncrypted),
-        BranchCode = fieldEncryption.Decrypt(a.BranchCodeEncrypted),
-        Iban = fieldEncryption.Decrypt(a.IbanEncrypted)
-    };
+        var plainIban = fieldEncryption.Decrypt(a.IbanEncrypted);
+        var maskedIban = string.IsNullOrEmpty(plainIban) || plainIban.Length <= 4
+            ? $"****{plainIban}"
+            : $"****{plainIban[^4..]}";
+
+        return new()
+        {
+            Id = a.Id, TenantId = a.TenantId, IsActive = a.IsActive,
+            AccountTitle = fieldEncryption.Decrypt(a.AccountTitleEncrypted),
+            AccountNumber = fieldEncryption.MaskAccountNumber(fieldEncryption.Decrypt(a.AccountNumberEncrypted)),
+            BankName = fieldEncryption.Decrypt(a.BankNameEncrypted),
+            BranchCode = fieldEncryption.Decrypt(a.BranchCodeEncrypted),
+            Iban = maskedIban
+        };
+    }
 
     // NOTE: Do NOT log the return value of this mapper — AccountNumber is plaintext.
     private BankAccountFullResponse MapFull(BankAccount a) => new()

@@ -320,6 +320,64 @@ public class BankAccountServiceTests
         oldValStr.Should().NotContain("12345678");
     }
 
+    // ── C1: GetAsync masked response — IBAN must be ****{last4} ─────────────
+
+    [Fact]
+    public async Task GetAsync_Response_IbanIsMaskedAsLast4()
+    {
+        var account = new BankAccount
+        {
+            Id = Guid.NewGuid(),
+            TenantId = null,
+            AccountTitleEncrypted = "ENC(ACME)",
+            AccountNumberEncrypted = "ENC(12345678)",
+            BankNameEncrypted = "ENC(HBL)",
+            BranchCodeEncrypted = "ENC(0012)",
+            IbanEncrypted = "ENC(PK36SCBL0000001123456702)",
+            IsActive = true
+        };
+        _bankRepo.Setup(r => r.GetPlatformAccountAsync()).ReturnsAsync(account);
+        _encryption.Setup(e => e.Decrypt(It.IsAny<string>())).Returns<string>(s =>
+            s.StartsWith("ENC(") ? s[4..^1] : s);
+        _encryption.Setup(e => e.MaskAccountNumber(It.IsAny<string>())).Returns("****5678");
+
+        var result = await CreateService().GetAsync(null);
+
+        result.IsSuccess.Should().BeTrue();
+        // IBAN must be masked to ****{last4} — NOT the full plaintext
+        result.Data!.Iban.Should().Be("****6702");
+        result.Data.Iban.Should().NotBe("PK36SCBL0000001123456702");
+        result.Data.Iban.Should().StartWith("****");
+    }
+
+    [Fact]
+    public async Task GetFullAsync_ReturnsFullDecryptedIban_NotMasked()
+    {
+        var account = new BankAccount
+        {
+            Id = Guid.NewGuid(),
+            TenantId = null,
+            AccountTitleEncrypted = "ENC(ACME)",
+            AccountNumberEncrypted = "ENC(12345678)",
+            BankNameEncrypted = "ENC(HBL)",
+            BranchCodeEncrypted = "ENC(0012)",
+            IbanEncrypted = "ENC(PK36SCBL0000001123456702)",
+            IsActive = true
+        };
+        _bankRepo.Setup(r => r.GetPlatformAccountAsync()).ReturnsAsync(account);
+        _encryption.Setup(e => e.Decrypt(It.IsAny<string>())).Returns<string>(s =>
+            s.StartsWith("ENC(") ? s[4..^1] : s);
+
+        var result = await CreateService().GetFullAsync(null);
+
+        result.IsSuccess.Should().BeTrue();
+        // GetFullAsync must return the COMPLETE unmasked IBAN
+        result.Data!.Iban.Should().Be("PK36SCBL0000001123456702");
+        result.Data.Iban.Should().NotStartWith("****");
+        // MaskAccountNumber must never be called on the full-fetch path
+        _encryption.Verify(e => e.MaskAccountNumber(It.IsAny<string>()), Times.Never);
+    }
+
     // ── GetFullAsync: returns unmasked AccountNumber ─────────────────────────
 
     [Fact]
