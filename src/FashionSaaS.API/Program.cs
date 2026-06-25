@@ -118,14 +118,20 @@ app.UseCors("FashionSaaSCors");
 // 4. Rate limiting
 app.UseRateLimiter();
 
-// 5. Tenant resolution from JWT claim / X-Tenant-Slug      — Task 21 completes
+// 5. Authentication — must run before tenant resolution so the JWT tenant_id claim
+//    is available when TenantResolutionMiddleware reads HttpContext.User
+app.UseAuthentication();
+
+// 6. Tenant resolution from JWT claim / X-Tenant-Slug.
+//    Placed after UseAuthentication so the JWT is already decoded and the tenant_id
+//    claim is populated; storefront slug resolution also works here (route values
+//    are available post-routing regardless of auth order).
 app.UseMiddleware<TenantResolutionMiddleware>();
 
-// 6. Authentication + Authorization
-app.UseAuthentication();
+// 7. Authorization
 app.UseAuthorization();
 
-// 7. Audit logging (write AuditLog row after response)     — Task 21 completes
+// 8. Audit logging (write AuditLog row after response)     — Task 21 completes
 app.UseMiddleware<AuditLoggingMiddleware>();
 
 if (app.Environment.IsDevelopment())

@@ -28,13 +28,13 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         base.OnModelCreating(modelBuilder);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(ApplicationDbContext).Assembly);
 
-        // Global query filter for multi-tenancy — applies to all TenantOwnedEntity subclasses
-        // BankAccount has nullable TenantId (null = platform account), so filter only when resolved
-        var tenantId = currentTenantService.TenantId;
-        if (tenantId.HasValue)
-        {
-            modelBuilder.Entity<BankAccount>()
-                .HasQueryFilter(b => b.TenantId == tenantId.Value);
-        }
+        // Global query filter for multi-tenancy — installed unconditionally so EF does not skip it
+        // when the model is first built (OnModelCreating runs once with TenantId null).
+        // The lambda closes over the injected service instance; EF re-evaluates TenantId per query.
+        // When TenantId is null (SuperAdmin/platform context) this resolves to TenantId == null,
+        // returning only platform-owned rows — any path that must read across tenants or by a
+        // specific tenant must call .IgnoreQueryFilters() (see BankAccountRepository).
+        modelBuilder.Entity<BankAccount>()
+            .HasQueryFilter(b => b.TenantId == currentTenantService.TenantId);
     }
 }
