@@ -28,6 +28,16 @@ public class PaymentsController(SubscriptionService subscriptionService) : Contr
         return StatusCode(response.StatusCode, response);
     }
 
+    [HttpGet(ApiUrl.AdminPayments.GetById)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> GetById(Guid id)
+    {
+        var response = await subscriptionService.GetPaymentByIdAsync(id);
+        return StatusCode(response.StatusCode, response);
+    }
+
     [HttpPut(ApiUrl.AdminPayments.Confirm)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status400BadRequest)]

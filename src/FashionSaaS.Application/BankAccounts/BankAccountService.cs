@@ -13,7 +13,8 @@ public class BankAccountService(
     IPasswordHasher passwordHasher,
     IAuditLogService auditLogService,
     IEmailService emailService,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    ITotpService totpService)
 {
     public async Task<ResponseData<BankAccountResponse>> GetAsync(Guid? tenantId)
     {
@@ -30,13 +31,22 @@ public class BankAccountService(
     /// <summary>
     /// Returns the bank account with the AccountNumber FULLY DECRYPTED and UNMASKED.
     /// <para>
-    /// SENSITIVE: The returned <see cref="BankAccountFullResponse.AccountNumber"/> is the
-    /// raw plaintext value. Callers MUST enforce AdminOwner / SuperAdmin authorization before
-    /// invoking this method and MUST NOT expose the result to lower-privileged callers.
+    /// SENSITIVE: Requires the caller to supply a current TOTP code verified against their own
+    /// MFA secret (step-up re-verification) before plaintext data is returned.
     /// </para>
     /// </summary>
-    public async Task<ResponseData<BankAccountFullResponse>> GetFullAsync(Guid? tenantId)
+    public async Task<ResponseData<BankAccountFullResponse>> GetFullAsync(
+        Guid? tenantId, Guid requestingUserId, string totpCode)
     {
+        // Step-up: load the requesting user's MFA settings (navigation included by GetByIdWithRolesAsync)
+        var user = await userRepository.GetByIdWithRolesAsync(requestingUserId);
+        if (user?.MfaSettings is null || !user.MfaSettings.IsEnrolled)
+            return ResponseData<BankAccountFullResponse>.Failure("MFA required.", 403);
+
+        var secret = fieldEncryption.Decrypt(user.MfaSettings.TotpSecretEncrypted!);
+        if (!totpService.Verify(secret, totpCode))
+            return ResponseData<BankAccountFullResponse>.Failure("Invalid verification code.", 403);
+
         var account = tenantId.HasValue
             ? await bankAccountRepository.GetByTenantIdAsync(tenantId.Value)
             : await bankAccountRepository.GetPlatformAccountAsync();

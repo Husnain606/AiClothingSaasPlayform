@@ -56,7 +56,7 @@ public static class ApiUrl
         public const string GetAll = "api/admin/subscriptions";
         public const string GetById = "api/admin/subscriptions/{id}";
         public const string Assign = "api/admin/subscriptions";
-        public const string ConfirmPayment = "api/admin/subscriptions/{id}/confirm-payment";
+        public const string ChangePlan = "api/admin/subscriptions/{id}/change-plan";
         public const string Suspend = "api/admin/subscriptions/{id}/suspend";
         public const string Reactivate = "api/admin/subscriptions/{id}/reactivate";
     }

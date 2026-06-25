@@ -49,6 +49,17 @@ public class UsersController(UserService userService) : ControllerBase
         return StatusCode(response.StatusCode, response);
     }
 
+    [HttpPut(ApiUrl.AdminUsers.Update)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> Update(Guid id, [FromBody] UpdateUserRequest request)
+    {
+        var response = await userService.UpdateAsync(id, request, AdminId, Ip, Ua);
+        return StatusCode(response.StatusCode, response);
+    }
+
     [HttpPut(ApiUrl.AdminUsers.Unlock)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status400BadRequest)]

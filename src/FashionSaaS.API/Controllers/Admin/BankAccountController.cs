@@ -35,15 +35,16 @@ public class BankAccountController(BankAccountService bankAccountService) : Cont
 
     /// <summary>
     /// Returns the platform bank account with AccountNumber FULLY UNMASKED.
-    /// SuperAdmin + MFA-gated single-fetch only.
+    /// Requires a fresh TOTP code (step-up re-verification) — SuperAdmin + MFA-gated.
     /// </summary>
-    [HttpGet(ApiUrl.AdminBankAccount.GetFull)]
+    [HttpPost(ApiUrl.AdminBankAccount.GetFull)]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
-    public async Task<IActionResult> GetFull()
+    public async Task<IActionResult> GetFull([FromBody] VerifyTotpRequest request)
     {
-        var response = await bankAccountService.GetFullAsync(null);
+        var response = await bankAccountService.GetFullAsync(null, UserId, request.TotpCode);
         return StatusCode(response.StatusCode, response);
     }
 

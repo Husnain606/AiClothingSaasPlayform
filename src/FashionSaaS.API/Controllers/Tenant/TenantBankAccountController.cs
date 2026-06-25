@@ -35,16 +35,17 @@ public class TenantBankAccountController(BankAccountService bankAccountService, 
 
     /// <summary>
     /// Returns the current tenant's bank account with AccountNumber FULLY UNMASKED.
-    /// AdminOwner only — single-fetch, scoped to the current tenant.
+    /// Requires a fresh TOTP code (step-up re-verification). AdminOwner only — scoped to the current tenant.
     /// SENSITIVE: never log the response body of this endpoint.
     /// </summary>
-    [HttpGet(ApiUrl.TenantBankAccount.GetFull)]
+    [HttpPost(ApiUrl.TenantBankAccount.GetFull)]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
-    public async Task<IActionResult> GetFull()
+    public async Task<IActionResult> GetFull([FromBody] VerifyTotpRequest request)
     {
-        var response = await bankAccountService.GetFullAsync(currentTenant.TenantId);
+        var response = await bankAccountService.GetFullAsync(currentTenant.TenantId, UserId, request.TotpCode);
         return StatusCode(response.StatusCode, response);
     }
 

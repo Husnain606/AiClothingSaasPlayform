@@ -4,11 +4,13 @@ using FashionSaaS.Application.Common;
 using FashionSaaS.Application.Mfa;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace FashionSaaS.API.Controllers.Admin;
 
 [ApiController]
 [Authorize(Roles = "SuperAdmin")]
+[EnableRateLimiting("SuperAdminPolicy")]
 public class MfaController(MfaService mfaService) : ControllerBase
 {
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);

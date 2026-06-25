@@ -91,6 +91,7 @@ public class AuthController(AuthService authService, IPasswordResetTokenReposito
 
     [Authorize]
     [HttpPost(ApiUrl.Auth.Logout)]
+    [EnableRateLimiting("AuthenticatedPolicy")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
@@ -129,6 +130,7 @@ public class AuthController(AuthService authService, IPasswordResetTokenReposito
 
     [Authorize]
     [HttpPut(ApiUrl.Auth.ChangePassword)]
+    [EnableRateLimiting("AuthenticatedPolicy")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]

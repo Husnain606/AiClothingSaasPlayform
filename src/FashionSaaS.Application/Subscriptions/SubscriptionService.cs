@@ -210,6 +210,13 @@ public class SubscriptionService(
             subs.Select(s => Map(s, s.Plan)).ToList());
     }
 
+    public async Task<ResponseData<PaymentResponse>> GetPaymentByIdAsync(Guid paymentId)
+    {
+        var payment = await paymentRepository.GetByIdAsync(paymentId);
+        if (payment is null) return ResponseData<PaymentResponse>.Failure("Payment not found.", 404);
+        return ResponseData<PaymentResponse>.Success(MapPayment(payment));
+    }
+
     public async Task<ResponseData<IReadOnlyList<PaymentResponse>>> GetPaymentsBySubscriptionAsync(Guid subscriptionId)
     {
         var payments = await paymentRepository.GetBySubscriptionAsync(subscriptionId);

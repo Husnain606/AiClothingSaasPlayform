@@ -16,12 +16,13 @@ public class BankAccountServiceTests
     private readonly Mock<IAuditLogService> _audit = new();
     private readonly Mock<IEmailService> _email = new();
     private readonly Mock<IUnitOfWork> _uow = new();
+    private readonly Mock<ITotpService> _totp = new();
 
     private const string Ip = "127.0.0.1";
     private const string Ua = "xunit";
 
     private BankAccountService CreateService() => new(_bankRepo.Object, _userRepo.Object,
-        _encryption.Object, _hasher.Object, _audit.Object, _email.Object, _uow.Object);
+        _encryption.Object, _hasher.Object, _audit.Object, _email.Object, _uow.Object, _totp.Object);
 
     private void SetupUow() =>
         _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
@@ -31,6 +32,29 @@ public class BankAccountServiceTests
             It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<string>(), It.IsAny<string>(),
             It.IsAny<Guid>(), It.IsAny<object>(), It.IsAny<object>(), It.IsAny<string>(), It.IsAny<string>()))
             .Returns(Task.CompletedTask);
+
+    /// <summary>
+    /// Sets up a user with MFA enrolled and returns (userId, totpCode).
+    /// _totp.Verify(secret, totpCode) returns true; _encryption.Decrypt("ENC(secret)") returns "secret".
+    /// </summary>
+    private (User user, Guid userId, string totpCode) SetupMfaUser()
+    {
+        var userId = Guid.NewGuid();
+        var totpCode = "123456";
+        var mfaSettings = new UserMfaSettings
+        {
+            IsEnrolled = true,
+            TotpSecretEncrypted = "ENC(secret)"
+        };
+        var user = new User { Id = userId, PasswordHash = "hash", Email = "admin@x.com" };
+        user.MfaSettings = mfaSettings;
+
+        _userRepo.Setup(r => r.GetByIdWithRolesAsync(userId)).ReturnsAsync(user);
+        _encryption.Setup(e => e.Decrypt("ENC(secret)")).Returns("secret");
+        _totp.Setup(t => t.Verify("secret", totpCode)).Returns(true);
+
+        return (user, userId, totpCode);
+    }
 
     // ── CreateAsync: password gate ───────────────────────────────────────────
 
@@ -353,6 +377,7 @@ public class BankAccountServiceTests
     [Fact]
     public async Task GetFullAsync_ReturnsFullDecryptedIban_NotMasked()
     {
+        var (_, userId, totpCode) = SetupMfaUser();
         var account = new BankAccount
         {
             Id = Guid.NewGuid(),
@@ -365,10 +390,10 @@ public class BankAccountServiceTests
             IsActive = true
         };
         _bankRepo.Setup(r => r.GetPlatformAccountAsync()).ReturnsAsync(account);
-        _encryption.Setup(e => e.Decrypt(It.IsAny<string>())).Returns<string>(s =>
+        _encryption.Setup(e => e.Decrypt(It.Is<string>(s => s != "ENC(secret)"))).Returns<string>(s =>
             s.StartsWith("ENC(") ? s[4..^1] : s);
 
-        var result = await CreateService().GetFullAsync(null);
+        var result = await CreateService().GetFullAsync(null, userId, totpCode);
 
         result.IsSuccess.Should().BeTrue();
         // GetFullAsync must return the COMPLETE unmasked IBAN
@@ -383,6 +408,7 @@ public class BankAccountServiceTests
     [Fact]
     public async Task GetFullAsync_ReturnsFullDecryptedAccountNumber_NotMasked()
     {
+        var (_, userId, totpCode) = SetupMfaUser();
         var account = new BankAccount
         {
             Id = Guid.NewGuid(),
@@ -395,10 +421,10 @@ public class BankAccountServiceTests
             IsActive = true
         };
         _bankRepo.Setup(r => r.GetPlatformAccountAsync()).ReturnsAsync(account);
-        _encryption.Setup(e => e.Decrypt(It.IsAny<string>())).Returns<string>(s =>
+        _encryption.Setup(e => e.Decrypt(It.Is<string>(s => s != "ENC(secret)"))).Returns<string>(s =>
             s.StartsWith("ENC(") ? s[4..^1] : s);
 
-        var result = await CreateService().GetFullAsync(null);
+        var result = await CreateService().GetFullAsync(null, userId, totpCode);
 
         result.IsSuccess.Should().BeTrue();
         // Must be full plaintext, not masked
@@ -412,8 +438,9 @@ public class BankAccountServiceTests
     [Fact]
     public async Task GetFullAsync_NoAccount_ReturnsNotFound()
     {
+        var (_, userId, totpCode) = SetupMfaUser();
         _bankRepo.Setup(r => r.GetPlatformAccountAsync()).ReturnsAsync((BankAccount?)null);
-        var result = await CreateService().GetFullAsync(null);
+        var result = await CreateService().GetFullAsync(null, userId, totpCode);
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Should().Be(404);
     }
@@ -421,6 +448,7 @@ public class BankAccountServiceTests
     [Fact]
     public async Task GetFullAsync_TenantAccount_ReturnsFullDecryptedAccountNumber()
     {
+        var (_, userId, totpCode) = SetupMfaUser();
         var tenantId = Guid.NewGuid();
         var account = new BankAccount
         {
@@ -434,10 +462,10 @@ public class BankAccountServiceTests
             IsActive = true
         };
         _bankRepo.Setup(r => r.GetByTenantIdAsync(tenantId)).ReturnsAsync(account);
-        _encryption.Setup(e => e.Decrypt(It.IsAny<string>())).Returns<string>(s =>
+        _encryption.Setup(e => e.Decrypt(It.Is<string>(s => s != "ENC(secret)"))).Returns<string>(s =>
             s.StartsWith("ENC(") ? s[4..^1] : s);
 
-        var result = await CreateService().GetFullAsync(tenantId);
+        var result = await CreateService().GetFullAsync(tenantId, userId, totpCode);
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.AccountNumber.Should().Be("98765432");
@@ -512,5 +540,66 @@ public class BankAccountServiceTests
 
         captured.Should().NotBeNull();
         captured!.DomainEvents.Should().ContainSingle(e => e.GetType().Name == "BankAccountChangedEvent");
+    }
+
+    // ── GetFullAsync: TOTP step-up gate ─────────────────────────────────────
+
+    [Fact]
+    public async Task GetFullAsync_WrongTotpCode_Returns403()
+    {
+        var userId = Guid.NewGuid();
+        var mfaSettings = new UserMfaSettings { IsEnrolled = true, TotpSecretEncrypted = "ENC(secret)" };
+        var user = new User { Id = userId, PasswordHash = "hash", Email = "admin@x.com" };
+        user.MfaSettings = mfaSettings;
+
+        _userRepo.Setup(r => r.GetByIdWithRolesAsync(userId)).ReturnsAsync(user);
+        _encryption.Setup(e => e.Decrypt("ENC(secret)")).Returns("secret");
+        _totp.Setup(t => t.Verify("secret", "wrong")).Returns(false);
+
+        var result = await CreateService().GetFullAsync(null, userId, "wrong");
+
+        result.IsSuccess.Should().BeFalse();
+        result.StatusCode.Should().Be(403);
+        result.Message.Should().Be("Invalid verification code.");
+        _bankRepo.Verify(r => r.GetPlatformAccountAsync(), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetFullAsync_UserNotEnrolledInMfa_Returns403()
+    {
+        var userId = Guid.NewGuid();
+        var user = new User { Id = userId, PasswordHash = "hash", Email = "admin@x.com" };
+        // MfaSettings is null — not enrolled
+        _userRepo.Setup(r => r.GetByIdWithRolesAsync(userId)).ReturnsAsync(user);
+
+        var result = await CreateService().GetFullAsync(null, userId, "123456");
+
+        result.IsSuccess.Should().BeFalse();
+        result.StatusCode.Should().Be(403);
+        result.Message.Should().Be("MFA required.");
+        _bankRepo.Verify(r => r.GetPlatformAccountAsync(), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetFullAsync_CorrectTotpCode_ReturnsFullAccountNumber()
+    {
+        var (_, userId, totpCode) = SetupMfaUser();
+        var account = new BankAccount
+        {
+            Id = Guid.NewGuid(), TenantId = null,
+            AccountTitleEncrypted = "ENC(Corp)", AccountNumberEncrypted = "ENC(99998888)",
+            BankNameEncrypted = "ENC(HBL)", BranchCodeEncrypted = "ENC(0012)",
+            IbanEncrypted = "ENC(PK36HBL)", IsActive = true
+        };
+        _bankRepo.Setup(r => r.GetPlatformAccountAsync()).ReturnsAsync(account);
+        _encryption.Setup(e => e.Decrypt(It.Is<string>(s => s != "ENC(secret)"))).Returns<string>(s =>
+            s.StartsWith("ENC(") ? s[4..^1] : s);
+
+        var result = await CreateService().GetFullAsync(null, userId, totpCode);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Data!.AccountNumber.Should().Be("99998888");
+        result.Data.AccountNumber.Should().NotStartWith("****");
+        _encryption.Verify(e => e.MaskAccountNumber(It.IsAny<string>()), Times.Never);
     }
 }

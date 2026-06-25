@@ -39,13 +39,13 @@ public class SubscriptionsController(SubscriptionService subscriptionService) : 
         return StatusCode(response.StatusCode, response);
     }
 
-    [HttpPut(ApiUrl.AdminSubscriptions.ConfirmPayment)]
+    [HttpPut(ApiUrl.AdminSubscriptions.ChangePlan)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
-    public async Task<IActionResult> ConfirmPayment(Guid id)
+    public async Task<IActionResult> ChangePlan(Guid id, [FromBody] ChangePlanRequest request)
     {
-        var response = await subscriptionService.ConfirmPaymentAsync(id, AdminId, Ip, Ua);
+        var response = await subscriptionService.ChangePlanAsync(id, request.NewPlanId, AdminId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 
