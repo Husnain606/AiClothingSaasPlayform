@@ -1,4 +1,5 @@
 using FashionSaaS.API.Extensions;
+using FashionSaaS.API.Handlers;
 using FashionSaaS.API.Logging;
 using FashionSaaS.API.Middleware;
 using FashionSaaS.Infrastructure;
@@ -53,6 +54,10 @@ builder.Services.AddFluentValidationAutoValidation();
 // Register with empty config for now; profiles added per controller assembly later
 builder.Services.AddAutoMapper(cfg => { });
 
+// Global exception handler (CONVENTIONS §3)
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
+
 // Controllers + Swagger
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -104,8 +109,8 @@ app.UseHsts();
 // 1. Security headers (X-Frame-Options, CSP, HSTS etc.)   — Task 21 completes
 app.UseMiddleware<SecurityHeadersMiddleware>();
 
-// 2. Global exception → RFC 7807 ProblemDetails            — Task 21 completes
-app.UseMiddleware<ExceptionHandlingMiddleware>();
+// 2. Global exception handler (CONVENTIONS §3 — replaces ExceptionHandlingMiddleware)
+app.UseExceptionHandler();
 
 // 3. CORS
 app.UseCors("FashionSaaSCors");
