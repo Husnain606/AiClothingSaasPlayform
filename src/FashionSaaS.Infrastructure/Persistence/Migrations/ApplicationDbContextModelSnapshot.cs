@@ -75,7 +75,7 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("EntityName", "EntityId");
 
-                    b.ToTable("AuditLogs");
+                    b.ToTable("AuditLogs", (string)null);
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.BankAccount", b =>
@@ -125,7 +125,7 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("TenantId");
 
-                    b.ToTable("BankAccounts");
+                    b.ToTable("BankAccounts", (string)null);
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.MfaBackupCode", b =>
@@ -158,7 +158,7 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("UserMfaSettingsId");
 
-                    b.ToTable("MfaBackupCodes");
+                    b.ToTable("MfaBackupCodes", (string)null);
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.PasswordHistory", b =>
@@ -185,7 +185,7 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("PasswordHistories");
+                    b.ToTable("PasswordHistories", (string)null);
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.PasswordResetToken", b =>
@@ -220,7 +220,7 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("PasswordResetTokens");
+                    b.ToTable("PasswordResetTokens", (string)null);
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.RefreshToken", b =>
@@ -256,7 +256,7 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("UserId", "IsRevoked");
 
-                    b.ToTable("RefreshTokens");
+                    b.ToTable("RefreshTokens", (string)null);
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.Role", b =>
@@ -282,64 +282,64 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("Roles");
+                    b.ToTable("Roles", (string)null);
 
                     b.HasData(
                         new
                         {
                             Id = new Guid("10000000-0000-0000-0000-000000000001"),
-                            CreatedAt = new DateTime(2026, 6, 23, 12, 5, 2, 981, DateTimeKind.Utc).AddTicks(4429),
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = 1,
                             Scope = 1,
-                            UpdatedAt = new DateTime(2026, 6, 23, 12, 5, 2, 981, DateTimeKind.Utc).AddTicks(4576)
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = new Guid("10000000-0000-0000-0000-000000000002"),
-                            CreatedAt = new DateTime(2026, 6, 23, 12, 5, 2, 981, DateTimeKind.Utc).AddTicks(4723),
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = 2,
                             Scope = 2,
-                            UpdatedAt = new DateTime(2026, 6, 23, 12, 5, 2, 981, DateTimeKind.Utc).AddTicks(4724)
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = new Guid("10000000-0000-0000-0000-000000000003"),
-                            CreatedAt = new DateTime(2026, 6, 23, 12, 5, 2, 981, DateTimeKind.Utc).AddTicks(4726),
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = 3,
                             Scope = 2,
-                            UpdatedAt = new DateTime(2026, 6, 23, 12, 5, 2, 981, DateTimeKind.Utc).AddTicks(4726)
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = new Guid("10000000-0000-0000-0000-000000000004"),
-                            CreatedAt = new DateTime(2026, 6, 23, 12, 5, 2, 981, DateTimeKind.Utc).AddTicks(4728),
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = 4,
                             Scope = 2,
-                            UpdatedAt = new DateTime(2026, 6, 23, 12, 5, 2, 981, DateTimeKind.Utc).AddTicks(4729)
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = new Guid("10000000-0000-0000-0000-000000000005"),
-                            CreatedAt = new DateTime(2026, 6, 23, 12, 5, 2, 981, DateTimeKind.Utc).AddTicks(4731),
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = 5,
                             Scope = 2,
-                            UpdatedAt = new DateTime(2026, 6, 23, 12, 5, 2, 981, DateTimeKind.Utc).AddTicks(4731)
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = new Guid("10000000-0000-0000-0000-000000000006"),
-                            CreatedAt = new DateTime(2026, 6, 23, 12, 5, 2, 981, DateTimeKind.Utc).AddTicks(4733),
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = 6,
                             Scope = 2,
-                            UpdatedAt = new DateTime(2026, 6, 23, 12, 5, 2, 981, DateTimeKind.Utc).AddTicks(4734)
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = new Guid("10000000-0000-0000-0000-000000000007"),
-                            CreatedAt = new DateTime(2026, 6, 23, 12, 5, 2, 981, DateTimeKind.Utc).AddTicks(4736),
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = 7,
                             Scope = 3,
-                            UpdatedAt = new DateTime(2026, 6, 23, 12, 5, 2, 981, DateTimeKind.Utc).AddTicks(4736)
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         });
                 });
 
@@ -383,7 +383,9 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("TenantId");
 
-                    b.ToTable("SubscriptionPayments");
+                    b.HasIndex("Status", "DueDate");
+
+                    b.ToTable("SubscriptionPayments", (string)null);
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.SubscriptionPlan", b =>
@@ -433,7 +435,9 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("SubscriptionPlans");
+                    b.HasIndex("IsActive");
+
+                    b.ToTable("SubscriptionPlans", (string)null);
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.Tenant", b =>
@@ -486,7 +490,7 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
                     b.HasIndex("Slug")
                         .IsUnique();
 
-                    b.ToTable("Tenants");
+                    b.ToTable("Tenants", (string)null);
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.TenantSubscription", b =>
@@ -520,9 +524,9 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("PlanId");
 
-                    b.HasIndex("TenantId");
+                    b.HasIndex("TenantId", "Status");
 
-                    b.ToTable("TenantSubscriptions");
+                    b.ToTable("TenantSubscriptions", (string)null);
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.User", b =>
@@ -550,6 +554,9 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsEmailVerified")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsLocked")
+                        .HasColumnType("bit");
+
                     b.Property<string>("LastName")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -573,7 +580,7 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("TenantId");
 
-                    b.ToTable("Users");
+                    b.ToTable("Users", (string)null);
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.UserLoginAttempt", b =>
@@ -614,7 +621,7 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Email", "CreatedAt");
 
-                    b.ToTable("UserLoginAttempts");
+                    b.ToTable("UserLoginAttempts", (string)null);
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.UserMfaSettings", b =>
@@ -647,7 +654,7 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
                     b.HasIndex("UserId")
                         .IsUnique();
 
-                    b.ToTable("UserMfaSettings");
+                    b.ToTable("UserMfaSettings", (string)null);
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.UserRole", b =>
@@ -662,7 +669,7 @@ namespace FashionSaaS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("RoleId");
 
-                    b.ToTable("UserRoles");
+                    b.ToTable("UserRoles", (string)null);
                 });
 
             modelBuilder.Entity("FashionSaaS.Domain.Entities.BankAccount", b =>
