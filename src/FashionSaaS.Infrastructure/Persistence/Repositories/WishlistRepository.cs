@@ -10,7 +10,6 @@ public class WishlistRepository(ApplicationDbContext context)
     public async Task<Wishlist?> GetByCustomerAsync(Guid customerId, CancellationToken ct = default)
         => await DbSet
             .AsNoTracking()
-            .AsSplitQuery()
             .Include(w => w.Items)
             .FirstOrDefaultAsync(w => w.CustomerId == customerId, ct);
 }
