@@ -81,4 +81,20 @@ Keep the codebase lightweight: pick the smallest-capability collection abstracti
 
 ---
 
-_Conventions added 2026-06-24 (§1–3); §4–5 added 2026-06-24. Applies to Phase 1 code (refactored to comply) and all subsequent phases._
+## 6. EF Core query performance — compose `IQueryable`, no-track reads, split big includes
+
+Write every repository query for performance. These are binding for all repositories (Phase 1 retrofitted + all new code).
+
+**Rules:**
+- **Compose as `IQueryable<T>`.** Start a query from the `DbSet` (`_context.Set<T>().AsQueryable()`), build it up (conditional `Where`, ordering, paging), then materialize once with `ToListAsync()` / `FirstOrDefaultAsync()` / `CountAsync()`. Don't build lists in memory and filter with LINQ-to-objects.
+- **`AsNoTracking()` for read-only queries.** Any query whose result is only read (lists, paged queries, tree/detail *reads*, lookups, projections) must use `.AsNoTracking()` — it skips change-tracker overhead and lowers memory. **Keep tracking only** for a single-entity fetch that the caller will then mutate and save (e.g. `GetByIdAsync` used by update/delete flows). When in doubt: read endpoint → `AsNoTracking`; load-then-save → tracked.
+- **`AsSplitQuery()` for multiple collection includes.** A query with two or more collection `Include`s (e.g. Product → Variants + Images + Reviews) must use `.AsSplitQuery()` to avoid the cartesian-explosion of a single JOIN. For a read-only multi-include where the same root can repeat, prefer `AsNoTracking()` (EF de-dups roots in split queries) or `AsNoTrackingWithIdentityResolution()` if identity must be preserved.
+- **Existence checks** use `AnyAsync(predicate)` (never `CountAsync() > 0` or materializing). **Counts** use `CountAsync`.
+- **Project when you don't need the entity.** For list/summary reads that map to a DTO, prefer `.Select(x => new Dto{...})` so SQL returns only needed columns (also implicitly no-tracking). Use full-entity + `AsNoTracking` when the mapper needs the whole graph.
+- **Paginate at the database** (`Skip`/`Take` on the `IQueryable`, with a separate `CountAsync` for the total) — never page in memory.
+- **No lazy loading.** Eager-load with `Include` (lazy proxies are not enabled and must not be). Avoid N+1 by including what the mapper reads.
+- Apply these in repositories (the query layer); services stay persistence-ignorant. The multi-tenant global query filter composes with all of the above automatically.
+
+---
+
+_Conventions added 2026-06-24 (§1–3); §4–5 added 2026-06-24; §6 (EF query performance) added 2026-06-25. Applies to Phase 1 code (refactored to comply) and all subsequent phases._
