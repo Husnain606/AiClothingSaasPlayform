@@ -11,6 +11,7 @@ using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Application.Inventory;
 using FashionSaaS.Application.LoginAttempts;
 using FashionSaaS.Application.Mfa;
+using FashionSaaS.Application.ProductImages;
 using FashionSaaS.Application.Products;
 using FashionSaaS.Application.ProductVariants;
 using FashionSaaS.Application.SubscriptionPlans;
@@ -38,6 +39,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<CategoryService>();
         services.AddScoped<ProductService>();
         services.AddScoped<ProductVariantService>();
+        services.AddScoped<ProductImageService>();
         services.AddScoped<InventoryService>();
         services.AddScoped<AuditLogQueryService>();
         services.AddScoped<LoginAttemptService>();
