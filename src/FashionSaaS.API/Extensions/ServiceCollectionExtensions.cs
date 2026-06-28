@@ -5,6 +5,7 @@ using FashionSaaS.Application.AuditLogs;
 using FashionSaaS.Application.Auth;
 using FashionSaaS.Application.Behaviors;
 using FashionSaaS.Application.BankAccounts;
+using FashionSaaS.Application.Categories;
 using FashionSaaS.Application.Configuration;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Application.LoginAttempts;
@@ -31,6 +32,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<SubscriptionPlanService>();
         services.AddScoped<SubscriptionService>();
         services.AddScoped<BankAccountService>();
+        services.AddScoped<CategoryService>();
         services.AddScoped<AuditLogQueryService>();
         services.AddScoped<LoginAttemptService>();
         services.AddScoped<ISuperAdminIpGuardService, SuperAdminIpGuardService>();

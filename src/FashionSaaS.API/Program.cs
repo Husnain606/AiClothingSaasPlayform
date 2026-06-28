@@ -4,6 +4,7 @@ using FashionSaaS.API.Logging;
 using FashionSaaS.API.Middleware;
 using FashionSaaS.Application.Configuration;
 using FashionSaaS.Infrastructure;
+using FluentValidation;
 using FluentValidation.AspNetCore;
 using Microsoft.OpenApi;
 using Serilog;
@@ -50,6 +51,10 @@ builder.Services.AddMediatRWithBehaviors();
 
 // FluentValidation auto-validation on controllers
 builder.Services.AddFluentValidationAutoValidation();
+
+// Register all FluentValidation validators in the Application assembly (current + future).
+// CONVENTIONS §8: validators run at the API boundary before the controller action.
+builder.Services.AddValidatorsFromAssembly(typeof(FashionSaaS.Application.Categories.CategoryService).Assembly);
 
 // Global exception handler (CONVENTIONS §3)
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();

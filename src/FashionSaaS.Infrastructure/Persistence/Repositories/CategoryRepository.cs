@@ -19,4 +19,10 @@ public class CategoryRepository(ApplicationDbContext context)
             .OrderBy(c => c.ParentCategoryId)
             .ThenBy(c => c.SortOrder)
             .ToListAsync(ct);
+
+    public async Task<bool> HasChildrenAsync(Guid tenantId, Guid categoryId, CancellationToken ct = default)
+        => await DbSet.AnyAsync(c => c.TenantId == tenantId && c.ParentCategoryId == categoryId, ct);
+
+    public async Task<bool> HasProductsAsync(Guid tenantId, Guid categoryId, CancellationToken ct = default)
+        => await Context.Set<Product>().AnyAsync(p => p.TenantId == tenantId && p.CategoryId == categoryId, ct);
 }
