@@ -97,4 +97,36 @@ Write every repository query for performance. These are binding for all reposito
 
 ---
 
-_Conventions added 2026-06-24 (§1–3); §4–5 added 2026-06-24; §6 (EF query performance) added 2026-06-25. Applies to Phase 1 code (refactored to comply) and all subsequent phases._
+## 7. EF data configuration — one `IEntityTypeConfiguration<T>` per entity
+
+Every entity is configured in its own `IEntityTypeConfiguration<T>` class under `Infrastructure/Persistence/Configurations/`, applied via `modelBuilder.ApplyConfigurationsFromAssembly(...)`. Do **not** configure entities inline in `OnModelCreating` (the only thing that stays in `OnModelCreating` is the cross-cutting multi-tenant global query filter, which needs the injected `ICurrentTenantService`).
+
+**Each configuration class sets, explicitly:**
+- Key(s) and any value generation.
+- `Property(...).HasMaxLength(...)` for every string column; `.IsRequired()` where non-nullable; `.HasColumnType`/`.HasPrecision(18,2)` for money/decimal.
+- Indexes per CONVENTIONS §4 (`HasIndex(...)`, `.IsUnique()` for natural keys like slug/SKU/code/email-per-tenant).
+- Relationships (`HasOne/WithMany/HasForeignKey`) with explicit `OnDelete(...)` (Cascade for owned children, Restrict for lookups/shared refs).
+- Check constraints for domain invariants where DB-enforceable (e.g. `CK_Review_Rating BETWEEN 1 AND 5`).
+- Seed data via `HasData` uses **static** timestamps (never `DateTime.UtcNow` — causes migration churn; see §4 history).
+
+## 8. Input validation — FluentValidation validators for every request DTO
+
+Each inbound request/command DTO has a FluentValidation `AbstractValidator<T>` in its Application feature folder (e.g. `Application/Products/Validators/CreateProductRequestValidator.cs`). Validators are registered with `AddValidatorsFromAssembly(typeof(<AnyApplicationType>).Assembly)` and auto-run at the API boundary via `AddFluentValidationAutoValidation` (already wired) — invalid input returns 400 before the controller action executes.
+
+**Division of responsibility (both layers, distinct jobs):**
+- **FluentValidation = input shape:** required fields, string length, numeric range, enum/format (email, slug pattern), cross-field rules (e.g. `StartsAt < EndsAt`, percentage ≤ 100). These are request-level and have no DB access.
+- **Service layer = business rules:** uniqueness (slug/SKU/code/email), existence/ownership, state-transition legality, tenant scoping. Services return `ResponseData` with 409/404/403/400 accordingly. Do **not** put these in validators.
+
+New feature work that accepts input MUST ship its validators. (Phase 1 used inline service validation only; retrofitting Phase-1 validators is optional, but all Phase 2+ request DTOs get validators.)
+
+## 9. Logging — Serilog, structured, secrets masked
+
+Use the configured Serilog logger (console + rolling file). 
+- Use **message templates with named properties**, never string interpolation: `logger.LogInformation("Product {ProductId} published for tenant {TenantId}", id, tenantId);` — so properties are captured structurally.
+- **Never log secrets or PII** (passwords, tokens, full account numbers, IBAN, TOTP secrets). The `SensitiveDataDestructuringPolicy` masks known sensitive property names when objects are destructured (`{@Obj}`) — keep its property set current when adding sensitive DTOs.
+- Levels: `Debug` dev detail, `Information` notable state changes, `Warning` recoverable/anomalous, `Error` failures with the exception. Don't log-and-rethrow the same exception repeatedly (the global `IExceptionHandler` logs unhandled ones once).
+- Background/middleware components inject `ILogger<T>`; swallow only with an explicit logged reason (e.g. best-effort audit / shutdown cancellation).
+
+---
+
+_Conventions added 2026-06-24 (§1–3); §4–5 added 2026-06-24; §6 (EF query performance), §7 (data configuration), §8 (FluentValidation), §9 (Serilog) added 2026-06-25. Applies to Phase 1 code (refactored to comply) and all subsequent phases._
