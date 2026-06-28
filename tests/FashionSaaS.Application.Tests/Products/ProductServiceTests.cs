@@ -113,6 +113,68 @@ public class ProductServiceTests
         result.StatusCode.Should().Be(409);
     }
 
+    [Fact]
+    public async Task UpdateAsync_SameCategory_ReturnsResponseWithReloadedCounts()
+    {
+        var id = Guid.NewGuid();
+        var catId = Guid.NewGuid();
+        var stored = Product(id, catId);
+        var detailedProduct = Product(id, catId);
+        detailedProduct.Variants.Add(Variant(id));
+        detailedProduct.Images.Add(Image(id));
+
+        _products.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(stored);
+        _products.Setup(r => r.SlugExistsAsync(_tenantId, "tee", id, It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        _categories.Setup(r => r.GetByIdAsync(catId)).ReturnsAsync(Category(catId));
+        // Re-fetch after save returns entity with loaded collections
+        _products.Setup(r => r.GetByIdWithDetailsAsync(id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(detailedProduct);
+
+        var result = await CreateService().UpdateAsync(id,
+            new UpdateProductRequest { Name = "Tee", Slug = "tee", CategoryId = catId, BasePrice = 10m },
+            Guid.NewGuid(), "127.0.0.1", "ua");
+
+        result.IsSuccess.Should().BeTrue();
+        result.Data!.VariantCount.Should().Be(1);
+        result.Data.PrimaryImageUrl.Should().NotBeNullOrEmpty();
+        _products.Verify(r => r.GetByIdWithDetailsAsync(id, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    // ── GetBySlug ────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetBySlugAsync_ExistingSlug_ReturnsDetailedResponse()
+    {
+        var id = Guid.NewGuid();
+        var catId = Guid.NewGuid();
+        var product = Product(id, catId);
+        product.Variants.Add(Variant(id));
+        product.Images.Add(Image(id));
+
+        _products.Setup(r => r.GetBySlugWithDetailsAsync(_tenantId, "tee", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(product);
+
+        var result = await CreateService().GetBySlugAsync("tee");
+
+        result.IsSuccess.Should().BeTrue();
+        result.Data!.Slug.Should().Be("tee");
+        result.Data.VariantCount.Should().Be(1);
+        result.Data.PrimaryImageUrl.Should().NotBeNullOrEmpty();
+        // Must NOT fall back to full-table-scan GetPagedAsync
+        _products.Verify(r => r.GetPagedAsync(It.IsAny<ProductFilter>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetBySlugAsync_UnknownSlug_Returns404()
+    {
+        _products.Setup(r => r.GetBySlugWithDetailsAsync(_tenantId, "nope", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Product?)null);
+
+        var result = await CreateService().GetBySlugAsync("nope");
+
+        result.StatusCode.Should().Be(404);
+    }
+
     // ── Publish gating ──────────────────────────────────────────────────────────
 
     [Fact]

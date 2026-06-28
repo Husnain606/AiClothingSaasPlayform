@@ -23,6 +23,16 @@ public class ProductRepository(ApplicationDbContext context)
             .Include(p => p.Reviews)
             .FirstOrDefaultAsync(p => p.Id == id, ct);
 
+    public async Task<Product?> GetBySlugWithDetailsAsync(Guid tenantId, string slug, CancellationToken ct = default)
+        => await DbSet
+            .AsNoTracking()
+            .AsSplitQuery()
+            .Include(p => p.Category)
+            .Include(p => p.Variants)
+            .Include(p => p.Images)
+            .Include(p => p.Reviews)
+            .FirstOrDefaultAsync(p => p.TenantId == tenantId && p.Slug == slug, ct);
+
     public async Task<(IReadOnlyList<Product> Items, int Total)> GetPagedAsync(ProductFilter filter, CancellationToken ct = default)
     {
         var query = DbSet

@@ -57,8 +57,14 @@ public class ProductService(
             null, new { product.Name, product.Slug, product.CategoryId, product.BasePrice }, ipAddress, userAgent);
 
         logger.LogInformation("Product {ProductId} created for tenant {TenantId}", product.Id, tenantId);
+
+        // Re-fetch with full nav graph so the response object is consistent with GetById
+        // (counts are genuinely 0 for a brand-new product, but this avoids relying on
+        //  unloaded collections and keeps Create/Update symmetric).
+        var created = await productRepository.GetByIdWithDetailsAsync(product.Id, ct)
+                      ?? product; // fallback — should never be null immediately after insert
         return ResponseData<ProductResponse>.Success(
-            MapToResponse(product, category.Name), "Product created.", 201);
+            MapDetailedResponse(created), "Product created.", 201);
     }
 
     public async Task<ResponseData<ProductResponse>> UpdateAsync(Guid id, UpdateProductRequest request,
@@ -74,12 +80,19 @@ public class ProductService(
         if (await productRepository.SlugExistsAsync(tenantId, request.Slug, id, ct))
             return ResponseData<ProductResponse>.Failure($"Slug '{request.Slug}' is already in use.", 409);
 
-        Category? category = null;
+        // Capture category name before save — re-fetch only if CategoryId actually changed.
+        string? categoryName;
         if (request.CategoryId != product.CategoryId)
         {
-            category = await categoryRepository.GetByIdAsync(request.CategoryId);
-            if (category is null || category.TenantId != tenantId)
+            var newCategory = await categoryRepository.GetByIdAsync(request.CategoryId);
+            if (newCategory is null || newCategory.TenantId != tenantId)
                 return ResponseData<ProductResponse>.Failure("Category not found.", 404);
+            categoryName = newCategory.Name;
+        }
+        else
+        {
+            // CategoryId unchanged — resolve name without an extra round-trip.
+            categoryName = (await categoryRepository.GetByIdAsync(product.CategoryId))?.Name;
         }
 
         var old = new { product.Name, product.Slug, product.Description, product.CategoryId, product.BasePrice, product.Tags };
@@ -98,8 +111,10 @@ public class ProductService(
             ipAddress, userAgent);
 
         logger.LogInformation("Product {ProductId} updated for tenant {TenantId}", product.Id, tenantId);
-        var categoryName = category?.Name ?? (await categoryRepository.GetByIdAsync(product.CategoryId))?.Name;
-        return ResponseData<ProductResponse>.Success(MapToResponse(product, categoryName), "Product updated.");
+
+        // Re-fetch with nav graph so VariantCount/PrimaryImageUrl/review stats reflect reality.
+        var updated = await productRepository.GetByIdWithDetailsAsync(product.Id, ct);
+        return ResponseData<ProductResponse>.Success(MapDetailedResponse(updated!), "Product updated.");
     }
 
     public async Task<ResponseData<ProductResponse>> PublishAsync(Guid id,
@@ -163,8 +178,9 @@ public class ProductService(
             new { Status = previousStatus }, new { Status = ProductStatus.Archived }, ipAddress, userAgent);
 
         logger.LogInformation("Product {ProductId} archived for tenant {TenantId}", product.Id, tenantId);
-        var category = await categoryRepository.GetByIdAsync(product.CategoryId);
-        return ResponseData<ProductResponse>.Success(MapToResponse(product, category?.Name), "Product archived.");
+        // Category didn't change during archive — resolve name in one fetch; no second category lookup.
+        var archivedCategory = await categoryRepository.GetByIdAsync(product.CategoryId);
+        return ResponseData<ProductResponse>.Success(MapToResponse(product, archivedCategory?.Name), "Product archived.");
     }
 
     public async Task<ResponseData<bool>> DeleteAsync(Guid id,
@@ -177,10 +193,11 @@ public class ProductService(
         if (product is null || product.TenantId != tenantId)
             return ResponseData<bool>.Failure("Product not found.", 404);
 
-        // Only Draft products may be hard-deleted; Active/Archived must be archived, not removed (spec §8).
+        // Only Draft products may be hard-deleted; Active products should be archived first,
+        // and Archived products are kept for records (spec §8).
         if (product.Status != ProductStatus.Draft)
             return ResponseData<bool>.Failure(
-                "Only draft products can be deleted. Archive published or archived products instead.", 409);
+                "Only draft products can be deleted; archive active products and keep archived ones for records.", 409);
 
         await productRepository.DeleteAsync(product);
         await unitOfWork.SaveChangesAsync(ct);
@@ -231,16 +248,8 @@ public class ProductService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<ProductResponse>.Failure("Tenant could not be resolved.", 400);
 
-        // The repository exposes no slug-based detail lookup, so resolve the id from the
-        // tenant-scoped paged set, then load the full details graph for the match.
-        var (items, _) = await productRepository.GetPagedAsync(
-            new ProductFilter { TenantId = tenantId, Page = 1, PageSize = int.MaxValue }, ct);
-        var match = items.FirstOrDefault(p => p.Slug == slug);
-        if (match is null)
-            return ResponseData<ProductResponse>.Failure("Product not found.", 404);
-
-        var product = await productRepository.GetByIdWithDetailsAsync(match.Id, ct);
-        if (product is null || product.TenantId != tenantId)
+        var product = await productRepository.GetBySlugWithDetailsAsync(tenantId, slug, ct);
+        if (product is null)
             return ResponseData<ProductResponse>.Failure("Product not found.", 404);
 
         return ResponseData<ProductResponse>.Success(MapDetailedResponse(product));
