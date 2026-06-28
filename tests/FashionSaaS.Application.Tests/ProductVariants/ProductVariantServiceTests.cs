@@ -44,8 +44,8 @@ public class ProductVariantServiceTests
         var productId = Guid.NewGuid();
         _products.Setup(r => r.GetByIdAsync(productId)).ReturnsAsync(Product(productId, 20m));
         _variants.Setup(r => r.SkuExistsAsync(_tenantId, "SKU-NEW", null, It.IsAny<CancellationToken>())).ReturnsAsync(false);
-        _variants.Setup(r => r.GetByProductAsync(productId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<ProductVariant>());
+        _variants.Setup(r => r.SizeColorExistsAsync(productId, "M", "Red", null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
 
         var result = await CreateService().AddAsync(
             new AddVariantRequest { ProductId = productId, Size = "M", Color = "Red", Sku = "SKU-NEW", StockQuantity = 3 },
@@ -64,8 +64,8 @@ public class ProductVariantServiceTests
         var productId = Guid.NewGuid();
         _products.Setup(r => r.GetByIdAsync(productId)).ReturnsAsync(Product(productId, 20m));
         _variants.Setup(r => r.SkuExistsAsync(_tenantId, "SKU-NEW", null, It.IsAny<CancellationToken>())).ReturnsAsync(false);
-        _variants.Setup(r => r.GetByProductAsync(productId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<ProductVariant>());
+        _variants.Setup(r => r.SizeColorExistsAsync(productId, "M", "Red", null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
 
         var result = await CreateService().AddAsync(
             new AddVariantRequest { ProductId = productId, Size = "M", Color = "Red", Sku = "SKU-NEW", PriceOverride = 9.99m },
@@ -111,8 +111,9 @@ public class ProductVariantServiceTests
         var productId = Guid.NewGuid();
         _products.Setup(r => r.GetByIdAsync(productId)).ReturnsAsync(Product(productId));
         _variants.Setup(r => r.SkuExistsAsync(_tenantId, "SKU-X", null, It.IsAny<CancellationToken>())).ReturnsAsync(false);
-        _variants.Setup(r => r.GetByProductAsync(productId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<ProductVariant> { Variant(productId, "m", "red") }); // case-insensitive match
+        // DB-side uniqueness check returns true (duplicate exists).
+        _variants.Setup(r => r.SizeColorExistsAsync(productId, "M", "Red", null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
 
         var result = await CreateService().AddAsync(
             new AddVariantRequest { ProductId = productId, Size = "M", Color = "Red", Sku = "SKU-X" },

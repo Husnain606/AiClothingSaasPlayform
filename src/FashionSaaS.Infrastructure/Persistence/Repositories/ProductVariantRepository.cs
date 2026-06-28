@@ -12,6 +12,14 @@ public class ProductVariantRepository(ApplicationDbContext context)
             v => v.TenantId == tenantId && v.Sku == sku && (excludeId == null || v.Id != excludeId),
             ct);
 
+    public async Task<bool> SizeColorExistsAsync(Guid productId, string size, string color, Guid? excludeId = null, CancellationToken ct = default)
+        => await DbSet.AnyAsync(
+            v => v.ProductId == productId
+                 && v.Size.ToLower() == size.ToLower()
+                 && v.Color.ToLower() == color.ToLower()
+                 && (excludeId == null || v.Id != excludeId),
+            ct);
+
     public async Task<IReadOnlyList<ProductVariant>> GetByProductAsync(Guid productId, CancellationToken ct = default)
         => await DbSet
             .AsNoTracking()

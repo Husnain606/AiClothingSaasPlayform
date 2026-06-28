@@ -19,9 +19,6 @@ public class UpdateVariantRequestValidator : AbstractValidator<UpdateVariantRequ
             .NotEmpty().WithMessage("Sku is required.")
             .MaximumLength(100).WithMessage("Sku must not exceed 100 characters.");
 
-        RuleFor(x => x.StockQuantity)
-            .GreaterThanOrEqualTo(0).WithMessage("StockQuantity must be zero or greater.");
-
         RuleFor(x => x.PriceOverride)
             .GreaterThanOrEqualTo(0).WithMessage("PriceOverride must be zero or greater.")
             .When(x => x.PriceOverride.HasValue);

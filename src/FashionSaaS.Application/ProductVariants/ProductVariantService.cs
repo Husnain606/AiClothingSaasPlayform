@@ -35,9 +35,8 @@ public class ProductVariantService(
         if (await variantRepository.SkuExistsAsync(tenantId, request.Sku, null, ct))
             return ResponseData<VariantResponse>.Failure($"SKU '{request.Sku}' is already in use.", 409);
 
-        // (Product, Size, Color) must be unique within the product.
-        var existing = await variantRepository.GetByProductAsync(request.ProductId, ct);
-        if (existing.Any(v => SameSizeColor(v, request.Size, request.Color)))
+        // (Product, Size, Color) must be unique within the product — DB-side check (§6).
+        if (await variantRepository.SizeColorExistsAsync(request.ProductId, request.Size, request.Color, null, ct))
             return ResponseData<VariantResponse>.Failure(
                 $"A variant with size '{request.Size}' and color '{request.Color}' already exists for this product.", 409);
 
@@ -83,24 +82,23 @@ public class ProductVariantService(
         if (await variantRepository.SkuExistsAsync(tenantId, request.Sku, id, ct))
             return ResponseData<VariantResponse>.Failure($"SKU '{request.Sku}' is already in use.", 409);
 
-        // (Product, Size, Color) uniqueness, excluding the variant being updated.
-        var siblings = await variantRepository.GetByProductAsync(variant.ProductId, ct);
-        if (siblings.Any(v => v.Id != id && SameSizeColor(v, request.Size, request.Color)))
+        // (Product, Size, Color) uniqueness, excluding the variant being updated — DB-side check (§6).
+        if (await variantRepository.SizeColorExistsAsync(variant.ProductId, request.Size, request.Color, id, ct))
             return ResponseData<VariantResponse>.Failure(
                 $"A variant with size '{request.Size}' and color '{request.Color}' already exists for this product.", 409);
 
-        var old = new { variant.Size, variant.Color, variant.Sku, variant.StockQuantity, variant.PriceOverride };
+        var old = new { variant.Size, variant.Color, variant.Sku, variant.IsActive, variant.PriceOverride };
         variant.Size = request.Size;
         variant.Color = request.Color;
         variant.Sku = request.Sku;
-        variant.StockQuantity = request.StockQuantity;
+        variant.IsActive = request.IsActive;
         variant.PriceOverride = request.PriceOverride;
 
         await variantRepository.UpdateAsync(variant);
         await unitOfWork.SaveChangesAsync(ct);
 
         await auditLogService.LogAsync(updatedByUserId, tenantId, "VariantUpdated", "ProductVariant", variant.Id,
-            old, new { variant.Size, variant.Color, variant.Sku, variant.StockQuantity, variant.PriceOverride },
+            old, new { variant.Size, variant.Color, variant.Sku, variant.IsActive, variant.PriceOverride },
             ipAddress, userAgent);
 
         logger.LogInformation("Variant {VariantId} updated for tenant {TenantId}", variant.Id, tenantId);
@@ -166,10 +164,6 @@ public class ProductVariantService(
         var responses = variants.Select(v => MapToResponse(v, product.BasePrice)).ToList();
         return ResponseData<IReadOnlyList<VariantResponse>>.Success(responses);
     }
-
-    private static bool SameSizeColor(ProductVariant v, string size, string color)
-        => string.Equals(v.Size, size, StringComparison.OrdinalIgnoreCase)
-           && string.Equals(v.Color, color, StringComparison.OrdinalIgnoreCase);
 
     private static VariantResponse MapToResponse(ProductVariant v, decimal productBasePrice) => new()
     {

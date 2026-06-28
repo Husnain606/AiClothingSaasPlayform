@@ -5,6 +5,6 @@ public class UpdateVariantRequest
     public string Size { get; set; } = string.Empty;
     public string Color { get; set; } = string.Empty;
     public string Sku { get; set; } = string.Empty;
-    public int StockQuantity { get; set; }
+    public bool IsActive { get; set; } = true;
     public decimal? PriceOverride { get; set; }
 }

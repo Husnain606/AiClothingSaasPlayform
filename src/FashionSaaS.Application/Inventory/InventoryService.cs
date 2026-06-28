@@ -73,7 +73,7 @@ public class InventoryService(
             "Stock for variant {VariantId} adjusted by {Delta} to {NewQty} ({Reason}) by user {UserId} for tenant {TenantId}",
             variant.Id, request.Delta, newQty, request.Reason, adjustedByUserId, tenantId);
 
-        return ResponseData<StockAdjustmentResponse>.Success(MapToResponse(adjustment), "Stock adjusted.", 201);
+        return ResponseData<StockAdjustmentResponse>.Success(MapToResponse(adjustment), "Stock adjusted.", 200);
     }
 
     public async Task<ResponseData<IReadOnlyList<LowStockItemResponse>>> GetLowStockAsync(int threshold,

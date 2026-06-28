@@ -50,7 +50,7 @@ public class InventoryServiceTests
             Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.IsSuccess.Should().BeTrue();
-        result.StatusCode.Should().Be(201);
+        result.StatusCode.Should().Be(200);
         variant.StockQuantity.Should().Be(60);
         captured.Should().NotBeNull();
         captured!.ResultingQuantity.Should().Be(60);

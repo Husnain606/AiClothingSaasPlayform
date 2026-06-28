@@ -60,14 +60,23 @@ public class ProductVariantValidatorTests
     [Fact]
     public void Update_BlankColor_Fails()
     {
-        var result = _update.Validate(new UpdateVariantRequest { Size = "M", Color = "", Sku = "SKU-1", StockQuantity = 0 });
+        var result = _update.Validate(new UpdateVariantRequest { Size = "M", Color = "", Sku = "SKU-1" });
         result.Errors.Should().Contain(e => e.PropertyName == nameof(UpdateVariantRequest.Color));
     }
 
     [Fact]
     public void Update_Valid_Passes()
     {
-        _update.Validate(new UpdateVariantRequest { Size = "M", Color = "Red", Sku = "SKU-1", StockQuantity = 0 })
+        _update.Validate(new UpdateVariantRequest { Size = "M", Color = "Red", Sku = "SKU-1" })
             .IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Update_StockQuantity_NotAccepted_OnUpdateRequest()
+    {
+        // UpdateVariantRequest must not carry StockQuantity — stock changes go through the ledger only.
+        var props = typeof(UpdateVariantRequest).GetProperties().Select(p => p.Name);
+        props.Should().NotContain(nameof(AddVariantRequest.StockQuantity),
+            "stock must only change via InventoryService.AdjustStock (ledger-only)");
     }
 }
