@@ -12,4 +12,13 @@ public class WishlistRepository(ApplicationDbContext context)
             .AsNoTracking()
             .Include(w => w.Items)
             .FirstOrDefaultAsync(w => w.CustomerId == customerId, ct);
+
+    public async Task<WishlistItem?> GetItemAsync(Guid itemId, CancellationToken ct = default)
+        => await Context.Set<WishlistItem>().FirstOrDefaultAsync(i => i.Id == itemId, ct);
+
+    public Task RemoveItemAsync(WishlistItem item)
+    {
+        Context.Set<WishlistItem>().Remove(item);
+        return Task.CompletedTask;
+    }
 }

@@ -16,4 +16,11 @@ public class DiscountRepository(ApplicationDbContext context)
         => await DbSet.AnyAsync(
             d => d.TenantId == tenantId && d.Code == code && (excludeId == null || d.Id != excludeId),
             ct);
+
+    public async Task<IReadOnlyList<Discount>> GetByTenantAsync(Guid tenantId, CancellationToken ct = default)
+        => await DbSet
+            .AsNoTracking()
+            .Where(d => d.TenantId == tenantId)
+            .OrderByDescending(d => d.CreatedAt)
+            .ToListAsync(ct);
 }

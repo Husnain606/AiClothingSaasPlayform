@@ -6,4 +6,5 @@ public interface IDiscountRepository : IGenericRepository<Discount>
 {
     Task<Discount?> GetByCodeAsync(Guid tenantId, string code, CancellationToken ct = default);
     Task<bool> CodeExistsAsync(Guid tenantId, string code, Guid? excludeId = null, CancellationToken ct = default);
+    Task<IReadOnlyList<Discount>> GetByTenantAsync(Guid tenantId, CancellationToken ct = default);
 }
