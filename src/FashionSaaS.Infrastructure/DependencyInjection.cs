@@ -49,6 +49,9 @@ public static class DependencyInjection
         // Email
         services.AddScoped<IEmailService, SmtpEmailService>();
 
+        // Image storage (Cloudinary)
+        services.AddScoped<IImageStorageService, CloudinaryImageStorageService>();
+
         // Audit log
         services.AddScoped<IAuditLogService, AuditLogService>();
 
