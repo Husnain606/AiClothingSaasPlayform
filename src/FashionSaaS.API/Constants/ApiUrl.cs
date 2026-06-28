@@ -116,4 +116,88 @@ public static class ApiUrl
         public const string Create = "api/tenant/bank-account";
         public const string Update = "api/tenant/bank-account";
     }
+
+    public static class TenantCategories
+    {
+        public const string GetAll = "api/tenant/categories";
+        public const string GetTree = "api/tenant/categories/tree";
+        public const string GetById = "api/tenant/categories/{id}";
+        public const string Create = "api/tenant/categories";
+        public const string Update = "api/tenant/categories/{id}";
+        public const string Move = "api/tenant/categories/{id}/move";
+        public const string Reorder = "api/tenant/categories/reorder";
+        public const string Delete = "api/tenant/categories/{id}";
+    }
+
+    public static class TenantProducts
+    {
+        public const string GetAll = "api/tenant/products";
+        public const string GetById = "api/tenant/products/{id}";
+        public const string GetBySlug = "api/tenant/products/slug/{slug}";
+        public const string Create = "api/tenant/products";
+        public const string Update = "api/tenant/products/{id}";
+        public const string Publish = "api/tenant/products/{id}/publish";
+        public const string Archive = "api/tenant/products/{id}/archive";
+        public const string Delete = "api/tenant/products/{id}";
+    }
+
+    public static class TenantProductVariants
+    {
+        public const string GetByProduct = "api/tenant/products/{productId}/variants";
+        public const string Add = "api/tenant/variants";
+        public const string Update = "api/tenant/variants/{id}";
+        public const string Deactivate = "api/tenant/variants/{id}/deactivate";
+        public const string Delete = "api/tenant/variants/{id}";
+    }
+
+    public static class TenantProductImages
+    {
+        public const string GetByProduct = "api/tenant/products/{productId}/images";
+        public const string Upload = "api/tenant/products/images";
+        public const string Reorder = "api/tenant/products/{productId}/images/reorder";
+        public const string SetPrimary = "api/tenant/products/images/{id}/set-primary";
+        public const string Delete = "api/tenant/products/images/{id}";
+    }
+
+    public static class TenantInventory
+    {
+        public const string AdjustStock = "api/tenant/inventory/adjust";
+        public const string GetLowStock = "api/tenant/inventory/low-stock";
+        public const string GetStockHistory = "api/tenant/inventory/variants/{variantId}/history";
+    }
+
+    public static class TenantCustomers
+    {
+        public const string GetAll = "api/tenant/customers";
+        public const string GetById = "api/tenant/customers/{id}";
+        public const string Create = "api/tenant/customers";
+        public const string Update = "api/tenant/customers/{id}";
+        public const string Deactivate = "api/tenant/customers/{id}/deactivate";
+    }
+
+    public static class TenantDiscounts
+    {
+        public const string GetAll = "api/tenant/discounts";
+        public const string GetById = "api/tenant/discounts/{id}";
+        public const string GetByCode = "api/tenant/discounts/code/{code}";
+        public const string Create = "api/tenant/discounts";
+        public const string Update = "api/tenant/discounts/{id}";
+        public const string Deactivate = "api/tenant/discounts/{id}/deactivate";
+        public const string Delete = "api/tenant/discounts/{id}";
+    }
+
+    public static class TenantReviews
+    {
+        public const string GetAll = "api/tenant/reviews";
+        public const string GetById = "api/tenant/reviews/{id}";
+        public const string Approve = "api/tenant/reviews/{id}/approve";
+        public const string Reject = "api/tenant/reviews/{id}/reject";
+        public const string Delete = "api/tenant/reviews/{id}";
+    }
+
+    public static class TenantWishlists
+    {
+        public const string GetByCustomer = "api/tenant/customers/{customerId}/wishlist";
+        public const string RemoveItem = "api/tenant/wishlist/items/{itemId}";
+    }
 }
