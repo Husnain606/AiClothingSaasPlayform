@@ -132,14 +132,26 @@ public class DiscountService(
         return ResponseData<bool>.Success(true, "Discount deleted.");
     }
 
-    public async Task<ResponseData<IReadOnlyList<DiscountResponse>>> GetAllAsync(CancellationToken ct = default)
+    public async Task<ResponseData<PagedResult<DiscountResponse>>> GetAllAsync(DiscountFilter filter,
+        CancellationToken ct = default)
     {
         if (currentTenant.TenantId is not { } tenantId)
-            return ResponseData<IReadOnlyList<DiscountResponse>>.Failure("Tenant could not be resolved.", 400);
+            return ResponseData<PagedResult<DiscountResponse>>.Failure("Tenant could not be resolved.", 400);
 
-        var discounts = await discountRepository.GetByTenantAsync(tenantId, ct);
-        var responses = discounts.Select(MapToResponse).ToList();
-        return ResponseData<IReadOnlyList<DiscountResponse>>.Success(responses);
+        // Enforce tenant scope regardless of the inbound filter value.
+        filter.TenantId = tenantId;
+
+        var (items, total) = await discountRepository.GetPagedAsync(filter, ct);
+
+        var page = new PagedResult<DiscountResponse>
+        {
+            Items = items.Select(MapToResponse).ToList(),
+            TotalCount = total,
+            Page = filter.Page,
+            PageSize = filter.PageSize
+        };
+
+        return ResponseData<PagedResult<DiscountResponse>>.Success(page);
     }
 
     public async Task<ResponseData<DiscountResponse>> GetByIdAsync(Guid id, CancellationToken ct = default)

@@ -136,14 +136,34 @@ public class DiscountServiceTests
     }
 
     [Fact]
-    public async Task GetAllAsync_ReturnsTenantDiscounts()
+    public async Task GetAllAsync_ReturnsPagedDiscounts()
     {
-        _discounts.Setup(r => r.GetByTenantAsync(_tenantId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<Discount> { Discount(), Discount("X") });
+        var filter = new DiscountFilter { Page = 1, PageSize = 10 };
+        var items = new List<Discount> { Discount(), Discount("X") };
+        _discounts
+            .Setup(r => r.GetPagedAsync(It.Is<DiscountFilter>(f => f.TenantId == _tenantId), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((items.AsReadOnly() as IReadOnlyList<Discount>, 2));
 
-        var result = await CreateService().GetAllAsync();
+        var result = await CreateService().GetAllAsync(filter);
 
         result.IsSuccess.Should().BeTrue();
-        result.Data!.Should().HaveCount(2);
+        result.Data!.Items.Should().HaveCount(2);
+        result.Data.TotalCount.Should().Be(2);
+        result.Data.Page.Should().Be(1);
+        result.Data.PageSize.Should().Be(10);
+    }
+
+    [Fact]
+    public async Task GetAllAsync_FilterInjectedWithTenantId()
+    {
+        var filter = new DiscountFilter { Page = 2, PageSize = 5, IsActive = true };
+        _discounts
+            .Setup(r => r.GetPagedAsync(It.Is<DiscountFilter>(f => f.TenantId == _tenantId && f.IsActive == true && f.Page == 2 && f.PageSize == 5), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((new List<Discount> { Discount() }.AsReadOnly() as IReadOnlyList<Discount>, 1));
+
+        var result = await CreateService().GetAllAsync(filter);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Data!.TotalCount.Should().Be(1);
     }
 }
