@@ -25,6 +25,10 @@ public static class DependencyInjection
             .ValidateOnStart();
         services.Configure<SmtpSettings>(configuration.GetSection(SmtpSettings.SectionName));
         services.Configure<CorsSettings>(configuration.GetSection(CorsSettings.SectionName));
+        services.AddOptions<CloudinarySettings>()
+            .Bind(configuration.GetSection(CloudinarySettings.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
 
         // DbContext
         services.AddDbContext<ApplicationDbContext>(options =>
@@ -64,6 +68,17 @@ public static class DependencyInjection
         services.AddScoped<IAuditLogRepository, AuditLogRepository>();
         services.AddScoped<ILoginAttemptRepository, LoginAttemptRepository>();
         services.AddScoped<IRoleRepository, RoleRepository>();
+
+        // Phase 2 — Catalog repositories
+        services.AddScoped<ICategoryRepository, CategoryRepository>();
+        services.AddScoped<IProductRepository, ProductRepository>();
+        services.AddScoped<IProductVariantRepository, ProductVariantRepository>();
+        services.AddScoped<IProductImageRepository, ProductImageRepository>();
+        services.AddScoped<IStockAdjustmentRepository, StockAdjustmentRepository>();
+        services.AddScoped<ICustomerRepository, CustomerRepository>();
+        services.AddScoped<IDiscountRepository, DiscountRepository>();
+        services.AddScoped<IReviewRepository, ReviewRepository>();
+        services.AddScoped<IWishlistRepository, WishlistRepository>();
 
         // Background jobs
         services.AddHostedService<SubscriptionExpiryJob>();
