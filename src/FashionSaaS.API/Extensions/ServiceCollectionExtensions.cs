@@ -24,6 +24,7 @@ using FashionSaaS.Application.Tenants;
 using FashionSaaS.Application.Users;
 using FashionSaaS.Application.Wishlists;
 using FashionSaaS.Infrastructure.EventHandlers;
+using Mapster;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -54,9 +55,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<LoginAttemptService>();
         services.AddScoped<ISuperAdminIpGuardService, SuperAdminIpGuardService>();
 
-        // Mappster configuration
-        var mapperConfig = MappingConfiguration.GetMappingConfig();
-        services.AddMapster(mapperConfig);
+        // Mapster configuration
+        services.AddMapster();
 
         return services;
     }
