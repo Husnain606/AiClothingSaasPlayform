@@ -12,6 +12,7 @@ using FashionSaaS.Application.Discounts;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Application.Inventory;
 using FashionSaaS.Application.LoginAttempts;
+using FashionSaaS.Application.Mapping;
 using FashionSaaS.Application.Mfa;
 using FashionSaaS.Application.ProductImages;
 using FashionSaaS.Application.Products;
@@ -52,6 +53,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped<AuditLogQueryService>();
         services.AddScoped<LoginAttemptService>();
         services.AddScoped<ISuperAdminIpGuardService, SuperAdminIpGuardService>();
+
+        // Mappster configuration
+        var mapperConfig = MappingConfiguration.GetMappingConfig();
+        services.AddMapster(mapperConfig);
+
         return services;
     }
 
