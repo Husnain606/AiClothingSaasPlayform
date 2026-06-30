@@ -8,7 +8,7 @@
 ## Tasks
 
 - [x] Task 1: Project Scaffolding & Build Configuration (3 subtasks) ✅
-- [ ] Task 2: Authentication Module (Login, Register, JWT)
+- [x] Task 2: Authentication Module (Login, Register, JWT) ✅
 - [ ] Task 3: Product Catalog Module (Browse, Search, Filter)
 - [ ] Task 4: Shopping Cart Module
 - [ ] Task 5: Checkout Module (Shipping, Payment, Orders)
@@ -28,6 +28,17 @@
   - HTTP interceptors (Auth + Error handling)
   - CoreModule with DI
   - Zero build errors, production-ready
+
+- Task 2: ✅ COMPLETE (commit 24d2276, build ✅, tests ✅, architecture ✅)
+  - Auth models: LoginRequest, LoginResponse, RegisterRequest, CurrentUser
+  - AuthService enhanced with login(), register(), logout(), token management
+  - LoginComponent with reactive forms and validation
+  - RegisterComponent with password confirmation validation
+  - AuthGuard (CanActivateFn) for route protection
+  - Routes configured for /login, /register
+  - Unit test specs for both components
+  - Build succeeds with zero TypeScript errors
+  - Ready for Task 3 integration
 
 ## Quality Gate Checks
 
