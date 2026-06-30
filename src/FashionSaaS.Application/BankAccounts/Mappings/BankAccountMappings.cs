@@ -21,6 +21,7 @@ public class BankAccountMappings : IRegister
             .Ignore(dest => dest.BranchCodeEncrypted)
             .Ignore(dest => dest.IbanEncrypted);
         config.NewConfig<UpdateBankAccountRequest, BankAccount>()
+            .IgnoreNullValues(true)
             .Ignore(dest => dest.AccountTitleEncrypted)
             .Ignore(dest => dest.AccountNumberEncrypted)
             .Ignore(dest => dest.BankNameEncrypted)

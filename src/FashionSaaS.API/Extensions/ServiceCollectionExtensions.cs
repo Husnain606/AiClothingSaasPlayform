@@ -55,7 +55,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<LoginAttemptService>();
         services.AddScoped<ISuperAdminIpGuardService, SuperAdminIpGuardService>();
 
-        // Mapster configuration
+        // Mapster configuration with assembly scanning for IRegister implementations
+        MappingConfiguration.GetMappingConfig();
         services.AddMapster();
 
         return services;
