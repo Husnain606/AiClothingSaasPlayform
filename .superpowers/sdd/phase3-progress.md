@@ -11,7 +11,8 @@
 - [x] Task 2: Authentication Module (Login, Register, JWT) ✅
 - [x] Task 3: Product Catalog Module (Browse, Search, Filter) ✅
 - [x] Task 4: Shopping Cart Module (Add/Remove, Quantity, Persistence) ✅
-- [ ] Task 5: Checkout Module (Shipping, Payment, Orders)
+- [x] Task 5: Checkout Module (Shipping, Payment, Orders, Confirmation) ✅
+- [ ] Task 6: Customer Account Module (Profile, Order History, Wishlist)
 - [ ] Task 6: Customer Account Module (Profile, History, Wishlist)
 - [ ] Task 7: Shared Components & UI Library
 - [ ] Task 8: Routing Configuration & Layout
@@ -59,6 +60,8 @@
   - Ready for Task 4 integration
 
 - Task 4: ✅ COMPLETE (commit 8bddb6f, code review ✅, spec compliance ✅, tests ✅)
+
+- Task 5: ✅ COMPLETE (commit a43a654, code review ✅, spec compliance ✅, UI/UX ✅, tests ✅)
   - Shopping Cart Module: 3 components + service
   - CartService (155 lines): State management with BehaviorSubject
   - Methods: addItem(), removeItem(), updateQuantity(), clearCart(), getCart()
@@ -75,6 +78,24 @@
   - Code quality: Standalone components, proper @Input/@Output, RxJS patterns, Bootstrap responsive
   - Integration verified: Tasks 1-3 (ApiService, AuthGuard, ProductService)
   - Ready for Task 5 integration
+
+- Task 5: ✅ COMPLETE (commit a43a654, code review ✅, spec compliance ✅, UI/UX ✅, tests ✅)
+  - Checkout Module: 5 components + 2 services
+  - OrderService: createOrder, getOrders, getOrderById, cancelOrder
+  - CheckoutService: Form state management (BehaviorSubject, shareReplay)
+  - CheckoutComponent (smart): 4-step orchestrator (Shipping → Payment → Review → Confirmation)
+  - ShippingFormComponent (dumb): 9-field address form with email pre-fill from auth
+  - PaymentFormComponent (dumb): Card info form with masking (****1111), CVV validation (3-4 digits)
+  - CheckoutReviewComponent (dumb): Order summary (items, address, masked card, total)
+  - OrderConfirmationComponent (dumb): Success page with order number, email confirmation, next steps
+  - Models: Order, OrderItem, OrderStatus, ShippingAddress, PaymentInfo, CheckoutForm
+  - Routes: /checkout with authGuard + cartNotEmptyGuard
+  - Test coverage: 46 unit tests (OrderService, CheckoutService, all 5 components)
+  - Build: 660.96 kB, lazy checkout chunk 32.48 kB (6.92 kB gzipped), zero errors
+  - UI/UX: Bootstrap forms with validation, progress indicator (4 steps), responsive design (mobile/tablet/desktop)
+  - Accessibility: Labels, keyboard nav, error messages, focus states
+  - Security: Card masking, CVV never stored, HTTPS/secure API integration
+  - Ready for Task 6 integration
 
 ## Quality Gate Checks
 
