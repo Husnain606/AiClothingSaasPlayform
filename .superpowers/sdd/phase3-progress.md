@@ -12,8 +12,7 @@
 - [x] Task 3: Product Catalog Module (Browse, Search, Filter) ✅
 - [x] Task 4: Shopping Cart Module (Add/Remove, Quantity, Persistence) ✅
 - [x] Task 5: Checkout Module (Shipping, Payment, Orders, Confirmation) ✅
-- [ ] Task 6: Customer Account Module (Profile, Order History, Wishlist)
-- [ ] Task 6: Customer Account Module (Profile, History, Wishlist)
+- [x] Task 6: Customer Account Module (Profile, Order History, Wishlist) ✅
 - [ ] Task 7: Shared Components & UI Library
 - [ ] Task 8: Routing Configuration & Layout
 - [ ] Task 9: Testing Setup & Unit Tests
