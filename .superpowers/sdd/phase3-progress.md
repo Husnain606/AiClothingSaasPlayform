@@ -10,7 +10,7 @@
 - [x] Task 1: Project Scaffolding & Build Configuration (3 subtasks) ✅
 - [x] Task 2: Authentication Module (Login, Register, JWT) ✅
 - [x] Task 3: Product Catalog Module (Browse, Search, Filter) ✅
-- [ ] Task 4: Shopping Cart Module
+- [x] Task 4: Shopping Cart Module (Add/Remove, Quantity, Persistence) ✅
 - [ ] Task 5: Checkout Module (Shipping, Payment, Orders)
 - [ ] Task 6: Customer Account Module (Profile, History, Wishlist)
 - [ ] Task 7: Shared Components & UI Library
@@ -41,6 +41,8 @@
   - Ready for Task 3 integration
 
 - Task 3: ✅ COMPLETE (commit 707a4ba, test framework fix complete, code review ✅, tests ✅)
+
+- Task 4: ✅ COMPLETE (commit 8bddb6f, code review ✅, tests ✅, build ✅)
   - Product Catalog Module: 6 components + service
   - CategoryListComponent (smart, data-loading)
   - ProductListComponent (dumb, responsive grid 4→3→2→1 cols)
@@ -55,6 +57,24 @@
   - Code quality: Clean architecture, RxJS patterns, no 'any' types, OnDestroy unsubscribe
   - Responsive design verified across mobile/tablet/desktop
   - Ready for Task 4 integration
+
+- Task 4: ✅ COMPLETE (commit 8bddb6f, code review ✅, spec compliance ✅, tests ✅)
+  - Shopping Cart Module: 3 components + service
+  - CartService (155 lines): State management with BehaviorSubject
+  - Methods: addItem(), removeItem(), updateQuantity(), clearCart(), getCart()
+  - Persistent storage: localStorage with automatic save/load
+  - Variant matching: Handles size/color product variants
+  - Calculations: Auto-computes subtotal, tax (10%), total, itemCount
+  - CartComponent (smart): Orchestrates state, emits events, navigates to checkout
+  - CartListComponent (dumb): Displays items with quantity ±/- buttons, remove option
+  - CartSummaryComponent (dumb): Shows totals, checkout button (disabled if empty), clear cart
+  - cartNotEmptyGuard: CanActivateFn blocks checkout if cart empty, redirects to catalog
+  - Routes: /cart (authGuard), /checkout (authGuard + cartNotEmptyGuard)
+  - Test coverage: 54 unit tests (CartService 20, CartComponent 6, CartListComponent 11, CartSummaryComponent 11, Guard 6)
+  - Build: 636.48 kB, zero TypeScript errors
+  - Code quality: Standalone components, proper @Input/@Output, RxJS patterns, Bootstrap responsive
+  - Integration verified: Tasks 1-3 (ApiService, AuthGuard, ProductService)
+  - Ready for Task 5 integration
 
 ## Quality Gate Checks
 
