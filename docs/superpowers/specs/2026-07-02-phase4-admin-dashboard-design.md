@@ -11,7 +11,7 @@
 Phase 4 delivers two halves that make FashionSaaS operational end-to-end:
 
 1. **Orders + Reporting backend** (.NET 10, extends the existing solution): an Orders domain the Phase 3 storefront checkout can actually post to, tenant-scoped order management, and a full reporting suite (aggregates + CSV export).
-2. **Tenant Admin Dashboard** (`fashionsaas-admin`, new Angular 20 app): store owners manage their catalog, inventory, orders, customers, discounts, reviews, and settings, with an analytics home page.
+2. **Tenant Admin Dashboard** (new `/admin` area inside the existing `fashionsaas-storefront` app, routed by the logged-in user's role): store owners manage their catalog, inventory, orders, customers, discounts, reviews, and settings, with an analytics home page.
 
 **Audience:** Tenant admins only (roles AdminOwner, StoreManager, InventoryManager, OrderManager, ContentManager). Super-admin platform console is out of scope (future phase).
 
@@ -101,15 +101,23 @@ New feature slice `api/tenant/reports/*`, roles **AdminOwner, StoreManager** (re
 
 ---
 
-## 4. Frontend — `fashionsaas-admin` (new Angular 20 app)
+## 4. Frontend — `/admin` area inside `fashionsaas-storefront` (role-routed, single app)
 
-Sibling folder to `fashionsaas-storefront`; identical stack and conventions: standalone components, zoneless CD, Bootstrap 5.3 CSS-only, Vitest via `ng test`, strict TS (no `any`), smart/dumb split, ApiService wrapper unwrapping `ResponseData<T>`, Auth+Error interceptors, environments with fileReplacements wired from day one (Phase 3's Task-10 lesson). Charts: **ng2-charts (Chart.js)** — the one new dependency.
+No new app. The admin dashboard is a lazy-loaded feature area of the existing storefront, sharing its core (ApiService, AuthService, interceptors), conventions (standalone, zoneless CD, Bootstrap 5.3 CSS-only, Vitest, strict TS, smart/dumb split), and build. Charts: **ng2-charts (Chart.js)** — the one new dependency.
 
-### 4.1 Module map (lazy feature routes under MainLayout: sidebar + topbar)
+### 4.0 Role-based routing (the app decides what you see)
+
+- **Post-login redirect by role:** after `api/auth/login`, AuthService reads the JWT roles claim. Admin-tier roles (AdminOwner, StoreManager, InventoryManager, OrderManager, ContentManager) → redirect to `/admin`; `Customer` (or no admin role) → `/products` as today.
+- **New AdminLayoutComponent** (sidebar + topbar) parallel to the existing MainLayout (shopper) and AuthLayout. `/admin/**` routes live under it; every admin route carries `authGuard + adminRoleGuard` (new functional guard checking JWT roles). Deeper role checks per module (e.g. `/admin/settings` = AdminOwner only).
+- **Shopper area untouched:** existing storefront routes and layouts stay as-is. Admins can still browse the shop; the header shows a "Dashboard" link when the user has an admin role (and the admin topbar links back to the store).
+- **Lazy isolation:** the entire `/admin` area (and ng2-charts) loads via `loadChildren`, so shoppers never download admin code — bundle impact on the storefront's initial chunk ≈ 0.
+- Menus render from the role claim (UI convenience only; enforcement remains server-side).
+
+### 4.1 Module map (lazy feature routes under `/admin`, AdminLayout: sidebar + topbar)
 
 | Module | Contents | Backend | Menu visible to |
 |---|---|---|---|
-| core | ApiService, AuthService (JWT, roles from token), interceptors, roleGuard | api/auth | — |
+| core (existing, extended) | AuthService gains role parsing from JWT + post-login role redirect; new adminRoleGuard | api/auth | — |
 | dashboard | KPI cards, sales chart, top products, status donut, date-range picker | reports/* | AdminOwner, StoreManager |
 | orders | list (filter/search/pager), detail, status actions (confirm/ship/deliver/cancel with confirm modal) | tenant/orders | AdminOwner, OrderManager, StoreManager |
 | catalog | products CRUD + publish/archive, categories tree (move/reorder), variants, image upload/reorder/primary | tenant/products, categories, variants, images | AdminOwner, StoreManager, ContentManager |
@@ -123,13 +131,13 @@ Sibling folder to `fashionsaas-storefront`; identical stack and conventions: sta
 
 ### 4.2 Security model (frontend)
 
-- Login via `api/auth/login`; JWT roles claim drives `roleGuard` per route AND menu rendering (defense in UI, enforcement stays server-side).
+- One login for everyone (`api/auth/login`); JWT roles claim drives post-login redirect, adminRoleGuard, and menu rendering (UI convenience — enforcement stays server-side).
 - 401 → interceptor clears session, redirects to login. 403 → friendly "no permission" page.
-- No `alert()` anywhere — shared toast component from day one (Phase 3 backlog lesson).
+- No `alert()` anywhere new — shared toast component introduced for the admin area (Phase 3 backlog lesson); existing storefront alert() call sites migrated opportunistically when touched.
 
 ### 4.3 UX standards
 
-Responsive (sidebar collapses to drawer < 992px), WCAG 2.1 AA (labels, keyboard nav, aria on icon buttons, focus states), skeleton/loading states on every async view, empty states with CTAs, destructive actions require typed/confirm modal, tables: server-side paging.
+Responsive (admin sidebar collapses to drawer < 992px), WCAG 2.1 AA (labels, keyboard nav, aria on icon buttons, focus states), skeleton/loading states on every async view, empty states with CTAs, destructive actions require confirm modal, tables: server-side paging. Bundle budget: storefront initial chunk must stay ≤ 600 kB (admin is lazy); a separate budget check on the admin chunk in the plan's final task.
 
 ---
 
@@ -149,4 +157,4 @@ Super-admin platform console; real payment processing (CardLast4 only; payment g
 
 ## 8. Execution shape
 
-Backend first (Orders domain → order APIs → reporting → tests), then admin app (scaffold → core/auth → shell/layout → dashboard → orders → catalog → inventory/customers/discounts/reviews → reports → settings → hardening), finishing with a storefront integration task (apiBaseUrl fix + live checkout smoke test). Detailed task breakdown belongs to the implementation plan (writing-plans), executed via subagent-driven development with per-task code review, as in Phase 3.
+Backend first (Orders domain → order APIs → reporting → tests), then the admin area inside the storefront app (role routing + AdminLayout → dashboard → orders → catalog → inventory/customers/discounts/reviews → reports → settings → hardening), finishing with an integration task (apiBaseUrl fix + live checkout-to-admin-order smoke test: customer places order in shop, admin sees and ships it). Detailed task breakdown belongs to the implementation plan (writing-plans), executed via subagent-driven development with per-task code review, as in Phase 3.
