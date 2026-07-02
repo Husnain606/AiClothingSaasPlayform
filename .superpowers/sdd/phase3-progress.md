@@ -15,7 +15,7 @@
 - [x] Task 6: Customer Account Module (Profile, Order History, Wishlist) ✅
 - [x] Task 7: Shared Components & UI Library ✅
 - [x] Task 8: Routing Configuration & Layout ✅
-- [ ] Task 9: Testing Setup & Unit Tests
+- [x] Task 9: Testing Setup & Unit Tests ✅
 - [ ] Task 10: Build & Deployment Configuration
 
 ## Completed
@@ -117,6 +117,16 @@
   - Header dead links fixed post-review: / (brand), /products (nav), /account (single dropdown item)
   - Bundle: 698 kB → 593 kB initial (lazy loading), 7 lazy chunks
   - Suite: 309 passed / 40 pre-existing failures (features/**) — Task 9 scope
+
+- Task 9: ✅ COMPLETE (commits 74a02c6 + e7c049a, code review ✅, suite 493/493 green ×2)
+  - All 40 pre-existing feature test failures fixed + 3 unhandled errors eliminated
+  - Suite grew 349 → 493 tests (5 suites previously crashed at load and never ran)
+  - PRODUCTION BUG FOUND & FIXED: cart.service variantsMatch() — variant-less duplicate
+    adds created a new cart line instead of incrementing quantity (74a02c6)
+  - No tests deleted or weakened (verified by reviewer + independent sub-audit)
+  - Environment conventions locked in: zoneless (no fakeAsync), setInput(), vi fake timers,
+    provideRouter([]), TestBed.resetTestingModule() per beforeEach
+  - Build succeeds (592.77 kB, known budget warning — Task 10 scope)
 
 ## Quality Gate Checks
 
