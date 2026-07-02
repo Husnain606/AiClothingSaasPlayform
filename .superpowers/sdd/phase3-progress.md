@@ -16,7 +16,9 @@
 - [x] Task 7: Shared Components & UI Library ✅
 - [x] Task 8: Routing Configuration & Layout ✅
 - [x] Task 9: Testing Setup & Unit Tests ✅
-- [ ] Task 10: Build & Deployment Configuration
+- [x] Task 10: Build & Deployment Configuration ✅
+
+**ALL 10 TASKS COMPLETE — awaiting final whole-branch review**
 
 ## Completed
 
@@ -127,6 +129,14 @@
   - Environment conventions locked in: zoneless (no fakeAsync), setInput(), vi fake timers,
     provideRouter([]), TestBed.resetTestingModule() per beforeEach
   - Build succeeds (592.77 kB, known budget warning — Task 10 scope)
+
+- Task 10: ✅ COMPLETE (storefront commit 31a678c, code review ✅)
+  - CRITICAL CATCH: fileReplacements was missing — prod builds would have shipped localhost:5000.
+    Now wired and verified (prod URL in bundle, localhost absent, 0 sourcemaps)
+  - Budget 500→600 kB warning (justified: no eager-import defect; weight is framework + Bootstrap CSS)
+  - npm scripts: build:prod, test:ci, analyze; .gitignore: test-results.txt
+  - deploy/nginx.conf SPA-fallback reference (Phase 8); storefront README with route/guard table
+  - Zero build warnings; 493/493 tests
 
 ## Quality Gate Checks
 
