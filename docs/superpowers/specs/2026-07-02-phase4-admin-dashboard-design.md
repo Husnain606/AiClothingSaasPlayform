@@ -13,7 +13,9 @@ Phase 4 delivers two halves that make FashionSaaS operational end-to-end:
 1. **Orders + Reporting backend** (.NET 10, extends the existing solution): an Orders domain the Phase 3 storefront checkout can actually post to, tenant-scoped order management, and a full reporting suite (aggregates + CSV export).
 2. **Tenant Admin Dashboard** (new `/admin` area inside the existing `fashionsaas-storefront` app, routed by the logged-in user's role): store owners manage their catalog, inventory, orders, customers, discounts, reviews, and settings, with an analytics home page.
 
-**Audience:** Tenant admins only (roles AdminOwner, StoreManager, InventoryManager, OrderManager, ContentManager). Super-admin platform console is out of scope (future phase).
+**Audience:** Both admin tiers, role-routed in one app:
+- **Tenant admins** (AdminOwner, StoreManager, InventoryManager, OrderManager, ContentManager) → store dashboard (full feature set, sections 2-4)
+- **Super admin** (SuperAdmin) → platform console over the 37 existing `api/admin/*` endpoints (tenants, plans, subscriptions, payments, audit logs, login attempts, platform users, MFA, platform bank account). **No new backend for the platform console** — UI over existing endpoints only; platform-wide analytics endpoints are a future phase.
 
 ---
 
@@ -107,8 +109,9 @@ No new app. The admin dashboard is a lazy-loaded feature area of the existing st
 
 ### 4.0 Role-based routing (the app decides what you see)
 
-- **Post-login redirect by role:** after `api/auth/login`, AuthService reads the JWT roles claim. Admin-tier roles (AdminOwner, StoreManager, InventoryManager, OrderManager, ContentManager) → redirect to `/admin`; `Customer` (or no admin role) → `/products` as today.
-- **New AdminLayoutComponent** (sidebar + topbar) parallel to the existing MainLayout (shopper) and AuthLayout. `/admin/**` routes live under it; every admin route carries `authGuard + adminRoleGuard` (new functional guard checking JWT roles). Deeper role checks per module (e.g. `/admin/settings` = AdminOwner only).
+- **Post-login redirect by role:** after `api/auth/login`, AuthService reads the JWT roles claim and routes three ways: `SuperAdmin` → `/admin/platform` (platform console); tenant admin roles (AdminOwner, StoreManager, InventoryManager, OrderManager, ContentManager) → `/admin` (store dashboard); `Customer`/no admin role → `/products` as today.
+- **SuperAdmin MFA flow:** `api/admin/*` requires the MfaVerified policy, and login returns an MFA challenge (`api/auth/login/mfa`) for SuperAdmins. The login page gains the TOTP challenge step, and the platform console includes MFA setup/backup-code screens (`api/admin/mfa/*`) for first-time setup.
+- **New AdminLayoutComponent** (sidebar + topbar) parallel to the existing MainLayout (shopper) and AuthLayout. `/admin/**` routes live under it; every admin route carries `authGuard + adminRoleGuard` (new functional guard checking JWT roles). The sidebar renders tenant-store modules or platform modules based on role. Deeper role checks per route (e.g. `/admin/settings` = AdminOwner only; `/admin/platform/**` = SuperAdmin only — mutually exclusive with tenant modules).
 - **Shopper area untouched:** existing storefront routes and layouts stay as-is. Admins can still browse the shop; the header shows a "Dashboard" link when the user has an admin role (and the admin topbar links back to the store).
 - **Lazy isolation:** the entire `/admin` area (and ng2-charts) loads via `loadChildren`, so shoppers never download admin code — bundle impact on the storefront's initial chunk ≈ 0.
 - Menus render from the role claim (UI convenience only; enforcement remains server-side).
@@ -128,6 +131,18 @@ No new app. The admin dashboard is a lazy-loaded feature area of the existing st
 | reports | full report pages per section 3 + CSV download buttons | reports/* | AdminOwner, StoreManager |
 | settings | tenant profile, tenant users + role assignment, subscription view, bank account (masked; TOTP re-verify for full) | tenant/profile, users, subscription, bank-account | AdminOwner only |
 | shared | table w/ sort+pager, KPI card, chart wrappers, confirm modal, toast/alert, status badge, date-range picker, empty/loading states | — | — |
+
+**Platform console modules (`/admin/platform/**`, SuperAdmin only, over existing endpoints):**
+
+| Module | Contents | Backend |
+|---|---|---|
+| platform-home | counts overview (tenants by status, active subscriptions, recent payments/logins) assembled client-side from list endpoints | admin/tenants, subscriptions, payments |
+| tenants | list/filter, detail, create/update, suspend/activate, delete (typed confirm) | admin/tenants |
+| plans | subscription plans CRUD | admin/subscription-plans |
+| subscriptions | list, assign to tenant, change plan, suspend/reactivate | admin/subscriptions |
+| payments | list by subscription, detail, confirm payment (TOTP-sensitive per backend) | admin/payments |
+| platform-users | list/filter, detail, create/update, unlock | admin/users |
+| security | audit logs (filterable), login attempts, MFA setup + backup codes, platform bank account (masked; TOTP for full) | admin/audit-logs, login-attempts, mfa, bank-account |
 
 ### 4.2 Security model (frontend)
 
@@ -153,7 +168,7 @@ Backend: existing global IExceptionHandler; business-rule violations return 400 
 
 ## 7. Explicitly out of scope
 
-Super-admin platform console; real payment processing (CardLast4 only; payment gateway is a later phase); email notifications on status change (Phase 7 real-time/notifications); materialized reporting views; storefront anonymous browsing change (separate pending product decision); mobile apps.
+New backend endpoints for the platform console (UI over existing 37 admin endpoints only; platform-wide analytics = future phase); real payment processing (CardLast4 only; payment gateway is a later phase); email notifications on status change (Phase 7 real-time/notifications); materialized reporting views; storefront anonymous browsing change (separate pending product decision); mobile apps.
 
 ## 8. Execution shape
 
