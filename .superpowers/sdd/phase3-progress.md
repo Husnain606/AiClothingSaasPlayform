@@ -13,7 +13,7 @@
 - [x] Task 4: Shopping Cart Module (Add/Remove, Quantity, Persistence) ✅
 - [x] Task 5: Checkout Module (Shipping, Payment, Orders, Confirmation) ✅
 - [x] Task 6: Customer Account Module (Profile, Order History, Wishlist) ✅
-- [ ] Task 7: Shared Components & UI Library
+- [x] Task 7: Shared Components & UI Library ✅
 - [ ] Task 8: Routing Configuration & Layout
 - [ ] Task 9: Testing Setup & Unit Tests
 - [ ] Task 10: Build & Deployment Configuration
@@ -95,6 +95,18 @@
   - Accessibility: Labels, keyboard nav, error messages, focus states
   - Security: Card masking, CVV never stored, HTTPS/secure API integration
   - Ready for Task 6 integration
+
+- Task 7: ✅ COMPLETE (commits 47bd487 + c8eb6b7 fix round, code review ✅ after fixes, 91 tests ✅)
+  - Shared Components & UI Library: 7 components, 2 directives, 2 pipes, barrel export
+  - Header (nav + cart badge + Angular-native user dropdown), Footer, LoadingSpinner, Alert, Pagination, Modal, SearchBar
+  - Directives: highlight, lazy-load-image (IntersectionObserver with jsdom-safe guard)
+  - Pipes: truncate, safe-html (documented trusted-content-only, falsy guard)
+  - Review fixes applied: keyboard-accessible routerLink nav, zoneless CD markForCheck in alert,
+    dropdown without Bootstrap JS, pagination buttons, modal aria-modal + Escape
+  - Tests: 91 passing across 11 spec files; build succeeds (698 kB, known budget warning)
+  - NOTE for Task 9: 41 pre-existing test failures across features/ (catalog/auth/cart/checkout/account)
+    must be addressed in the Testing task
+  - NOTE for Task 8: Header/Footer not yet mounted in app shell — that is Task 8's scope
 
 ## Quality Gate Checks
 
