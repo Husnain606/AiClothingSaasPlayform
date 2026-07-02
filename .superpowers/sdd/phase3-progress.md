@@ -18,7 +18,21 @@
 - [x] Task 9: Testing Setup & Unit Tests ✅
 - [x] Task 10: Build & Deployment Configuration ✅
 
-**ALL 10 TASKS COMPLETE — awaiting final whole-branch review**
+**ALL 10 TASKS COMPLETE — FINAL REVIEW PASSED, READY FOR MERGE**
+
+## Final Whole-Branch Review (2026-07-02)
+
+- Verdict: READY FOR MERGE (after 1 Critical fix, re-reviewed and approved)
+- Critical found & fixed: catalog grid + product detail add-to-cart were console.log stubs
+  never calling CartService (leftover Task 4 TODO) — fixed in storefront commit ba9593e,
+  scoped re-review APPROVED (subscribe present, variant guard sensible, exact-arg tests)
+- Final gates: 498/498 tests (42 files), prod build zero warnings, 592.76 kB initial
+- Cross-cutting verified clean: cart/order shape alignment, checkout clears cart only after
+  success, no `as any` in production code, single AuthService/token key, ApiResponse
+  unwrapping consistent, route/guard matrix sane
+- Minor backlog: dead core.module.ts, empty 401 handler, alert()-based UX,
+  PRODUCT DECISION: catalog behind authGuard (no anonymous browsing) — confirm intent
+- Full report: .superpowers/sdd/phase3-final-review.md
 
 ## Completed
 
