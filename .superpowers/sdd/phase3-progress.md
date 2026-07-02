@@ -14,7 +14,7 @@
 - [x] Task 5: Checkout Module (Shipping, Payment, Orders, Confirmation) ✅
 - [x] Task 6: Customer Account Module (Profile, Order History, Wishlist) ✅
 - [x] Task 7: Shared Components & UI Library ✅
-- [ ] Task 8: Routing Configuration & Layout
+- [x] Task 8: Routing Configuration & Layout ✅
 - [ ] Task 9: Testing Setup & Unit Tests
 - [ ] Task 10: Build & Deployment Configuration
 
@@ -107,6 +107,16 @@
   - NOTE for Task 9: 41 pre-existing test failures across features/ (catalog/auth/cart/checkout/account)
     must be addressed in the Testing task
   - NOTE for Task 8: Header/Footer not yet mounted in app shell — that is Task 8's scope
+
+- Task 8: ✅ COMPLETE (commits dac1e59 + 80792d3 header-link fix, code review ✅, 26 new tests ✅)
+  - MainLayout (header + outlet + sticky footer) and AuthLayout (centered card, no chrome)
+  - Route restructure under layout parents; ALL guards preserved (verified against pre-Task-8 config)
+  - All 7 feature routes lazy via loadComponent; route titles on every navigable route
+  - NotFoundComponent on ** wildcard with CTA to /products
+  - App root reduced to <router-outlet />; ~340 lines of scaffold removed
+  - Header dead links fixed post-review: / (brand), /products (nav), /account (single dropdown item)
+  - Bundle: 698 kB → 593 kB initial (lazy loading), 7 lazy chunks
+  - Suite: 309 passed / 40 pre-existing failures (features/**) — Task 9 scope
 
 ## Quality Gate Checks
 
