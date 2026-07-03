@@ -18,6 +18,7 @@ using FashionSaaS.Application.Orders;
 using FashionSaaS.Application.ProductImages;
 using FashionSaaS.Application.Products;
 using FashionSaaS.Application.ProductVariants;
+using FashionSaaS.Application.Reports;
 using FashionSaaS.Application.Reviews;
 using FashionSaaS.Application.SubscriptionPlans;
 using FashionSaaS.Application.Subscriptions;
@@ -51,6 +52,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<CustomerService>();
         services.AddScoped<DiscountService>();
         services.AddScoped<OrderService>();
+        services.AddScoped<ReportService>();
         services.AddScoped<ReviewService>();
         services.AddScoped<WishlistService>();
         services.AddScoped<AuditLogQueryService>();

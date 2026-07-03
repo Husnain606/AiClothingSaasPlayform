@@ -84,6 +84,9 @@ public static class DependencyInjection
         services.AddScoped<IWishlistRepository, WishlistRepository>();
         services.AddScoped<IOrderRepository, OrderRepository>();
 
+        // Phase 4a — Reporting
+        services.AddScoped<IReportRepository, ReportRepository>();
+
         // Background jobs
         services.AddHostedService<SubscriptionExpiryJob>();
 
