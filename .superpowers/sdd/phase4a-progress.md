@@ -13,7 +13,7 @@
 - [x] Task 4: Customer store endpoints (api/store/orders) + Customer role ✅
 - [x] Task 5: Tenant order management endpoints (api/tenant/orders) ✅
 - [x] Task 6: ReportService (7 aggregates) ✅
-- [ ] Task 7: Reports controller + CSV export
+- [x] Task 7: Reports controller + CSV export ✅
 - [ ] Task 8: E2E workflow tests + docs
 
 ## Completed
@@ -24,6 +24,7 @@ Task 3: complete (commits b2ab319..c55ed71 + fix 273d5dd, review approved after 
 Task 4: complete (commit fa9acbc..97eaaaf, review clean — spec ✅, quality approved, email-claim + Customer-role seeding independently verified; 419/419 tests)
 Task 5: complete (commit 15d2c69..361d44c, review clean — spec ✅, quality approved, TenantId-forcing confirmed in source + non-vacuous regression test; 420/420 tests)
 Task 6: complete (commits 7e94803..ac84b07, review clean — spec ✅ all 7 metrics hand-verified incl. Sunday→Monday bucketing, quality approved, layering acceptable; 436/436 tests)
+Task 7: complete (commit ad6a40d..3bfb35b, review clean — spec ✅ all 7 endpoints' CSV/error branches individually verified, quality approved; 439/439 tests)
 
 ## Minor findings for final review
 
