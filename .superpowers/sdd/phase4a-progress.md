@@ -8,7 +8,7 @@
 ## Tasks
 
 - [x] Task 1: Order domain (entities, status lifecycle, EF config, Phase4Orders migration) ✅
-- [ ] Task 2: Order DTOs, repository, Mapster profile, customer email linkage
+- [x] Task 2: Order DTOs, repository, Mapster profile, customer email linkage ✅
 - [ ] Task 3: OrderService (pricing, stock, transitions) + validators
 - [ ] Task 4: Customer store endpoints (api/store/orders) + Customer role
 - [ ] Task 5: Tenant order management endpoints (api/tenant/orders)
@@ -19,7 +19,10 @@
 ## Completed
 
 Task 1: complete (commit 0712924..2ec858d, review clean — spec ✅, quality approved; 378/378 tests, build 0 errors independently verified)
+Task 2: complete (commit 87b42bc..82f94e2, review clean — spec ✅, quality approved with 1 Minor; 383/383 tests)
 
 ## Minor findings for final review
 
-(none yet)
+- Task 2: OrderRepository.cs:4 unnecessary `using FashionSaaS.Infrastructure.Persistence;` (Low)
+- Task 2: tenant-isolation repo test satisfied by both global filter and explicit predicate — doesn't uniquely exercise the explicit branch (test-design nit)
+- Task 1: ApplicationDbContextModelSnapshot.cs contains ~800 lines of mechanical EF tool-version regeneration churn (`.ToTable("X", (string)null)` → `.ToTable("X")` across all entities) — final reviewer should spot-check that no unrelated substantive change hides in it.
