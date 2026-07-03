@@ -35,6 +35,10 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<Wishlist> Wishlists => Set<Wishlist>();
     public DbSet<WishlistItem> WishlistItems => Set<WishlistItem>();
 
+    // Phase 4a orders
+    public DbSet<Order> Orders => Set<Order>();
+    public DbSet<OrderItem> OrderItems => Set<OrderItem>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -73,5 +77,9 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasQueryFilter(w => w.TenantId == currentTenantService.TenantId);
         modelBuilder.Entity<WishlistItem>()
             .HasQueryFilter(i => i.TenantId == currentTenantService.TenantId);
+
+        // Phase 4a orders — same dynamic tenant filter pattern as the catalog entities above.
+        modelBuilder.Entity<Order>()
+            .HasQueryFilter(o => o.TenantId == currentTenantService.TenantId);
     }
 }
