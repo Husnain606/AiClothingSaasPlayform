@@ -208,4 +208,14 @@ public static class ApiUrl
         public const string GetById = "api/store/orders/{id}";
         public const string Cancel = "api/store/orders/{id}/cancel";
     }
+
+    public static class TenantOrders
+    {
+        public const string GetAll = "api/tenant/orders";
+        public const string GetById = "api/tenant/orders/{id}";
+        public const string Confirm = "api/tenant/orders/{id}/confirm";
+        public const string Ship = "api/tenant/orders/{id}/ship";
+        public const string Deliver = "api/tenant/orders/{id}/deliver";
+        public const string Cancel = "api/tenant/orders/{id}/cancel";
+    }
 }

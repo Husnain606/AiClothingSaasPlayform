@@ -459,6 +459,22 @@ public class OrderServiceTests
     }
 
     [Fact]
+    public async Task GetAllAsync_OverwritesClientSuppliedForeignTenantId_PreventingCrossTenantLeak()
+    {
+        var foreignTenantId = Guid.NewGuid();
+        var filter = new OrderFilter { TenantId = foreignTenantId, Page = 1, PageSize = 20 };
+        var order = OrderWithStatus(OrderStatus.Pending);
+        _orders.Setup(r => r.GetPagedAsync(It.Is<OrderFilter>(f => f.TenantId == _tenantId), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((new List<Order> { order }.AsReadOnly() as IReadOnlyList<Order>, 1));
+
+        var result = await CreateService().GetAllAsync(filter);
+
+        result.IsSuccess.Should().BeTrue();
+        filter.TenantId.Should().Be(_tenantId);
+        filter.TenantId.Should().NotBe(foreignTenantId);
+    }
+
+    [Fact]
     public async Task GetForCustomerAsync_FiltersByEmail()
     {
         var order = OrderWithStatus(OrderStatus.Pending, shippingEmail: "customer@example.com");
