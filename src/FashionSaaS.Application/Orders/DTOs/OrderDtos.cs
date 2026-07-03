@@ -71,6 +71,7 @@ public class OrderFilter
     public DateTime? From { get; set; }
     public DateTime? To { get; set; }
     public Guid? CustomerId { get; set; }
+    public string? CustomerEmail { get; set; }   // matches ShippingEmail exactly
     public string? Search { get; set; }   // matches OrderNumber contains
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 20;

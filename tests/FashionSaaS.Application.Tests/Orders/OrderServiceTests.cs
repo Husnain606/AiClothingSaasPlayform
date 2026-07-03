@@ -470,4 +470,25 @@ public class OrderServiceTests
         result.IsSuccess.Should().BeTrue();
         result.Data!.Items.Should().HaveCount(1);
     }
+
+    [Fact]
+    public async Task GetForCustomerAsync_ForwardsEmailFilter_AndUsesRepositoryTotalCount()
+    {
+        // Repository is the source of truth for filtering/pagination now — the service must
+        // forward CustomerEmail in the filter and trust the repo's TotalCount verbatim,
+        // rather than re-filtering/re-counting in memory.
+        var order = OrderWithStatus(OrderStatus.Pending, shippingEmail: "customer@example.com");
+        _orders.Setup(r => r.GetPagedAsync(
+                It.Is<OrderFilter>(f => f.TenantId == _tenantId && f.CustomerEmail == "customer@example.com" && f.Page == 2 && f.PageSize == 20),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((new List<Order> { order }.AsReadOnly() as IReadOnlyList<Order>, 25));
+
+        var result = await CreateService().GetForCustomerAsync("customer@example.com", 2, 20);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Data!.TotalCount.Should().Be(25);
+        result.Data.Items.Should().HaveCount(1);
+        _orders.Verify(r => r.GetPagedAsync(
+            It.Is<OrderFilter>(f => f.CustomerEmail == "customer@example.com"), It.IsAny<CancellationToken>()), Times.Once);
+    }
 }

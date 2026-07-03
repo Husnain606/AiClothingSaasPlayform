@@ -23,6 +23,8 @@ public class OrderRepository(ApplicationDbContext context) : IOrderRepository
         if (filter.From is { } from) query = query.Where(o => o.OrderDate >= from);
         if (filter.To is { } to) query = query.Where(o => o.OrderDate <= to);
         if (filter.CustomerId is { } customerId) query = query.Where(o => o.CustomerId == customerId);
+        if (!string.IsNullOrWhiteSpace(filter.CustomerEmail))
+            query = query.Where(o => o.ShippingEmail == filter.CustomerEmail);
         if (!string.IsNullOrWhiteSpace(filter.Search))
             query = query.Where(o => o.OrderNumber.Contains(filter.Search));
 

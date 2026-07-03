@@ -66,3 +66,50 @@ Verified directly by reading source (cross-checked against a parallel research a
 ## Commit
 
 See `git log` — committed as `feat(orders): OrderService with server-side pricing, stock coupling, and status lifecycle`.
+
+## Fix Round 1
+
+Addressed all four code-review findings from the Task 3 review.
+
+### Finding 1 (Important — functional bug): `GetForCustomerAsync` in-memory filtering
+
+Pushed customer-email filtering down to the repository/SQL layer instead of filtering an already-paginated page in memory (which could hide a customer's orders on other backend pages and reported a per-page, not true, `TotalCount`).
+
+- `src/FashionSaaS.Application/Orders/DTOs/OrderDtos.cs` — added `OrderFilter.CustomerEmail`.
+- `src/FashionSaaS.Infrastructure/Persistence/Repositories/OrderRepository.cs` — `GetPagedAsync` now applies `query.Where(o => o.ShippingEmail == filter.CustomerEmail)` when `CustomerEmail` is set.
+- `src/FashionSaaS.Application/Orders/OrderService.cs` — `GetForCustomerAsync` now sets `CustomerEmail` on the filter and returns the repository's `TotalCount`/`Items` directly; the in-memory `Where`/count-reconciliation logic was deleted. `GetByIdForCustomerAsync` was left unchanged (single-entity ownership check is already correct).
+
+Covering tests:
+- `tests/FashionSaaS.Infrastructure.Tests/Repositories/OrderRepositoryTests.cs::GetPagedAsync_CustomerEmail_ReturnsOnlyMatchingOrders_WithCorrectTotalCount` — seeds 2 orders for the target customer and 1 for another customer, requests `PageSize = 1`, and asserts `TotalCount == 2` (true total, not page size) while the returned page only contains the matching customer's order.
+- `tests/FashionSaaS.Application.Tests/Orders/OrderServiceTests.cs::GetForCustomerAsync_ForwardsEmailFilter_AndUsesRepositoryTotalCount` — mocks `GetPagedAsync` to assert the `OrderFilter` passed in has `CustomerEmail == "customer@example.com"` (plus correct `Page`/`PageSize`), returns `TotalCount = 25` from the mock, and asserts the service's response `TotalCount` is forwarded verbatim as `25` with no in-memory recomputation.
+- Existing `GetForCustomerAsync_FiltersByEmail` test left in place and still passes unchanged.
+
+### Finding 2 (Important — latent trap): customer staged before item validation
+
+Reordered `OrderService.CreateAsync` so all product/variant/stock validation for every line completes first (building `orderItems`/`stockDecrements`/`subtotal`), and `customerRepository.GetOrCreateByEmailAsync` is only called after that loop succeeds, right before constructing the `Order`. This avoids creating (and persisting via `GetOrCreateByEmailAsync`'s side effect) a new customer record when the order itself will be rejected for an invalid product/variant/stock line.
+
+No test changes were needed for this finding — all existing `CreateAsync_*` tests (`UnknownProduct`, `InactiveProduct`, `VariantRequestedButNotFound`, `InsufficientStock`, `ValidRequest`, `VariantPriceOverride`, `ClientCannotTamperPrices`) mock both `_products`/`_variants` and `_customers` paths and pass unchanged, confirming the reordering is behavior-preserving for the success path and fail-fast for the rejection paths.
+
+### Finding 3 (Minor): dead variable in `CreateAsync`
+
+Removed `var previousQty = variant.StockQuantity;` and the trailing `_ = previousQty; // retained for audit clarity...` line in the stock-decrement loop. Checked `InventoryService.AdjustStockAsync` for the matching pattern: it captures `previousQty` only to pass into `auditLogService.LogAsync`'s before/after payload (`new { StockQuantity = previousQty }` / `new { StockQuantity = newQty, ... }`), not onto the `StockAdjustment` entity itself (which only ever stores `Delta` + `ResultingQuantity`). `OrderService.CreateAsync` logs a single order-level audit event (`"OrderCreated"`) rather than a per-adjustment audit call, so there is no equivalent per-item audit call to thread `previousQty` into — removing the unused variable (rather than fabricating an unused audit call) matches the existing `StockAdjustment` schema and the order-level audit granularity already in place.
+
+### Finding 4 (Minor): silent skip in `CancelAsync`
+
+Added `logger.LogWarning("Variant {VariantId} missing during stock restore for order {OrderId}", variantId, order.Id);` immediately before the `continue` in the stock-restore loop, so a missing variant during cancellation is now observable instead of silently skipped.
+
+## Fix Round 1 — Test Command & Results
+
+```
+dotnet build --configuration Release
+```
+→ Build succeeded, 0 errors (only pre-existing `NU1701` package-compat warnings, unrelated).
+
+```
+dotnet test --configuration Release
+```
+→ **Passed: 419 (24 Domain.Tests + 309 Application.Tests + 86 Infrastructure.Tests), Failed: 0, Skipped: 0** (baseline was 417; +2 new tests from Finding 1).
+
+## Fix Round 1 — Commit
+
+`fix(orders): SQL-level customer email filtering, validation-before-customer-resolution, review minors`

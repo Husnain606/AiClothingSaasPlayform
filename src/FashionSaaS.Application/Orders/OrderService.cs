@@ -35,9 +35,6 @@ public class OrderService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<OrderDto>.Failure("Tenant could not be resolved.", 400);
 
-        var customer = await customerRepository.GetOrCreateByEmailAsync(
-            tenantId, customerEmail, customerFirstName, customerLastName, customerPhone, ct);
-
         var orderItems = new List<OrderItem>();
         var stockDecrements = new List<(ProductVariant Variant, int Quantity)>();
         decimal subtotal = 0m;
@@ -84,6 +81,9 @@ public class OrderService(
                 stockDecrements.Add((variant, line.Quantity));
         }
 
+        var customer = await customerRepository.GetOrCreateByEmailAsync(
+            tenantId, customerEmail, customerFirstName, customerLastName, customerPhone, ct);
+
         var tax = Math.Round(subtotal * TaxRate, 2, MidpointRounding.AwayFromZero);
         const decimal shippingCost = 0m;
         var total = subtotal + tax + shippingCost;
@@ -120,7 +120,6 @@ public class OrderService(
         // validated successfully — no partial mutation on a rejected order.
         foreach (var (variant, quantity) in stockDecrements)
         {
-            var previousQty = variant.StockQuantity;
             variant.StockQuantity -= quantity;
 
             await stockAdjustmentRepository.AddAsync(new StockAdjustment
@@ -132,8 +131,6 @@ public class OrderService(
                 ResultingQuantity = variant.StockQuantity,
                 AdjustedByUserId = actingUserId
             });
-
-            _ = previousQty; // retained for audit clarity / future diagnostics
         }
 
         await orderRepository.AddAsync(order);
@@ -182,17 +179,13 @@ public class OrderService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<PagedResult<OrderDto>>.Failure("Tenant could not be resolved.", 400);
 
-        var filter = new OrderFilter { TenantId = tenantId, Page = page, PageSize = pageSize };
+        var filter = new OrderFilter { TenantId = tenantId, CustomerEmail = customerEmail, Page = page, PageSize = pageSize };
         var (items, total) = await orderRepository.GetPagedAsync(filter, ct);
-
-        var owned = items
-            .Where(o => string.Equals(o.ShippingEmail, customerEmail, StringComparison.OrdinalIgnoreCase))
-            .ToList();
 
         var result = new PagedResult<OrderDto>
         {
-            Items = owned.Select(o => o.Adapt<OrderDto>()).ToList(),
-            TotalCount = owned.Count == items.Count ? total : owned.Count,
+            Items = items.Select(o => o.Adapt<OrderDto>()).ToList(),
+            TotalCount = total,
             Page = page,
             PageSize = pageSize
         };
@@ -271,7 +264,10 @@ public class OrderService(
 
             var variant = await variantRepository.GetByIdAsync(variantId);
             if (variant is null)
+            {
+                logger.LogWarning("Variant {VariantId} missing during stock restore for order {OrderId}", variantId, order.Id);
                 continue;
+            }
 
             variant.StockQuantity += item.Quantity;
 

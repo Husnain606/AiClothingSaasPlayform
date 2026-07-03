@@ -24,14 +24,14 @@ public class OrderRepositoryTests
     }
 
     private Order MakeOrder(Guid tenantId, string number = "ORD-2026-000001",
-        OrderStatus status = OrderStatus.Pending, DateTime? date = null) => new()
+        OrderStatus status = OrderStatus.Pending, DateTime? date = null, string shippingEmail = "a@b.c") => new()
     {
         TenantId = tenantId,
         CustomerId = Guid.NewGuid(),
         OrderNumber = number,
         Status = status,
         OrderDate = date ?? DateTime.UtcNow,
-        ShippingFirstName = "A", ShippingLastName = "B", ShippingEmail = "a@b.c",
+        ShippingFirstName = "A", ShippingLastName = "B", ShippingEmail = shippingEmail,
         ShippingPhone = "1", ShippingStreet = "s", ShippingCity = "c",
         ShippingState = "st", ShippingZipCode = "z", ShippingCountry = "US",
         CardLast4 = "1111", Subtotal = 100m, Tax = 10m, ShippingCost = 0m, Total = 110m,
@@ -87,6 +87,26 @@ public class OrderRepositoryTests
         var result = await repo.GetPagedAsync(new OrderFilter { TenantId = _tenantId });
 
         result.TotalCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task GetPagedAsync_CustomerEmail_ReturnsOnlyMatchingOrders_WithCorrectTotalCount()
+    {
+        await using var ctx = CreateContext();
+        ctx.Orders.AddRange(
+            MakeOrder(_tenantId, "ORD-2026-000001", shippingEmail: "customer@example.com"),
+            MakeOrder(_tenantId, "ORD-2026-000002", shippingEmail: "customer@example.com"),
+            MakeOrder(_tenantId, "ORD-2026-000003", shippingEmail: "other@example.com"));
+        await ctx.SaveChangesAsync();
+
+        var repo = new OrderRepository(ctx);
+        var result = await repo.GetPagedAsync(new OrderFilter
+        { TenantId = _tenantId, CustomerEmail = "customer@example.com", Page = 1, PageSize = 1 });
+
+        // TotalCount reflects all matching rows, not just the page returned.
+        result.TotalCount.Should().Be(2);
+        result.Items.Should().HaveCount(1);
+        result.Items.Should().OnlyContain(o => o.ShippingEmail == "customer@example.com");
     }
 
     [Fact]
