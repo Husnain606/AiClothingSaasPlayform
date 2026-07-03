@@ -11,7 +11,7 @@
 - [x] Task 2: Order DTOs, repository, Mapster profile, customer email linkage ✅
 - [x] Task 3: OrderService (pricing, stock, transitions) + validators ✅
 - [x] Task 4: Customer store endpoints (api/store/orders) + Customer role ✅
-- [ ] Task 5: Tenant order management endpoints (api/tenant/orders)
+- [x] Task 5: Tenant order management endpoints (api/tenant/orders) ✅
 - [ ] Task 6: ReportService (7 aggregates)
 - [ ] Task 7: Reports controller + CSV export
 - [ ] Task 8: E2E workflow tests + docs
@@ -22,6 +22,7 @@ Task 1: complete (commit 0712924..2ec858d, review clean — spec ✅, quality ap
 Task 2: complete (commit 87b42bc..82f94e2, review clean — spec ✅, quality approved with 1 Minor; 383/383 tests)
 Task 3: complete (commits b2ab319..c55ed71 + fix 273d5dd, review approved after Fix Round 1 — 2 Important fixed: SQL-level CustomerEmail filter replacing wrong in-memory paging, validation-before-customer-resolution; 419/419 tests)
 Task 4: complete (commit fa9acbc..97eaaaf, review clean — spec ✅, quality approved, email-claim + Customer-role seeding independently verified; 419/419 tests)
+Task 5: complete (commit 15d2c69..361d44c, review clean — spec ✅, quality approved, TenantId-forcing confirmed in source + non-vacuous regression test; 420/420 tests)
 
 ## Minor findings for final review
 
