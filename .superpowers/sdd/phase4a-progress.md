@@ -9,7 +9,7 @@
 
 - [x] Task 1: Order domain (entities, status lifecycle, EF config, Phase4Orders migration) ✅
 - [x] Task 2: Order DTOs, repository, Mapster profile, customer email linkage ✅
-- [ ] Task 3: OrderService (pricing, stock, transitions) + validators
+- [x] Task 3: OrderService (pricing, stock, transitions) + validators ✅
 - [ ] Task 4: Customer store endpoints (api/store/orders) + Customer role
 - [ ] Task 5: Tenant order management endpoints (api/tenant/orders)
 - [ ] Task 6: ReportService (7 aggregates)
@@ -20,6 +20,7 @@
 
 Task 1: complete (commit 0712924..2ec858d, review clean — spec ✅, quality approved; 378/378 tests, build 0 errors independently verified)
 Task 2: complete (commit 87b42bc..82f94e2, review clean — spec ✅, quality approved with 1 Minor; 383/383 tests)
+Task 3: complete (commits b2ab319..c55ed71 + fix 273d5dd, review approved after Fix Round 1 — 2 Important fixed: SQL-level CustomerEmail filter replacing wrong in-memory paging, validation-before-customer-resolution; 419/419 tests)
 
 ## Minor findings for final review
 

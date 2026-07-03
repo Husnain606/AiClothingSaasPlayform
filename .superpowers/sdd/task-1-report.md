@@ -1,126 +1,66 @@
-# Task 1: Project Scaffolding & Build Configuration - Completion Report
+# Task 1 Report: Order Domain — Entities, Enum, EF Configuration, Migration
 
-**Date:** 2026-06-30  
-**Task:** Phase 3 - Customer Storefront (Angular 20)  
-**Status:** DONE
+**Status: DONE**
+**Branch:** feature/phase4a-orders-backend
+**Commit:** 2ec858d — "feat(orders): Order/OrderItem domain, status lifecycle, EF config, Phase4Orders migration"
 
----
+## Files Created
 
-## Summary
+- `src/FashionSaaS.Domain/Enums/OrderStatus.cs` — enum: Pending(0), Confirmed(1), Shipped(2), Delivered(3), Cancelled(4)
+- `src/FashionSaaS.Domain/Entities/Order.cs` — Order entity with flattened shipping snapshot, money fields, `CanTransitionTo` lifecycle guard
+- `src/FashionSaaS.Domain/Entities/OrderItem.cs` — OrderItem entity with product/variant snapshot fields
+- `src/FashionSaaS.Infrastructure/Persistence/Configurations/OrderConfiguration.cs` — EF config (max lengths, decimal precision, indexes, FKs)
+- `src/FashionSaaS.Infrastructure/Persistence/Configurations/OrderItemConfiguration.cs` — EF config (max lengths, decimal precision, indexes)
+- `src/FashionSaaS.Infrastructure/Persistence/Migrations/20260703101408_Phase4Orders.cs` + `.Designer.cs` — new migration
+- `tests/FashionSaaS.Domain.Tests/Entities/OrderTests.cs` — 12 tests (11 theory cases + 1 default-status fact)
 
-Task 1 has been successfully completed. The Angular 20 frontend project (\ashionsaas-storefront\) has been initialized with:
-- Bootstrap 5.3.0 styling framework
-- Environment configuration for dev/prod
-- Base API service with generic HTTP methods
-- HTTP interceptors for authentication and error handling
-- All builds succeeding with zero errors
+## Files Modified
 
----
+- `src/FashionSaaS.Infrastructure/Persistence/ApplicationDbContext.cs` — added `DbSet<Order> Orders`, `DbSet<OrderItem> OrderItems`, and tenant query filter for `Order` mirroring the exact existing pattern (`o.TenantId == currentTenantService.TenantId`, referencing the injected `currentTenantService` primary-constructor parameter, not a captured local or field — this codebase has no `_currentTenant` field name; the parameter is used directly, consistent with every other filter in the file). OrderItem intentionally has no filter of its own — reached only through Order, per brief guidance.
+- `src/FashionSaaS.Infrastructure/Persistence/Migrations/ApplicationDbContextModelSnapshot.cs` — auto-updated by `dotnet ef migrations add`.
 
-## Task Completion
+## TDD Sequence
 
-### Task 1a: Initialize Angular Project & Dependencies ✓
+1. Wrote `OrderTests.cs` verbatim from brief.
+2. Ran `dotnet test tests/FashionSaaS.Domain.Tests --filter "FullyQualifiedName~OrderTests"` → compile error (CS0246/CS0103, `Order`/`OrderStatus` not found) — confirmed failing as expected.
+3. Implemented `OrderStatus`, `Order`, `OrderItem` verbatim from brief.
+4. Reran same filter → **12/12 passed**.
+5. Added EF configurations and DbContext registration.
+6. `dotnet build --configuration Release` → succeeded (only pre-existing NU1701 NuGet framework-compat warnings, unrelated to this task).
+7. `dotnet ef migrations add Phase4Orders --startup-project src/FashionSaaS.API --project src/FashionSaaS.Infrastructure` → migration created (dotnet-ef 10.0.5 already installed as local tool; no install step needed).
+8. `dotnet test --configuration Release` (full suite) → **378/378 passed** (24 Domain + 274 Application + 80 Infrastructure = 378; brief's baseline of 366 + 12 new = 378, confirmed exact match).
+9. Committed.
 
-**Completed Steps:**
-1. Created Angular 20 project with routing enabled, skipped git initialization
-2. Installed Bootstrap 5.3.0 and @popperjs/core dependencies
-3. Updated angular.json to include Bootstrap CSS in build pipeline
-4. Verified build succeeds with no errors
-5. Committed: \eat: initialize Angular 20 project with Bootstrap 5\
+## Migration Details
 
-**Verification:**
-- Angular CLI version: 21.1.2
-- Node.js version: 24.13.0 (exceeds requirement of 22+)
-- npm version: 11.17.0 (exceeds requirement of 11+)
-- Build output: "Application bundle generation complete" - no errors
+**Name:** `Phase4Orders` (`20260703101408_Phase4Orders`)
 
----
+**Tables created:**
+- `Orders` — Id (PK), TenantId, CustomerId, OrderNumber, Status (int), OrderDate, 9 shipping snapshot fields, CardLast4, Subtotal/Tax/ShippingCost/Total (all `decimal(18,2)`), TrackingNumber (nullable), CancelReason (nullable), CreatedAt, UpdatedAt. FK `Orders.CustomerId → Customers.Id` (Restrict).
+- `OrderItems` — Id (PK), OrderId, ProductId, ProductVariantId (nullable), ProductName, Size, Color, UnitPrice (`decimal(18,2)`), Quantity, CreatedAt, UpdatedAt. FK `OrderItems.OrderId → Orders.Id` (Cascade).
 
-### Task 1b: Configure Environment & API Base Service ✓
+**Indexes created:**
+- `IX_Orders_TenantId_OrderNumber` (unique)
+- `IX_Orders_TenantId_OrderDate`
+- `IX_Orders_TenantId_Status`
+- `IX_Orders_TenantId_CustomerId`
+- `IX_Orders_CustomerId` (auto, FK)
+- `IX_OrderItems_OrderId`
+- `IX_OrderItems_ProductId`
 
-**Files Created:**
-- \src/environments/environment.ts\ - Development configuration (localhost:5000)
-- \src/environments/environment.prod.ts\ - Production configuration (HTTPS API)
-- \src/app/core/models/api-response.model.ts\ - API response interfaces
-- \src/app/core/services/api.service.ts\ - Generic HTTP service
+All four Order indexes specified in the brief are present.
 
-**Implementation Details:**
-- \ApiResponse<T>\ interface with statusCode, message, data, errors, timestamp
-- \PagedResult<T>\ interface for paginated results
-- ApiService with generic \get<T>()\, \post<T>()\, \put<T>()\, \delete<T>()\ methods
-- All methods return \Observable<ApiResponse<T>>\
-- TypeScript path aliases configured (@env/*, @app/*)
+## Verification
 
-**Verification:**
-- tsconfig.json updated with baseUrl and path mappings
-- Build succeeds: bundle size 445.23 kB (raw), 81.07 kB (transfer)
-- Committed: \eat: add environment configuration and base API service\
+- **Roslyn diagnostics** (`get_diagnostics`, scope=solution, severityFilter=all): 103 results, **all "hidden" severity** (unused-using / duplicate-global-using notices in generated `obj/` files and EF migration boilerplate) — **zero errors, zero warnings** in project source.
+- **Build:** Release build succeeds; only pre-existing `NU1701` NuGet compat warnings (Base32, OtpSharp packages — present before this task, unrelated).
+- **EF model warning:** `dotnet ef` console output shows: `Entity 'Order' has a global query filter defined and is the required end of a relationship with the entity 'OrderItem'...`. Verified this is **pre-existing, expected behavior** in this codebase — the identical warning class already fires for `Customer`↔`Order` and (confirmed by reproducing on a clean stash) for the Phase 2 catalog entities (e.g., `Product`↔`ProductVariant`). Not a regression; consistent with the established tenant-filter pattern where required relationships between filtered entities intentionally don't get matching child filters unless the brief calls for it (it explicitly said OrderItem needs none).
+- **Full test suite:** `dotnet test --configuration Release` → 24 (Domain) + 274 (Application) + 80 (Infrastructure) = **378 passed, 0 failed, 0 skipped**.
 
----
+## Self-Review Notes
 
-### Task 1c: Create Core Module with HTTP Interceptors ✓
-
-**Files Created:**
-- \src/app/core/interceptors/auth.interceptor.ts\ - Adds JWT bearer token to requests
-- \src/app/core/interceptors/error.interceptor.ts\ - Handles HTTP errors (401, 403, 500)
-- \src/app/core/core.module.ts\ - Core module with interceptor registration
-- \src/app/core/services/auth.service.ts\ - Basic token management service
-
-**Implementation Details:**
-- AuthInterceptor: Retrieves token from localStorage, adds to Authorization header
-- ErrorInterceptor: Catches HttpErrorResponse, logs error, throws for component handling
-- CoreModule: Registers both interceptors via HTTP_INTERCEPTORS multi-provider pattern
-- App configuration updated to provide HTTP client and interceptors in standalone app
-
-**Verification:**
-- Angular 20 standalone app compatible (no NgModule required)
-- app.config.ts updated with provideHttpClient() and interceptor providers
-- Build succeeds: bundle size 464.37 kB (raw), 85.87 kB (transfer)
-- Committed: \eat: add HTTP interceptors for auth and error handling\
-
----
-
-## Commits
-
-All commits follow conventional commit format:
-
-\\\
-33b7c76 feat: add HTTP interceptors for auth and error handling
-3246360 feat: add environment configuration and base API service
-66f3b48 feat: initialize Angular 20 project with Bootstrap 5
-\\\
-
----
-
-## Build Verification
-
-**Final Build Output:**
-\\\
-> fashionsaas-storefront@0.0.0 build
-> ng build
-
-√ Building...
-Initial chunk files   | Names           | Raw size    | Estimated transfer size
-main-OYB7R5BK.js      | main            | 232.79 kB   | 63.23 kB
-styles-KY4SUSDE.css   | styles          | 231.58 kB   | 22.64 kB
-
-| Initial total      | 464.37 kB       | 85.87 kB
-Application bundle generation complete. [1.584 seconds]
-\\\
-
-**Status:** Build succeeded with zero errors and zero warnings
-
----
-
-## Architecture Notes
-
-- Clean separation: Core module handles HTTP infrastructure
-- Type-safe: All API responses wrapped in generic ApiResponse<T>
-- Environment-based: Dev/prod URLs differ only in environment files
-- Auth-ready: JWT interceptor in place for Task 2 authentication
-
----
-
-## Next Steps
-
-Task 2 (Authentication Module) is ready to proceed with login/register components and AuthService expansion.
+- Implemented exactly per brief's verbatim code blocks — no deviations to entity/enum/config shapes.
+- Confirmed field-naming assumption in the brief's Step 5 caveat was moot: the existing DbContext uses the injected primary-constructor parameter `currentTenantService` directly in every filter (no `_currentTenant` field exists anywhere in the file), so `Order`'s filter was written the same way for consistency.
+- A `git stash`/`dotnet ef migrations add TempCheck` diagnostic detour (used to confirm the required-relationship EF warning is pre-existing, not a regression) briefly diverged the working tree; recovered cleanly via `git checkout --` on the snapshot file plus `git stash pop`, verified DbContext and snapshot content post-recovery before proceeding. No stray migrations or duplicate entries remain (`dotnet ef migrations list` shows exactly one `Phase4Orders` entry, correctly ordered after `Phase2Catalog`).
+- Untracked `src/FashionSaaS.API/logs/` (Serilog output from running `dotnet ef` commands) was left unstaged/uncommitted — not part of this task's file set.
+- Note: this report file previously contained stale content from an unrelated Phase 3 (Angular storefront) task 1; it has been fully overwritten with this task's report.
