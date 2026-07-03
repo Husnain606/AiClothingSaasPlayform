@@ -174,4 +174,18 @@ public class CustomerRepositoryTests
         items.Should().BeEmpty();
         total.Should().Be(0);
     }
+
+    [Fact]
+    public async Task GetOrCreateByEmailAsync_CreatesThenReuses()
+    {
+        await using var ctx = CreateContext();
+        var repo = new CustomerRepository(ctx);
+
+        var first = await repo.GetOrCreateByEmailAsync(_tenantId, "jane@x.com", "Jane", "Doe", null);
+        await ctx.SaveChangesAsync();
+        var second = await repo.GetOrCreateByEmailAsync(_tenantId, "jane@x.com", "Jane", "Doe", null);
+
+        second.Id.Should().Be(first.Id);
+        ctx.Customers.Count(c => c.Email == "jane@x.com").Should().Be(1);
+    }
 }

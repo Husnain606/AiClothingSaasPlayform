@@ -82,6 +82,7 @@ public static class DependencyInjection
         services.AddScoped<IDiscountRepository, DiscountRepository>();
         services.AddScoped<IReviewRepository, ReviewRepository>();
         services.AddScoped<IWishlistRepository, WishlistRepository>();
+        services.AddScoped<IOrderRepository, OrderRepository>();
 
         // Background jobs
         services.AddHostedService<SubscriptionExpiryJob>();

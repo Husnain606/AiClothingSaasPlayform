@@ -39,4 +39,20 @@ public class CustomerRepository(ApplicationDbContext context)
 
         return (items, total);
     }
+
+    public async Task<Customer> GetOrCreateByEmailAsync(Guid tenantId, string email,
+        string firstName, string lastName, string? phone, CancellationToken ct = default)
+    {
+        var existing = await DbSet
+            .FirstOrDefaultAsync(c => c.TenantId == tenantId && c.Email == email, ct);
+        if (existing is not null) return existing;
+
+        var customer = new Customer
+        {
+            TenantId = tenantId, Email = email,
+            FirstName = firstName, LastName = lastName, Phone = phone, IsActive = true
+        };
+        await DbSet.AddAsync(customer, ct);
+        return customer;
+    }
 }
