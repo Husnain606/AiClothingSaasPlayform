@@ -218,4 +218,15 @@ public static class ApiUrl
         public const string Deliver = "api/tenant/orders/{id}/deliver";
         public const string Cancel = "api/tenant/orders/{id}/cancel";
     }
+
+    public static class TenantReports
+    {
+        public const string Summary = "api/tenant/reports/summary";
+        public const string SalesOverTime = "api/tenant/reports/sales-over-time";
+        public const string TopProducts = "api/tenant/reports/top-products";
+        public const string StatusBreakdown = "api/tenant/reports/order-status-breakdown";
+        public const string CustomerAnalytics = "api/tenant/reports/customer-analytics";
+        public const string InventoryTrends = "api/tenant/reports/inventory-trends";
+        public const string CategorySales = "api/tenant/reports/category-sales";
+    }
 }
