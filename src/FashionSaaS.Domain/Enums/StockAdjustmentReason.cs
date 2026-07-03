@@ -6,5 +6,7 @@ public enum StockAdjustmentReason
     Sale = 2,
     Correction = 3,
     Damage = 4,
-    Return = 5
+    Return = 5,
+    OrderPlaced = 6,
+    OrderCancelled = 7
 }
