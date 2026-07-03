@@ -200,4 +200,12 @@ public static class ApiUrl
         public const string GetByCustomer = "api/tenant/customers/{customerId}/wishlist";
         public const string RemoveItem = "api/tenant/wishlist/items/{itemId}";
     }
+
+    public static class StoreOrders
+    {
+        public const string Create = "api/store/orders";
+        public const string GetMine = "api/store/orders";
+        public const string GetById = "api/store/orders/{id}";
+        public const string Cancel = "api/store/orders/{id}/cancel";
+    }
 }

@@ -64,6 +64,8 @@ public class OrderDto
     public string? TrackingNumber { get; set; }
 }
 
+public record CancelOrderRequest(string Reason);
+
 public class OrderFilter
 {
     public Guid? TenantId { get; set; }
