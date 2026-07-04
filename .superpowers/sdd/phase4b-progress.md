@@ -8,7 +8,7 @@
 
 ## Tasks
 
-- [ ] Task 1: Auth upgrade (role parsing, three-way redirect, guards, MFA challenge, zoneless provider)
+- [x] Task 1: Auth upgrade (role parsing, three-way redirect, guards, MFA challenge, zoneless provider) ✅
 - [ ] Task 2: Admin shell (AdminLayout, /admin + /admin/platform scaffolds, header Dashboard link)
 - [ ] Task 3: Admin shared kit (toast, data-table, KPI card, confirm modal, date-range picker, status badge)
 - [ ] Task 4: API layer & contract reconciliation (TS DTOs, OrderAdminService, ReportApiService, apiBaseUrl /v1 fix, checkout/account repoints)
@@ -22,8 +22,10 @@
 
 ## Completed
 
-(none yet)
+Task 1: complete (storefront ba9593e..f7a7d25, review clean — spec ✅ incl. SuperAdmin precedence + memory-only mfaToken, quality approved; 521/521 ×2, zoneless live with zero fallout, reviewer re-ran suite independently)
 
 ## Minor findings for final review
 
+- Task 1: no test for malformed/garbage JWT through getRoles() (defensive try/catch verified by inspection; low)
+- Task 1: initial bundle at 599.50/600 kB — nearly zero headroom; admin area lazy isolation is load-bearing (Task 11 verifies)
 - Plan conflicts already resolved in-plan: zoneless provider missing (T1 adds), apiBaseUrl /v1 (T4), checkout OrderService dead route + dishonest payload (T4), account.model.ts phantom 'processing' status + AccountService dead route (T4)
