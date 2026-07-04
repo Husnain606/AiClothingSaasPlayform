@@ -25,7 +25,7 @@ FashionSaaS is an 8-phase project to build a complete multi-brand fashion eComme
 | **1** | ✅ COMPLETE | Core SaaS: Auth, multi-tenancy, users, subscriptions, billing | 2026-06-18 to 06-24 |
 | **2** | ✅ COMPLETE | Product Catalog: Categories, products, variants, inventory, reviews, wishlist | 2026-06-25 to 06-30 |
 | **3** | 📋 PLANNED | Customer Storefront: Angular 20 web application | 2026-07-01 (~3 weeks) |
-| **4** | 📅 QUEUED | Admin Dashboard: Analytics, reporting, management | Q3 2026 |
+| **4** | 🔄 4a backend COMPLETE / 4b dashboard NEXT | Admin Dashboard: Orders + reporting backend done; Analytics dashboard UI next | Q3 2026 |
 | **5** | 📅 QUEUED | AI Virtual Try-On: Microservice for size/fit prediction | Q3 2026 |
 | **6** | 📅 QUEUED | AI Features: Body measurement, fashion chatbot | Q4 2026 |
 | **7** | 📅 QUEUED | Real-Time: SignalR notifications, live updates | Q4 2026 |

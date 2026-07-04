@@ -129,6 +129,27 @@
 
 ---
 
+## Phase 4a: Orders + Reporting Backend ✅ COMPLETE
+
+**Branch:** `feature/phase4a-orders-backend`
+**Tests:** 442/442 passing (24 Domain + 332 Application + 86 Infrastructure)
+**Scope:** Order lifecycle management and tenant reporting/analytics backend, consumed by the future Phase 4b admin dashboard and the Phase 3 storefront checkout flow.
+
+### Endpoints Added (17 total):
+- **Store Orders (4):** create order (server-side pricing/tax/stock coupling), list my orders, get order by id, cancel as customer
+- **Tenant Orders (6):** list/filter orders, get order by id, confirm, ship (with tracking number), deliver, cancel as tenant
+- **Reports (7):** summary, sales-over-time, top products, status breakdown, customer analytics, inventory trends, category sales
+
+### Key Architecture Notes:
+- `OrderService` computes pricing, tax (10%, rounded), and totals entirely server-side — client payloads can never influence price. Stock decrements/restorations are recorded as append-only `StockAdjustment` ledger rows alongside the running `ProductVariant.StockQuantity`, mirroring the Phase 2 `InventoryService` bookkeeping pattern.
+- Order numbers use a per-tenant, per-year sequence: `ORD-{yyyy}-{000001}`.
+- `ReportService` exposes a single shared guard (`RunAsync`) for tenant resolution + date-range validation (`from <= to`, span <= 366 days) across all 7 report queries, delegating aggregate math to `ReportRepository`.
+- **E2E workflow tests** (`tests/FashionSaaS.Application.Tests/Orders/OrderWorkflowE2ETests.cs`) run the real `OrderRepository`, `CustomerRepository`, `ProductRepository`, `ProductVariantRepository`, `StockAdjustmentRepository`, `ReportRepository`, and real `UnitOfWork` over one shared EF Core in-memory `ApplicationDbContext`, with only `IAuditLogService` and `ICurrentTenantService` mocked — verifying the full create → confirm → ship → deliver lifecycle, the cancel/stock-restoration path, and that reports reflect real order data end-to-end.
+- Building these E2E tests against real repositories (rather than mocks) surfaced a genuine tracking bug in `OrderService.CreateAsync`: the matched `ProductVariant` comes from `IProductVariantRepository.GetByProductAsync`, which is `AsNoTracking` (shared with read-heavy listing call sites in `ProductService`/`ProductVariantService`), so mutating `StockQuantity` on that instance was silently lost. Fixed by having `GenericRepository.UpdateAsync` detect when a different tracked instance with the same key already exists and copy values onto it via `CurrentValues.SetValues` instead of blindly attaching (which would throw an identity-conflict exception) — a general-purpose fix, not an Orders-only patch.
+- Full suite run twice in `Release` configuration with identical green results (flake gate); `dotnet build --configuration Release` is 0 errors (12 pre-existing `NU1701` warnings from `Base32`/`OtpSharp` targeting `.NETFramework` are known/acceptable, unrelated to this work).
+
+---
+
 ## Overall Project Statistics
 
 ### Code Metrics:
