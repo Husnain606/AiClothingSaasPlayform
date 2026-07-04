@@ -14,7 +14,9 @@
 - [x] Task 5: Tenant order management endpoints (api/tenant/orders) ✅
 - [x] Task 6: ReportService (7 aggregates) ✅
 - [x] Task 7: Reports controller + CSV export ✅
-- [ ] Task 8: E2E workflow tests + docs
+- [x] Task 8: E2E workflow tests + docs ✅
+
+**ALL 8 TASKS COMPLETE — awaiting final whole-branch review**
 
 ## Completed
 
@@ -25,8 +27,11 @@ Task 4: complete (commit fa9acbc..97eaaaf, review clean — spec ✅, quality ap
 Task 5: complete (commit 15d2c69..361d44c, review clean — spec ✅, quality approved, TenantId-forcing confirmed in source + non-vacuous regression test; 420/420 tests)
 Task 6: complete (commits 7e94803..ac84b07, review clean — spec ✅ all 7 metrics hand-verified incl. Sunday→Monday bucketing, quality approved, layering acceptable; 436/436 tests)
 Task 7: complete (commit ad6a40d..3bfb35b, review clean — spec ✅ all 7 endpoints' CSV/error branches individually verified, quality approved; 439/439 tests)
+Task 8: complete (commits 28f0049..faa6330 + fix 3a209f5, approved after Fix Round 1 — E2E exposed & fixed REAL Task 3 stock-persistence bug (AsNoTracking mutation); fix round cured E2E mapping-config order dependence + added UpdateAsync tracked-duplicate unit test; 443/443, isolation-verified)
 
 ## Minor findings for final review
+
+- Task 8 follow-up: audit other services (ProductService, ProductVariantService, ...) for the same AsNoTracking-mutation bug class OrderService had — entities fetched via AsNoTracking then mutated without UpdateAsync lose changes silently
 
 - Task 6: report aggregate LINQ (SelectMany+Join+GroupBy) only proven on EF InMemory — needs a smoke-check against real SQL Server (Task 8 or first live run) to confirm translation
 - Task 6: Application.Tests → Infrastructure reference verdict: acceptable test-only pragmatism (reviewer approved); consider documenting the convention
