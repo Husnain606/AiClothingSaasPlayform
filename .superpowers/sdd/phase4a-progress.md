@@ -16,7 +16,14 @@
 - [x] Task 7: Reports controller + CSV export ✅
 - [x] Task 8: E2E workflow tests + docs ✅
 
-**ALL 8 TASKS COMPLETE — awaiting final whole-branch review**
+**ALL 8 TASKS COMPLETE — FINAL WHOLE-BRANCH REVIEW: READY FOR MERGE (2026-07-04)**
+
+Final review: zero Critical/Important; gates independently re-run (build 0 errors, 443/443);
+security seams verified (tenant forcing, 404-not-403 ownership, no-PAN end-to-end incl. audit payloads);
+storefront OrderDto contract matches order.model.ts field-for-field; DI boot-complete.
+Ledger minors triaged: AsNoTracking bug-class audit CLEAN across other services; report-LINQ SQL
+translation accepted w/ documented first-run smoke check; rest backlog. Full report:
+.superpowers/sdd/phase4a-final-review.md
 
 ## Completed
 
