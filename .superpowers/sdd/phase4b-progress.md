@@ -9,7 +9,7 @@
 ## Tasks
 
 - [x] Task 1: Auth upgrade (role parsing, three-way redirect, guards, MFA challenge, zoneless provider) ✅
-- [ ] Task 2: Admin shell (AdminLayout, /admin + /admin/platform scaffolds, header Dashboard link)
+- [x] Task 2: Admin shell (AdminLayout, /admin + /admin/platform scaffolds, header Dashboard link) ✅
 - [ ] Task 3: Admin shared kit (toast, data-table, KPI card, confirm modal, date-range picker, status badge)
 - [ ] Task 4: API layer & contract reconciliation (TS DTOs, OrderAdminService, ReportApiService, apiBaseUrl /v1 fix, checkout/account repoints)
 - [ ] Task 5: Dashboard home (ng2-charts, KPIs, charts)
@@ -23,9 +23,11 @@
 ## Completed
 
 Task 1: complete (storefront ba9593e..f7a7d25, review clean — spec ✅ incl. SuperAdmin precedence + memory-only mfaToken, quality approved; 521/521 ×2, zoneless live with zero fallout, reviewer re-ran suite independently)
+Task 2: complete (storefront f7a7d25..22c16d0 + budget 438ba1d, review clean — spec ✅, quality approved; 541/541 ×2 reviewer-verified. BUDGET DECISION: initial warning 600→620 kB, justified — overage is structural lazy-route registration (4.49 kB), admin code verified 100% lazy by independent grep+build; Task 11 re-audits)
 
 ## Minor findings for final review
 
+- Task 2: app.routes.spec.ts:75 brittle magic-number assertion (lazyRoutes.length toBe(7)) — pre-existing fragility, bump-prone
 - Task 1: no test for malformed/garbage JWT through getRoles() (defensive try/catch verified by inspection; low)
 - Task 1: initial bundle at 599.50/600 kB — nearly zero headroom; admin area lazy isolation is load-bearing (Task 11 verifies)
 - Plan conflicts already resolved in-plan: zoneless provider missing (T1 adds), apiBaseUrl /v1 (T4), checkout OrderService dead route + dishonest payload (T4), account.model.ts phantom 'processing' status + AccountService dead route (T4)
