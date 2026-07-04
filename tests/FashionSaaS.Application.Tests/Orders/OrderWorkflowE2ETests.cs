@@ -1,4 +1,5 @@
 using FashionSaaS.Application.Interfaces;
+using FashionSaaS.Application.Mapping;
 using FashionSaaS.Application.Orders;
 using FashionSaaS.Application.Orders.DTOs;
 using FashionSaaS.Application.Reports;
@@ -23,6 +24,16 @@ namespace FashionSaaS.Application.Tests.Orders;
 /// </summary>
 public class OrderWorkflowE2ETests
 {
+    static OrderWorkflowE2ETests()
+    {
+        // Order.Adapt<OrderDto>() (invoked internally by OrderService) relies on the
+        // OrderMappings IRegister profile being scanned into Mapster's global config —
+        // normally done once at API startup. Must be forced here too so this class's
+        // lowercase-status assertions pass when run in isolation, not just when some
+        // other test class (e.g. OrderServiceTests) happens to run first and prime it.
+        MappingConfiguration.GetMappingConfig();
+    }
+
     private readonly Guid _tenantId = Guid.NewGuid();
     private readonly Guid _actingUserId = Guid.NewGuid();
     private const string IpAddress = "127.0.0.1";
