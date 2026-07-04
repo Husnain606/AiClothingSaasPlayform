@@ -122,6 +122,11 @@ public class OrderService(
         {
             variant.StockQuantity -= quantity;
 
+            // Variant instances come from GetByProductAsync, which reads AsNoTracking (that
+            // repository method is shared with read-heavy listing call sites) — explicitly
+            // mark this instance as modified so the decrement is actually persisted.
+            await variantRepository.UpdateAsync(variant);
+
             await stockAdjustmentRepository.AddAsync(new StockAdjustment
             {
                 TenantId = tenantId,

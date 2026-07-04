@@ -29,7 +29,19 @@ public class GenericRepository<T>(ApplicationDbContext context) : IGenericReposi
     public Task UpdateAsync(T entity)
     {
         entity.UpdatedAt = DateTime.UtcNow;
-        Context.Entry(entity).State = EntityState.Modified;
+
+        // If a different instance with the same key is already tracked (e.g. the caller
+        // mutated a value fetched via an AsNoTracking query), copy the values onto the
+        // tracked instance instead of attaching — attaching a second instance with the
+        // same key throws.
+        var tracked = Context.ChangeTracker.Entries<T>()
+            .FirstOrDefault(e => e.Entity.Id == entity.Id && !ReferenceEquals(e.Entity, entity));
+
+        if (tracked is not null)
+            tracked.CurrentValues.SetValues(entity);
+        else
+            Context.Entry(entity).State = EntityState.Modified;
+
         return Task.CompletedTask;
     }
 
