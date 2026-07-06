@@ -12,7 +12,7 @@
 - [x] Task 2: Admin shell (AdminLayout, /admin + /admin/platform scaffolds, header Dashboard link) ✅
 - [x] Task 3: Admin shared kit (toast, data-table, KPI card, confirm modal, date-range picker, status badge) ✅
 - [x] Task 4: API layer & contract reconciliation (TS DTOs, OrderAdminService, ReportApiService, apiBaseUrl /v1 fix, checkout/account repoints) ✅
-- [ ] Task 5: Dashboard home (ng2-charts, KPIs, charts)
+- [x] Task 5: Dashboard home (ng2-charts, KPIs, charts) ✅
 - [ ] Task 6: Orders module (list/detail/status actions)
 - [ ] Task 7: Catalog module (products, categories tree, variants, images)
 - [ ] Task 8: Inventory + customers modules
@@ -29,8 +29,11 @@ Task 3: complete (storefront 438ba1d..049d244, review clean — spec ✅ all 6 k
 
 Task 4: complete (storefront 049d244..531f147, review clean — spec ✅ every route/DTO field independently re-verified against live backend source, quality approved; 602/602 ×2. FIXED 4 pre-existing broken integrations: apiBaseUrl /v1, checkout dead-route+dishonest-payload, account.model.ts phantom 'processing' status, account.service.ts dead route)
 
+Task 5: complete (storefront 531f147..b1f3cc9, review clean — spec ✅, quality approved; 610/610 ×2. ng2-charts+chart.js added (the one new dep), verified 100% lazy by independent grep of all 9 eager chunks. BUNDLE RULING: accept — initial 604.49→604.86 kB (+0.37 kB) is esbuild chunk-boundary bookkeeping not a leak, within 620 kB budget. @angular/cdk@^21 added as ng2-charts peer dep, zero code imports (Task 11 re-audits))
+
 ## Minor findings for final review
 
+- Task 5: @angular/cdk@^21 present only for ng2-charts@7 peer resolution — zero runtime imports; Task 11 confirm it stays unused
 - Task 4: report-api.service.ts downloadCsv swallows HTTP errors silently (by-design void signature; later modules should add call-site error handling)
 - Task 4: ApiService.post/put still `body: any` (pre-existing, not this task's scope; future cleanup)
 - Task 3: DataTable.cellText/cellDate use unsafe `as` casts around unknown (internal helpers, not public API; low)
