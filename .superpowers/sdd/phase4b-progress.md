@@ -14,7 +14,7 @@
 - [x] Task 4: API layer & contract reconciliation (TS DTOs, OrderAdminService, ReportApiService, apiBaseUrl /v1 fix, checkout/account repoints) ✅
 - [x] Task 5: Dashboard home (ng2-charts, KPIs, charts) ✅
 - [x] Task 6: Orders module (list/detail/status actions) ✅
-- [ ] Task 7: Catalog module (products, categories tree, variants, images)
+- [x] Task 7: Catalog module (products, categories tree, variants, images) ✅
 - [ ] Task 8: Inventory + customers modules
 - [ ] Task 9: Discounts + reviews modules
 - [ ] Task 10: Reports + settings modules
@@ -33,8 +33,11 @@ Task 5: complete (storefront 531f147..b1f3cc9, review clean — spec ✅, qualit
 
 Task 6: complete (storefront ca0b1a9, submodule bumped c25752d, CONTROLLER-REVIEWED — task-reviewer agent died on session limit, controller verified directly: status-gating map exact per 5 rules + exhaustive switch + 5 exact-array tests, status visible as DataTable column, placeholder cleanly removed, order-list/order-detail confirmed separate lazy chunks, initial 606.64 kB within 620, build clean; 628/628 ×2 per implementer)
 
+Task 7: complete (storefront ca0b1a9..42ae71b, all 6 backend-shape claims independently re-verified against live source, quality approved AFTER Fix Round 1 — reviewer found real bug: product-list rendered every row TWICE via a duplicate hand-rolled table, copied uncritically from the plan brief's own flawed sample markup; root cause was DataTable's 'custom' cell-type declared-but-never-implemented; fixed by implementing it properly (additive, order-list unaffected) + added genuine DOM-count regression test; 678/678 ×2, bundle 608.01 kB unchanged, largest task in the plan)
+
 ## Minor findings for final review
 
+- Task 7: ProductSummaryResponse dead-code suspicion (raised by research sub-agents during Task 7) RESOLVED unfounded — reviewer confirmed it's actively wired end-to-end (list queries project into it, frontend ProductSummaryDto mirrors it)
 - Task 6: reviewed by controller (not an independent reviewer agent) due to session-limit death — final whole-branch review should give the orders module a fuller pass
 - Task 5: @angular/cdk@^21 present only for ng2-charts@7 peer resolution — zero runtime imports; Task 11 confirm it stays unused
 - Task 4: report-api.service.ts downloadCsv swallows HTTP errors silently (by-design void signature; later modules should add call-site error handling)
