@@ -13,7 +13,7 @@
 - [x] Task 3: Admin shared kit (toast, data-table, KPI card, confirm modal, date-range picker, status badge) ✅
 - [x] Task 4: API layer & contract reconciliation (TS DTOs, OrderAdminService, ReportApiService, apiBaseUrl /v1 fix, checkout/account repoints) ✅
 - [x] Task 5: Dashboard home (ng2-charts, KPIs, charts) ✅
-- [ ] Task 6: Orders module (list/detail/status actions)
+- [x] Task 6: Orders module (list/detail/status actions) ✅
 - [ ] Task 7: Catalog module (products, categories tree, variants, images)
 - [ ] Task 8: Inventory + customers modules
 - [ ] Task 9: Discounts + reviews modules
@@ -31,8 +31,11 @@ Task 4: complete (storefront 049d244..531f147, review clean — spec ✅ every r
 
 Task 5: complete (storefront 531f147..b1f3cc9, review clean — spec ✅, quality approved; 610/610 ×2. ng2-charts+chart.js added (the one new dep), verified 100% lazy by independent grep of all 9 eager chunks. BUNDLE RULING: accept — initial 604.49→604.86 kB (+0.37 kB) is esbuild chunk-boundary bookkeeping not a leak, within 620 kB budget. @angular/cdk@^21 added as ng2-charts peer dep, zero code imports (Task 11 re-audits))
 
+Task 6: complete (storefront ca0b1a9, submodule bumped c25752d, CONTROLLER-REVIEWED — task-reviewer agent died on session limit, controller verified directly: status-gating map exact per 5 rules + exhaustive switch + 5 exact-array tests, status visible as DataTable column, placeholder cleanly removed, order-list/order-detail confirmed separate lazy chunks, initial 606.64 kB within 620, build clean; 628/628 ×2 per implementer)
+
 ## Minor findings for final review
 
+- Task 6: reviewed by controller (not an independent reviewer agent) due to session-limit death — final whole-branch review should give the orders module a fuller pass
 - Task 5: @angular/cdk@^21 present only for ng2-charts@7 peer resolution — zero runtime imports; Task 11 confirm it stays unused
 - Task 4: report-api.service.ts downloadCsv swallows HTTP errors silently (by-design void signature; later modules should add call-site error handling)
 - Task 4: ApiService.post/put still `body: any` (pre-existing, not this task's scope; future cleanup)
