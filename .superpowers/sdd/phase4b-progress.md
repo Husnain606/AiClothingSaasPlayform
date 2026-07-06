@@ -10,7 +10,7 @@
 
 - [x] Task 1: Auth upgrade (role parsing, three-way redirect, guards, MFA challenge, zoneless provider) ✅
 - [x] Task 2: Admin shell (AdminLayout, /admin + /admin/platform scaffolds, header Dashboard link) ✅
-- [ ] Task 3: Admin shared kit (toast, data-table, KPI card, confirm modal, date-range picker, status badge)
+- [x] Task 3: Admin shared kit (toast, data-table, KPI card, confirm modal, date-range picker, status badge) ✅
 - [ ] Task 4: API layer & contract reconciliation (TS DTOs, OrderAdminService, ReportApiService, apiBaseUrl /v1 fix, checkout/account repoints)
 - [ ] Task 5: Dashboard home (ng2-charts, KPIs, charts)
 - [ ] Task 6: Orders module (list/detail/status actions)
@@ -25,8 +25,12 @@
 Task 1: complete (storefront ba9593e..f7a7d25, review clean — spec ✅ incl. SuperAdmin precedence + memory-only mfaToken, quality approved; 521/521 ×2, zoneless live with zero fallout, reviewer re-ran suite independently)
 Task 2: complete (storefront f7a7d25..22c16d0 + budget 438ba1d, review clean — spec ✅, quality approved; 541/541 ×2 reviewer-verified. BUDGET DECISION: initial warning 600→620 kB, justified — overage is structural lazy-route registration (4.49 kB), admin code verified 100% lazy by independent grep+build; Task 11 re-audits)
 
+Task 3: complete (storefront 438ba1d..049d244, review clean — spec ✅ all 6 kit component APIs match brief exactly, quality approved; 587/587 ×2, controller-recovered from implementer session-limit death mid-task, one test fix (NG0100: drive real input element instead of mutating field directly), reviewer independently reran gates and got identical numbers)
+
 ## Minor findings for final review
 
+- Task 3: DataTable.cellText/cellDate use unsafe `as` casts around unknown (internal helpers, not public API; low)
+- Task 3: ConfirmModal's Escape HostListener is global (document-scoped) — fine for single-modal usage; would double-fire if modals ever stack (note for future integrators)
 - Task 2: app.routes.spec.ts:75 brittle magic-number assertion (lazyRoutes.length toBe(7)) — pre-existing fragility, bump-prone
 - Task 1: no test for malformed/garbage JWT through getRoles() (defensive try/catch verified by inspection; low)
 - Task 1: initial bundle at 599.50/600 kB — nearly zero headroom; admin area lazy isolation is load-bearing (Task 11 verifies)
