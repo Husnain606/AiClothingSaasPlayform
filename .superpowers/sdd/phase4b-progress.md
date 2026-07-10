@@ -16,7 +16,7 @@
 - [x] Task 6: Orders module (list/detail/status actions) ✅
 - [x] Task 7: Catalog module (products, categories tree, variants, images) ✅
 - [x] Task 8: Inventory + customers modules ✅
-- [ ] Task 9: Discounts + reviews modules
+- [x] Task 9: Discounts + reviews modules ✅
 - [ ] Task 10: Reports + settings modules
 - [ ] Task 11: Platform console + hardening (bundle budget, prod grep, suite ×2, docs)
 
@@ -51,8 +51,11 @@ suite (0 regressions). Harness-template scaffold files at the repo root (untrack
 `Directory.Packages.props`, unrelated to FashionSaaS) were temporarily moved aside to work around an
 unrelated NU1015 MSBuild conflict during verification, then restored unchanged.
 
+Task 9: complete (storefront dac7ab7..52e65f7, review clean AFTER Fix Round 1 — spec ✅ all backend-shape claims verified (now correct post-eef97b4 enum fix); reviewer initially flagged reject-reason overlay as a real a11y defect (input outside ConfirmModal's dialog/ARIA scope/tab-trap despite the modal already having the requireTypedConfirmation mechanism for exactly this); fixed by generalizing ConfirmModalComponent with requireReason/reasonLabel inputs (additive EventEmitter<string|undefined> widening), verified zero regression across ALL 4 other ConfirmModal consumers (order-detail, customer-detail, discount-list, product-list) via independent targeted spec run; genuine DOM-level tests added; 735/735 ×2, bundle 608.02 kB unchanged; a matching pre-existing defect in order-detail's ship/cancel modals correctly spun off as a separate follow-up, not silently expanded into scope)
+
 ## Minor findings for final review
 
+- Task 9 follow-up (spawned as background task, not fixed here): order-detail's ship/cancel ConfirmModal usages have the same input-outside-dialog defect class as the one just fixed — Task 11 or a dedicated pass should apply the same requireReason/requireTypedConfirmation fix there
 - Task 8: WishlistItemResponse.ProductName nullable — UI renders blank on null (documented known gap, not fixed, low priority)
 - Task 7: ProductSummaryResponse dead-code suspicion (raised by research sub-agents during Task 7) RESOLVED unfounded — reviewer confirmed it's actively wired end-to-end (list queries project into it, frontend ProductSummaryDto mirrors it)
 - Task 6: reviewed by controller (not an independent reviewer agent) due to session-limit death — final whole-branch review should give the orders module a fuller pass
