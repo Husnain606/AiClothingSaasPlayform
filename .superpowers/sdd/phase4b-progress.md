@@ -18,7 +18,9 @@
 - [x] Task 8: Inventory + customers modules ✅
 - [x] Task 9: Discounts + reviews modules ✅
 - [x] Task 10: Reports + settings modules ✅
-- [ ] Task 11: Platform console + hardening (bundle budget, prod grep, suite ×2, docs)
+- [x] Task 11: Platform console + hardening (bundle budget, prod grep, suite ×2, docs) ✅
+
+**ALL 11 TASKS COMPLETE — awaiting final whole-branch review**
 
 ## Completed
 
@@ -55,8 +57,12 @@ Task 9: complete (storefront dac7ab7..52e65f7, review clean AFTER Fix Round 1 �
 
 Task 10: complete (storefront 52e65f7..7ae1aaa, review clean — spec ✅, quality approved. Security-sensitive checks all passed: AdminOwner-only guard scope matches backend attributes exactly (settings=AdminOwner-only, reports=broader AdminOwner+StoreManager, correctly NOT over-restricted); assignRole bare-string body shape confirmed correct via real test assertion (`toBe('InventoryManager')` not `.toEqual({role})`); TOTP code/revealed bank data confirmed never logged/persisted (zero console.log/localStorage/sessionStorage hits). Real backend divergences caught: profile fields, single-role CreateUserRequest, shared masked/full bank DTO shape, VerifyTotpRequest.TotpCode field name. 766/766 ×2, bundle 608.02 kB unchanged. task-10-report.md filename collision with a stale, already-committed Phase 3 report (git-recoverable at 780f4e6) — correctly flagged by implementer, no data lost)
 
+Task 11: complete (storefront 7ae1aaa..23b5249, review clean AFTER Fix Round 1 — LARGEST security surface in the plan, all superAdminGuard/TOTP/typed-confirm checks passed independently. CRITICAL CATCH: primary reviewer's "Spec ✅" missed a real bug that a research sub-agent surfaced and the controller confirmed directly against backend source via Roslyn Navigator — getAuditLogs/getLoginAttempts/getPlatformUsers typed as bare arrays but backend returns PagedResult<T>, silently breaking 3 platform console views + the home KPI card; getLoginAttempts also allowed a guaranteed-400 empty-email call. Fixed: 3 services now return PagedResult<T> correctly, 4 components updated, UI structurally prevents the empty-email 400, tests confirmed genuinely bug-catching (would fail against old bare-array code) via independent re-review. Also landed the Task 9 order-detail ConfirmModal a11y follow-up using the identical fix pattern (verified, not ad-hoc). 834/834 ×2, bundle 607.72 kB (within 620 kB budget, platform console confirmed 100% lazy), @angular/cdk still zero runtime imports, prod env grep clean, docs updated (README + PROJECT_PROGRESS.md Phase 4b section))
+
 ## Minor findings for final review
 
+- Task 11: PagedResult<T> TS type has stale `pageNumber` field name vs backend's `page` — harmless (unused), spawned as separate background follow-up task, not fixed here
+- Task 11: dead PlatformAdminService methods (updateTenant, getPlatformUser, updatePlan, assignSubscription) exist with no UI consumer — no spec violation, note for future tenant/plan-edit or new-subscription workflows
 - Task 10: bank-account create/update UI out of scope (backend supports it w/ CurrentPassword requirement; no form built) — real gap for a future task if tenants need to set up bank details via UI
 - Task 10: tenant-users role assignment is additive-only server-side, no verified "remove role" endpoint — unverified/out-of-scope, flagged not fixed
 - Task 9 follow-up (spawned as background task, not fixed here): order-detail's ship/cancel ConfirmModal usages have the same input-outside-dialog defect class as the one just fixed — Task 11 or a dedicated pass should apply the same requireReason/requireTypedConfirmation fix there
