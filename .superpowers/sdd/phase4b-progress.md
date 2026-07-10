@@ -17,7 +17,7 @@
 - [x] Task 7: Catalog module (products, categories tree, variants, images) ✅
 - [x] Task 8: Inventory + customers modules ✅
 - [x] Task 9: Discounts + reviews modules ✅
-- [ ] Task 10: Reports + settings modules
+- [x] Task 10: Reports + settings modules ✅
 - [ ] Task 11: Platform console + hardening (bundle budget, prod grep, suite ×2, docs)
 
 ## Completed
@@ -53,8 +53,12 @@ unrelated NU1015 MSBuild conflict during verification, then restored unchanged.
 
 Task 9: complete (storefront dac7ab7..52e65f7, review clean AFTER Fix Round 1 — spec ✅ all backend-shape claims verified (now correct post-eef97b4 enum fix); reviewer initially flagged reject-reason overlay as a real a11y defect (input outside ConfirmModal's dialog/ARIA scope/tab-trap despite the modal already having the requireTypedConfirmation mechanism for exactly this); fixed by generalizing ConfirmModalComponent with requireReason/reasonLabel inputs (additive EventEmitter<string|undefined> widening), verified zero regression across ALL 4 other ConfirmModal consumers (order-detail, customer-detail, discount-list, product-list) via independent targeted spec run; genuine DOM-level tests added; 735/735 ×2, bundle 608.02 kB unchanged; a matching pre-existing defect in order-detail's ship/cancel modals correctly spun off as a separate follow-up, not silently expanded into scope)
 
+Task 10: complete (storefront 52e65f7..7ae1aaa, review clean — spec ✅, quality approved. Security-sensitive checks all passed: AdminOwner-only guard scope matches backend attributes exactly (settings=AdminOwner-only, reports=broader AdminOwner+StoreManager, correctly NOT over-restricted); assignRole bare-string body shape confirmed correct via real test assertion (`toBe('InventoryManager')` not `.toEqual({role})`); TOTP code/revealed bank data confirmed never logged/persisted (zero console.log/localStorage/sessionStorage hits). Real backend divergences caught: profile fields, single-role CreateUserRequest, shared masked/full bank DTO shape, VerifyTotpRequest.TotpCode field name. 766/766 ×2, bundle 608.02 kB unchanged. task-10-report.md filename collision with a stale, already-committed Phase 3 report (git-recoverable at 780f4e6) — correctly flagged by implementer, no data lost)
+
 ## Minor findings for final review
 
+- Task 10: bank-account create/update UI out of scope (backend supports it w/ CurrentPassword requirement; no form built) — real gap for a future task if tenants need to set up bank details via UI
+- Task 10: tenant-users role assignment is additive-only server-side, no verified "remove role" endpoint — unverified/out-of-scope, flagged not fixed
 - Task 9 follow-up (spawned as background task, not fixed here): order-detail's ship/cancel ConfirmModal usages have the same input-outside-dialog defect class as the one just fixed — Task 11 or a dedicated pass should apply the same requireReason/requireTypedConfirmation fix there
 - Task 8: WishlistItemResponse.ProductName nullable — UI renders blank on null (documented known gap, not fixed, low priority)
 - Task 7: ProductSummaryResponse dead-code suspicion (raised by research sub-agents during Task 7) RESOLVED unfounded — reviewer confirmed it's actively wired end-to-end (list queries project into it, frontend ProductSummaryDto mirrors it)
