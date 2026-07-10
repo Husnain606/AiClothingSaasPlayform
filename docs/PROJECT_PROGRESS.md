@@ -150,6 +150,34 @@
 
 ---
 
+## Phase 4b: Role-Routed Admin Area ✅ COMPLETE
+
+**Branch:** `feature/phase4b-admin-area`
+**Tasks:** 11/11 complete
+**Tests:** 828/828 passing (Vitest, `ng test --watch=false`, run twice with identical counts)
+**Scope:** Full `/admin` back-office UI over the Phase 2/4a backend and a SuperAdmin platform console over the existing `api/admin/*` endpoints. **Zero new backend endpoints required for the entire phase** — every task consumed already-shipped API surface.
+
+### Modules delivered (Tasks 1-11):
+1. **Auth + shell + kit** — login/MFA flow reuse, `AdminLayoutComponent`, role guards (`adminRoleGuard`, `adminOwnerGuard`, `superAdminGuard`), shared kit (`DataTableComponent`, `ConfirmModalComponent`, `ToastService`, `StatusBadgeComponent`, `KpiCardComponent`, `DateRangePickerComponent`).
+2. **API layer + dashboard** — thin `ApiService`-wrapping admin services, `DashboardComponent` KPIs.
+3. **Orders** — list/detail/confirm/ship/deliver/cancel.
+4. **Catalog** — product/category/variant/image CRUD.
+5. **Inventory + customers** — stock adjustment, low-stock, customer list/detail/deactivate.
+6. **Discounts + reviews** — discount CRUD, review moderation queue.
+7. **Reports + settings** — 7 report views, tenant profile/users/subscription/bank-account settings.
+8. **Platform console** (Task 11) — tenants (CRUD + suspend/activate + typed-confirmation delete), subscription plans (CRUD), subscriptions (assign/change-plan/suspend/reactivate), payments (scoped by subscription + confirm), platform users (list/unlock), security (audit logs, login attempts, MFA TOTP setup, masked platform bank account) — all gated by `superAdminGuard`.
+
+### Key architecture notes:
+- **DataTable `'custom'` column type** used for every list needing row-level actions or custom cell rendering — no module hand-rolls a duplicate `<table>` alongside `DataTableComponent`.
+- **`ConfirmModalComponent.requireTypedConfirmation`** (type-to-confirm) used for the one genuinely destructive, hard-to-reverse action (tenant delete); **`requireReason`** used for order ship/cancel and review rejection — both mechanisms keep the captured input *inside* the modal's `role="dialog"` subtree (focus trap + auto-focus + screen-reader scope). An accessibility defect where two consumers (`review-queue`, then `order-detail`) instead bound the reason/tracking-number input as a sibling element *outside* the dialog was found and fixed in Task 9 (review-queue) and as a Task-9 follow-up (order-detail) — both now use the modal's own field.
+- **DOM row-count regression tests** on every list view assert `fixture.nativeElement.querySelectorAll('table tbody tr').length` equals the component's row count, catching duplicate-render bugs the way a `component.rows.length` assertion alone cannot — applied with no exceptions across all 11 tasks' list views.
+- **Backend enum-serialization fix (mid-Task-9):** `JsonStringEnumConverter` is registered globally in `Program.cs` so every enum-typed DTO property (order/discount/review/subscription/payment status, discount type, etc.) serializes and binds as its string name rather than a numeric value — confirmed by grep and exercised by the frontend's plain-`string`-typed status fields (no frontend-side enum re-encoding needed).
+- **Every service/DTO was verified against the live backend source** (`ApiUrl.cs` + `Controllers/Admin/*.cs` + `Application/*/DTOs/*.cs`) rather than trusting illustrative task-brief code samples — real, task-specific divergences were found and corrected in nearly every task (wrong HTTP verbs, wrong body-key casing, DTO fields that don't exist on the backend, e.g. Task 11's MFA setup being `GET` not `POST`, `ChangePlanRequest.NewPlanId` not `planId`, and `PaymentsController.GetAll` requiring a `subscriptionId` query param).
+- **100% lazy platform console:** grepping the initial/eager production chunks for any platform-module symbol (`PlatformAdminService`, `TenantListComponent`, etc.) returns zero matches — the entire `/admin/platform` subtree loads via `loadChildren`/`loadComponent` only.
+- **Production bundle:** initial total **607.72 kB** (raw) — under the 620 kB ceiling established in Task 2 for this class of growth, in line with the Task 5-10 history (604.49 → 604.86 → 606.64 → 608.01 → 608.02 → 607.72 kB).
+
+---
+
 ## Overall Project Statistics
 
 ### Code Metrics:
