@@ -45,26 +45,21 @@ TryOnRequest : BaseEntity (Id, CreatedAt, UpdatedAt — matches main API's BaseE
   CustomerId: Guid
   ProductId: Guid
   ProductVariantId: Guid?
-  GarmentImageUrl: string       // snapshot of the product image used — this service cannot join to Products
-  PersonImageUrl: string?       // Cloudinary URL, populated ONLY if customer opted to save their photo; null otherwise
-  ResultImageUrl: string        // Cloudinary URL of the rendered result
   Status: TryOnStatus           // enum: Completed, Failed (synchronous flow — no Pending/Processing state needed since Gemini responds in one call)
   FailureReason: string?        // populated when Status = Failed (e.g. Gemini error, quota exceeded before the call was even attempted — though quota-exceeded requests may not warrant a persisted row at all; decide in planning)
   CreatedAt: DateTime            // UTC; also the quota-counting timestamp
 ```
 
+**No image fields at all — this entity is a bare usage-counter/audit row, nothing more.** Neither the customer's uploaded photo nor the rendered result is ever persisted, by design (see section 8): the fully stateless choice means this service never needs to store, serve, or manage any image long-term. `TryOnRequest` exists solely to (a) enforce the monthly quota and (b) provide a minimal audit trail of render attempts per tenant/customer/product. Both the input photo and the result image exist only as in-memory byte streams for the duration of a single request and are never written to disk, a database column, or any blob/object storage.
+
 Follows this codebase's established event-log entity pattern (`AuditLog`, `StockAdjustment`, `LoginAttempt`) — every render attempt is recorded, and the same table serves as the quota-counting mechanism: `COUNT(*) WHERE TenantId = X AND Status = Completed AND CreatedAt >= start-of-current-calendar-month`.
 
 Tenant isolation: same EF Core global query filter pattern as the main API (`HasQueryFilter` referencing an injected `ICurrentTenantService`, resolved from the independently-validated JWT's `tenant_id` claim) — this service re-implements that pattern itself rather than sharing code with the monolith.
 
-### 4.2 Saved photo (opt-in)
-
-The customer's saved photo (when `PersonImageUrl` is populated) is associated with `(TenantId, CustomerId)`. Account settings in the storefront calls this service directly to fetch/delete it — exact endpoint shape decided during planning (likely `GET /api/tryon/saved-photo` and `DELETE /api/tryon/saved-photo`, scoped to the authenticated customer from their JWT).
-
 ## 5. Vendor integration — Gemini image API
 
 - **Client:** a Refit-typed interface (explicit library approval from the user, scoped to third-party AI API clients for this project).
-- **Flow:** synchronous request/response. The service sends the customer's uploaded photo + the garment image (fetched from the passed-in `GarmentImageUrl`) to Gemini's image generation/editing endpoint (model TBD at planning time between Gemini 2.5/3 Flash Image and Pro Image — Flash is cheaper and likely sufficient; verify current model names/endpoints against Google's current API docs at planning time, since vendor APIs evolve quickly) and receives the composited result image in the same call.
+- **Flow:** synchronous request/response. The service fetches the garment image via a plain HTTPS GET of the passed-in `GarmentImageUrl` (a Cloudinary URL the storefront already has from the main API's catalog — no Cloudinary SDK needed for this, it's just a public/signed HTTPS resource), forwards it along with the customer's uploaded photo bytes to Gemini's image generation/editing endpoint (model TBD at planning time between Gemini 2.5/3 Flash Image and Pro Image — Flash is cheaper and likely sufficient; verify current model names/endpoints against Google's current API docs at planning time, since vendor APIs evolve quickly), and receives the composited result image bytes in the same call — which are then returned directly in this service's own HTTP response (see section 10), never written anywhere.
 - **No job queue or polling** — unlike dedicated try-on vendors (FASHN.ai, etc.), which were evaluated and explicitly not chosen in favor of Gemini's more general-purpose, cheaper, synchronous API.
 - **Known tradeoff, accepted:** Gemini is a general-purpose image model, not purpose-trained for garment-fit realism the way a dedicated try-on API is. Result quality/consistency (garment draping, pose fidelity) may be less proven. If quality proves insufficient after building this, the vendor integration is isolated behind the Application layer's service interface, making a swap to a dedicated vendor (e.g. FASHN.ai) a contained change, not a redesign.
 
@@ -77,12 +72,14 @@ The customer's saved photo (when `PersonImageUrl` is populated) is associated wi
 
 Before calling Gemini: `COUNT(TryOnRequest WHERE TenantId = current tenant AND Status = Completed AND CreatedAt >= start of current calendar month)`. If `count >= aiUsageLimit` claim value, reject with a clear, friendly error (exact HTTP status/response shape decided in planning — likely 429 with a `ResponseData`-style envelope matching the main API's conventions for consistency, even though this is a different service).
 
-## 8. Photo consent & retention
+## 8. Photo handling — fully stateless, nothing ever persisted
 
-- **Default:** ephemeral. The uploaded photo is used for the single render and not persisted — `PersonImageUrl` stays null, nothing is written to Cloudinary for the input photo.
-- **Opt-in save:** a consent checkbox ("Save my photo for future try-ons") on the try-on UI. If checked, the photo is uploaded to this service's own Cloudinary integration and `PersonImageUrl` is populated. On subsequent visits, if a saved photo exists, the customer can reuse it without re-uploading.
-- **Management:** the customer can view/delete their saved photo from Account settings (storefront calls this service directly).
-- **Isolation:** photos are tenant-scoped; no cross-tenant access. This service owns its own Cloudinary credentials/folder structure — implementation duplicates the main API's `IImageStorageService`/`CloudinaryImageStorageService` pattern rather than referencing it, per the "own database, own everything" service-autonomy decision.
+**Decision (revised twice from the original opt-in-save design — now the strictest option):** NEITHER the customer's uploaded photo NOR the rendered result image is ever persisted, anywhere, under any option. No consent checkbox, no "save for reuse," no saved-photo management screen, no Cloudinary write integration in this service at all, no `*ImageUrl` columns in the database. That entire storage layer is removed from scope entirely.
+
+- **Backend:** the uploaded photo arrives as part of the multipart request that triggers the render, is held in memory only long enough to forward it to Gemini. Gemini's response (the composited result) is held in memory only long enough to return it in this service's own HTTP response body. Neither ever touches a database column, a file, or any blob/object storage. This service therefore needs **no Cloudinary write credentials at all** — its only outbound HTTP dependencies are a plain GET of the garment image URL and the Gemini API call.
+- **Frontend:** the customer's uploaded photo and the displayed result both live only in the browser's memory/DOM for the current view of the product detail page. Refreshing the page, navigating away, or revisiting later loses both — there is nothing to explicitly clear, since nothing is retained beyond normal component teardown or a page reload. This is the intended behavior, not a limitation to work around.
+- **Isolation:** since nothing is persisted, there is no image-access surface (cross-tenant or otherwise) to reason about at all — the strongest possible privacy story, and the simplest to build and verify.
+- **What `TryOnRequest` (section 4.1) still needs to exist for:** purely quota enforcement and a minimal audit trail (tenant, customer, product, timestamp, success/failure) — it carries zero images or image references.
 
 ## 9. Messaging — Azure Service Bus
 
@@ -96,17 +93,17 @@ Before calling Gemini: `COUNT(TryOnRequest WHERE TenantId = current tenant AND S
 
 | Endpoint | Method | Purpose |
 |---|---|---|
-| `/api/tryon` | POST | multipart: photo file + `garmentImageUrl` + `productId` + `productVariantId?` + `savePhoto: bool`. Returns the rendered result image URL. |
-| `/api/tryon/saved-photo` | GET | Returns the customer's saved photo URL, if any. |
-| `/api/tryon/saved-photo` | DELETE | Deletes the customer's saved photo. |
+| `/api/tryon` | POST | multipart: photo file + `garmentImageUrl` + `productId` + `productVariantId?`. Returns the rendered result image directly in the response (bytes/base64 — exact encoding decided in planning, e.g. a base64 data URI is simplest for the Angular side to render immediately without a second request). Nothing is stored; the response IS the only copy of the result that ever exists. |
+
+No saved-photo endpoints — removed entirely per section 8's fully-stateless decision.
 
 Response envelope is a fresh, independent implementation matching the main API's `ResponseData<T>` *shape* (`IsSuccess`, `StatusCode`, `Message`, `Data`, `Errors`) — not a shared type or project reference — so the storefront's existing `ApiService` unwrapping logic works unchanged against this service too, while the two codebases stay fully decoupled.
 
 ## 11. Frontend (storefront) integration
 
 - New environment config entry: `tryOnApiBaseUrl` (both `environment.ts` and `environment.prod.ts`).
-- A "Try It On" section on the product detail page (`features/catalog/components/product-detail/`): photo upload (or "use my saved photo" if one exists), consent checkbox, submit, loading state, result display.
-- Saved-photo view/delete control added to Account settings, calling the try-on service directly (same direct-call pattern as the main try-on flow — no proxying through the main API).
+- A "Try It On" section on the product detail page (`features/catalog/components/product-detail/`): photo upload, submit, loading state, result display (rendered directly from the response — e.g. a data URI in an `<img>` src) — no consent checkbox, no saved-photo affordance, since nothing is ever saved.
+- No Account settings changes — there is nothing to manage since no photo is ever persisted.
 - Zoneless CD, Vitest conventions, strict TS, WCAG 2.1 AA — all established storefront conventions apply unchanged.
 
 ## 12. Error handling
@@ -124,7 +121,8 @@ Response envelope is a fresh, independent implementation matching the main API's
 ## 14. Out of scope for Phase 5a (explicitly deferred)
 
 - Size/fit prediction (Phase 5b — separate spec, separate design conversation).
-- A dedicated try-on history/gallery page for customers.
+- Saving or reusing any photo (input or result), in any form — deliberately, not an oversight (section 8).
+- A dedicated try-on history/gallery page for customers — impossible by design now, since nothing is retained to show a history of.
 - Moderation of uploaded customer photos (content safety review) — flagged as a real future consideration given photo uploads, not addressed now.
 - Any Service Bus **consumer** — publish-only in this phase.
 - Per-plan-tier configuration UI for `AiUsageLimit` (the field already exists and is settable via the existing admin subscription-plan CRUD from Phase 4b; no new UI needed to set the number itself, only to *enforce* it, which this phase does).
