@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using FashionSaaS.API.Extensions;
 using FashionSaaS.API.Handlers;
 using FashionSaaS.API.Logging;
@@ -61,7 +62,13 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 
 // Controllers + Swagger
-builder.Services.AddControllers();
+// JsonStringEnumConverter: all enum-typed request/response DTO properties serialize/bind as their
+// member name (e.g. "Pending"), not the underlying int. Without this, any DTO exposing a raw enum
+// property (as opposed to OrderDto's explicit lowercase-string mapping) round-trips as a bare number,
+// silently breaking any client that assumes named values.
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
