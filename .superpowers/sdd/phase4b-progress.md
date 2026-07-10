@@ -37,6 +37,20 @@ Task 7: complete (storefront ca0b1a9..42ae71b, all 6 backend-shape claims indepe
 
 Task 8: complete (storefront 42ae71b..dac7ab7, review clean — spec ✅ all 5 backend-shape claims verified, quality approved; DOUBLE-TABLE CHECK PASSED (Task 7 lesson applied correctly: customer-list uses DataTable 'custom' column, other 3 views are legitimate standalone tables that never use DataTable at all); DOM row-count regression tests present on all list views; 704/704, bundle 608.01 kB unchanged)
 
+## Cross-phase backend fix (outer repo, mid-Task-9)
+
+**BUG FOUND & FIXED:** Task 9's review surfaced that `DiscountResponse.Type` and `ReviewResponse.Status`
+(and, on inspection, `ProductResponse.Status` — used by the already-approved Task 7 catalog module) are raw
+C# enums with **no `JsonStringEnumConverter`** registered anywhere in the backend (confirmed via Roslyn
+Navigator: zero symbol matches). Default System.Text.Json behavior serializes these as **integers**, not
+the PascalCase strings all three frontend modules assumed (unlike `OrderDto.Status`, which Phase 4a's
+Mapster config explicitly converts to a lowercase string). This was a systemic gap, not a Task-9-specific
+mistake — root-caused with the user's go-ahead, fixed via one global converter registration in
+`src/FashionSaaS.API/Program.cs` (outer repo commit `eef97b4`), verified against the full 443-test backend
+suite (0 regressions). Harness-template scaffold files at the repo root (untracked `Directory.Build.props`/
+`Directory.Packages.props`, unrelated to FashionSaaS) were temporarily moved aside to work around an
+unrelated NU1015 MSBuild conflict during verification, then restored unchanged.
+
 ## Minor findings for final review
 
 - Task 8: WishlistItemResponse.ProductName nullable — UI renders blank on null (documented known gap, not fixed, low priority)
