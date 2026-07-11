@@ -12,7 +12,7 @@ namespace FashionSaaS.API.Controllers.Admin;
 [Authorize(Roles = "SuperAdmin")]
 [Authorize(Policy = "MfaVerified")]
 [EnableRateLimiting("SuperAdminPolicy")]
-internal class LoginAttemptsController(LoginAttemptService loginAttemptService) : ControllerBase
+public class LoginAttemptsController(LoginAttemptService loginAttemptService) : ControllerBase
 {
     [HttpGet(ApiUrl.AdminLoginAttempts.GetAll)]
     [ProducesResponseType(StatusCodes.Status200OK)]

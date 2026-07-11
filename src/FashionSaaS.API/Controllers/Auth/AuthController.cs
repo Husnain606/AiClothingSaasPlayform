@@ -11,7 +11,7 @@ using Microsoft.AspNetCore.RateLimiting;
 namespace FashionSaaS.API.Controllers.Auth;
 
 [ApiController]
-internal class AuthController(AuthService authService, IPasswordResetTokenRepository resetTokenRepo,
+public class AuthController(AuthService authService, IPasswordResetTokenRepository resetTokenRepo,
     IPasswordHistoryRepository historyRepo, IJwtService jwtService) : ControllerBase
 {
     private string Ip => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";

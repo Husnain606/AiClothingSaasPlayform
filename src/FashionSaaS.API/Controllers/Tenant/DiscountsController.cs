@@ -12,7 +12,7 @@ namespace FashionSaaS.API.Controllers.Tenant;
 [ApiController]
 [Authorize(Roles = "AdminOwner,StoreManager")]
 [EnableRateLimiting("AuthenticatedPolicy")]
-internal class DiscountsController(DiscountService discountService) : ControllerBase
+public class DiscountsController(DiscountService discountService) : ControllerBase
 {
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     private string Ip => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";

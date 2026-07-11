@@ -13,7 +13,7 @@ namespace FashionSaaS.API.Controllers.Admin;
 [Authorize(Roles = "SuperAdmin")]
 [Authorize(Policy = "MfaVerified")]
 [EnableRateLimiting("SuperAdminPolicy")]
-internal class BankAccountController(BankAccountService bankAccountService) : ControllerBase
+public class BankAccountController(BankAccountService bankAccountService) : ControllerBase
 {
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     private string Ip => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";

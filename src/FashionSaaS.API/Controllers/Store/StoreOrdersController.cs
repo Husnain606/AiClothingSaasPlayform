@@ -12,7 +12,7 @@ namespace FashionSaaS.API.Controllers.Store;
 [ApiController]
 [Authorize(Roles = "Customer")]
 [EnableRateLimiting("AuthenticatedPolicy")]
-internal class StoreOrdersController(OrderService orderService) : ControllerBase
+public class StoreOrdersController(OrderService orderService) : ControllerBase
 {
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     private string Email => User.FindFirstValue(ClaimTypes.Email)!;

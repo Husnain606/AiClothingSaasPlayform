@@ -12,7 +12,7 @@ namespace FashionSaaS.API.Controllers.Admin;
 [ApiController]
 [Authorize(Roles = "SuperAdmin")]
 [EnableRateLimiting("SuperAdminPolicy")]
-internal class MfaController(MfaService mfaService) : ControllerBase
+public class MfaController(MfaService mfaService) : ControllerBase
 {
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
@@ -47,5 +47,5 @@ internal class MfaController(MfaService mfaService) : ControllerBase
         return StatusCode(response.StatusCode, response);
     }
 
-    internal record VerifySetupRequest(string Code);
+    public record VerifySetupRequest(string Code);
 }

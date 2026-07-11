@@ -12,7 +12,7 @@ namespace FashionSaaS.API.Controllers.Tenant;
 [ApiController]
 [Authorize(Roles = "AdminOwner")]
 [EnableRateLimiting("AuthenticatedPolicy")]
-internal class TenantSubscriptionController(SubscriptionService subscriptionService, ICurrentTenantService currentTenant) : ControllerBase
+public class TenantSubscriptionController(SubscriptionService subscriptionService, ICurrentTenantService currentTenant) : ControllerBase
 {
     /// <summary>
     /// Returns the active subscription for the current tenant.

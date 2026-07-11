@@ -13,7 +13,7 @@ namespace FashionSaaS.API.Controllers.Admin;
 [Authorize(Roles = "SuperAdmin")]
 [Authorize(Policy = "MfaVerified")]
 [EnableRateLimiting("SuperAdminPolicy")]
-internal class UsersController(UserService userService) : ControllerBase
+public class UsersController(UserService userService) : ControllerBase
 {
     private Guid AdminId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     private string Ip => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";

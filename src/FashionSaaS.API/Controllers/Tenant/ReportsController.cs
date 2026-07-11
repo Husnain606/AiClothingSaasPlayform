@@ -12,7 +12,7 @@ namespace FashionSaaS.API.Controllers.Tenant;
 [ApiController]
 [Authorize(Roles = "AdminOwner,StoreManager")]
 [EnableRateLimiting("AuthenticatedPolicy")]
-internal class ReportsController(ReportService reportService) : ControllerBase
+public class ReportsController(ReportService reportService) : ControllerBase
 {
     [HttpGet(ApiUrl.TenantReports.Summary)]
     [ProducesResponseType(StatusCodes.Status200OK)]

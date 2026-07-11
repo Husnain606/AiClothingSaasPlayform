@@ -12,7 +12,7 @@ namespace FashionSaaS.API.Controllers.Tenant;
 [ApiController]
 [Authorize(Roles = "AdminOwner,StoreManager")]
 [EnableRateLimiting("AuthenticatedPolicy")]
-internal class WishlistsController(WishlistService wishlistService) : ControllerBase
+public class WishlistsController(WishlistService wishlistService) : ControllerBase
 {
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     private string Ip => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";

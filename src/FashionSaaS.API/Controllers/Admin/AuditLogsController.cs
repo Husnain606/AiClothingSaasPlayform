@@ -12,7 +12,7 @@ namespace FashionSaaS.API.Controllers.Admin;
 [Authorize(Roles = "SuperAdmin")]
 [Authorize(Policy = "MfaVerified")]
 [EnableRateLimiting("SuperAdminPolicy")]
-internal class AuditLogsController(AuditLogQueryService auditLogService) : ControllerBase
+public class AuditLogsController(AuditLogQueryService auditLogService) : ControllerBase
 {
     [HttpGet(ApiUrl.AdminAuditLogs.GetAll)]
     [ProducesResponseType(StatusCodes.Status200OK)]

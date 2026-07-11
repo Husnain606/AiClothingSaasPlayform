@@ -12,7 +12,7 @@ namespace FashionSaaS.API.Controllers.Tenant;
 [ApiController]
 [Authorize(Roles = "AdminOwner,StoreManager,ContentManager")]
 [EnableRateLimiting("AuthenticatedPolicy")]
-internal class ProductImagesController(ProductImageService imageService) : ControllerBase
+public class ProductImagesController(ProductImageService imageService) : ControllerBase
 {
     /// <summary>Maximum accepted upload size (5 MB).</summary>
     private const long MaxImageBytes = 5 * 1024 * 1024;
@@ -99,10 +99,10 @@ internal class ProductImagesController(ProductImageService imageService) : Contr
     }
 
     /// <summary>multipart/form-data binding model: the uploaded file plus image metadata.</summary>
-    internal class UploadImageForm
+    public class UploadImageForm
     {
         public IFormFile? File { get; set; }
-        public Guid ProductId { get; set; }
+        public required Guid ProductId { get; set; }
         public Guid? VariantId { get; set; }
         public string? AltText { get; set; }
     }

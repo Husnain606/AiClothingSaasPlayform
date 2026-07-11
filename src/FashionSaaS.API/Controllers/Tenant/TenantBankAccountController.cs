@@ -13,7 +13,7 @@ namespace FashionSaaS.API.Controllers.Tenant;
 [ApiController]
 [Authorize(Roles = "AdminOwner")]
 [EnableRateLimiting("AuthenticatedPolicy")]
-internal class TenantBankAccountController(BankAccountService bankAccountService, ICurrentTenantService currentTenant) : ControllerBase
+public class TenantBankAccountController(BankAccountService bankAccountService, ICurrentTenantService currentTenant) : ControllerBase
 {
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     private string Ip => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";

@@ -357,12 +357,34 @@ dotnet_diagnostic.CA1861.severity = suggestion
 # not a real collision with the .NET event delegate pattern. — 2026-07-11
 dotnet_diagnostic.CA1711.severity = suggestion
 
+# S6934: every controller action already carries a complete, absolute route template via
+# the ApiUrl.* constants convention (e.g. [HttpGet(ApiUrl.TenantDiscounts.GetAll)]) — a
+# deliberate, working, project-wide routing convention. Adding a class-level [Route] would
+# be redundant at best and risks colliding with the already-absolute per-action templates
+# at worst. — 2026-07-11
+dotnet_diagnostic.S6934.severity = suggestion
+
 # CA1812: one of the most commonly suppressed rules in any ASP.NET Core codebase — MVC
 # controllers, middleware, and their nested request/form DTOs are all instantiated by the
 # framework via reflection/DI activation, invisible to Roslyn's static "never instantiated"
 # analysis. This isn't a case-by-case false positive; it's a structural blind spot the rule
 # has for this entire hosting model. — 2026-07-11
 dotnet_diagnostic.CA1812.severity = suggestion
+
+# CA1515: the exact inverse problem to CA1812/CA1034 below — this rule's premise ("app
+# assemblies don't need public types") is actively wrong for MVC controllers specifically.
+# ASP.NET Core's ControllerFeatureProvider only discovers PUBLIC top-level classes (verified:
+# a real, live bug existed in this codebase from every controller being internal until this
+# fix — confirmed via a 404 on a real endpoint and an empty Swagger paths object before the
+# fix, see the phase5a-visual-tryon branch history). Controllers, and request/form DTOs bound
+# by the model binder, must stay public. — 2026-07-11
+dotnet_diagnostic.CA1515.severity = suggestion
+
+# CA1034: VerifySetupRequest/UploadImageForm are request DTOs scoped to and reused by exactly
+# one controller each — nesting them co-locates a single-use shape with its only consumer,
+# a common, deliberate ASP.NET Core pattern, not an oversight. They must be public (see
+# CA1515 above) since the model binder needs to construct them. — 2026-07-11
+dotnet_diagnostic.CA1034.severity = suggestion
 
 
 ##############################
