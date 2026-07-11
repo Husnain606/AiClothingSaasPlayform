@@ -10,15 +10,15 @@ namespace FashionSaaS.Infrastructure.Tests.Repositories;
 
 public class ProductVariantRepositoryTests
 {
-    private Guid _tenantId = Guid.NewGuid();
-    private Guid _productId = Guid.NewGuid();
+    private readonly Guid _tenantId = Guid.NewGuid();
+    private readonly Guid _productId = Guid.NewGuid();
 
     private ApplicationDbContext CreateContext()
     {
         var currentTenant = new Mock<ICurrentTenantService>();
         currentTenant.Setup(c => c.TenantId).Returns(_tenantId);
 
-        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+        DbContextOptions<ApplicationDbContext> options = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
         return new ApplicationDbContext(options, currentTenant.Object);
@@ -52,7 +52,7 @@ public class ProductVariantRepositoryTests
     [Fact]
     public async Task SkuExistsAsync_ExistingSku_ReturnsTrue()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         SeedProduct(ctx);
         var variant = new ProductVariant
         {
@@ -75,7 +75,7 @@ public class ProductVariantRepositoryTests
     [Fact]
     public async Task SkuExistsAsync_ExcludeId_IgnoresSpecificId()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         SeedProduct(ctx);
         var variant = new ProductVariant
         {
@@ -98,7 +98,7 @@ public class ProductVariantRepositoryTests
     [Fact]
     public async Task GetByProductAsync_ProductWithVariants_ReturnsAllVariants()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         SeedProduct(ctx);
         var var1 = new ProductVariant
         {
@@ -122,7 +122,7 @@ public class ProductVariantRepositoryTests
         await ctx.SaveChangesAsync();
 
         var repo = new ProductVariantRepository(ctx);
-        var result = await repo.GetByProductAsync(_productId);
+        IReadOnlyList<ProductVariant> result = await repo.GetByProductAsync(_productId);
 
         result.Should().HaveCount(2);
     }

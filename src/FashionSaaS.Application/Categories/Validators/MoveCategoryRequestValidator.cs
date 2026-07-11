@@ -10,10 +10,13 @@ public class MoveCategoryRequestValidator : AbstractValidator<MoveCategoryReques
         RuleFor(x => x.Id)
             .NotEmpty().WithMessage("Category Id is required.");
 
-        // NewParentId may be null (move to root). When supplied it must differ from Id;
-        // full cycle detection (descendant check) is a service-layer business rule.
+        // S125 false positive: this is prose, not commented-out code. NewParentId may be null
+        // (move to root). When supplied it must differ from Id; full cycle detection
+        // (descendant check) is a service-layer business rule.
+#pragma warning disable S125
         RuleFor(x => x.NewParentId)
             .NotEqual(x => x.Id).When(x => x.NewParentId.HasValue)
             .WithMessage("A category cannot be its own parent.");
+#pragma warning restore S125
     }
 }

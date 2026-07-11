@@ -1,4 +1,5 @@
 using System.Text;
+using FashionSaaS.Application.Common;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Application.ProductImages;
 using FashionSaaS.Application.ProductImages.DTOs;
@@ -30,17 +31,26 @@ public class ProductImageServiceTests
 
     private Product Product(Guid id) => new()
     {
-        Id = id, TenantId = _tenantId, CategoryId = Guid.NewGuid(), Name = "Tee", Slug = "tee", BasePrice = 20m
+        Id = id,
+        TenantId = _tenantId,
+        CategoryId = Guid.NewGuid(),
+        Name = "Tee",
+        Slug = "tee",
+        BasePrice = 20m
     };
 
     private ProductImage Image(Guid productId, int sortOrder = 0, bool isPrimary = false) => new()
     {
-        Id = Guid.NewGuid(), TenantId = _tenantId, ProductId = productId,
-        CloudinaryPublicId = $"pid-{sortOrder}", Url = $"https://cdn/img-{sortOrder}.jpg",
-        SortOrder = sortOrder, IsPrimary = isPrimary
+        Id = Guid.NewGuid(),
+        TenantId = _tenantId,
+        ProductId = productId,
+        CloudinaryPublicId = $"pid-{sortOrder}",
+        Url = $"https://cdn/img-{sortOrder}.jpg",
+        SortOrder = sortOrder,
+        IsPrimary = isPrimary
     };
 
-    private static Stream Content() => new MemoryStream(Encoding.UTF8.GetBytes("binary"));
+    private static MemoryStream Content() => new(Encoding.UTF8.GetBytes("binary"));
 
     // ── Upload ────────────────────────────────────────────────────────────────────
 
@@ -58,7 +68,7 @@ public class ProductImageServiceTests
         _images.Setup(r => r.AddAsync(It.IsAny<ProductImage>()))
             .Callback<ProductImage>(i => saved = i).Returns(Task.CompletedTask);
 
-        var result = await CreateService().UploadAsync(
+        ResponseData<ProductImageResponse> result = await CreateService().UploadAsync(
             new UploadImageRequest { ProductId = productId, AltText = "alt" }, Content(), "a.jpg",
             Guid.NewGuid(), "127.0.0.1", "ua");
 
@@ -85,7 +95,7 @@ public class ProductImageServiceTests
         _images.Setup(r => r.AddAsync(It.IsAny<ProductImage>()))
             .Callback<ProductImage>(i => saved = i).Returns(Task.CompletedTask);
 
-        var result = await CreateService().UploadAsync(
+        ResponseData<ProductImageResponse> result = await CreateService().UploadAsync(
             new UploadImageRequest { ProductId = productId }, Content(), "b.jpg",
             Guid.NewGuid(), "127.0.0.1", "ua");
 
@@ -120,7 +130,7 @@ public class ProductImageServiceTests
         _products.Setup(r => r.GetByIdAsync(productId))
             .ReturnsAsync(new Product { Id = productId, TenantId = Guid.NewGuid() });
 
-        var result = await CreateService().UploadAsync(
+        ResponseData<ProductImageResponse> result = await CreateService().UploadAsync(
             new UploadImageRequest { ProductId = productId }, Content(), "a.jpg",
             Guid.NewGuid(), "127.0.0.1", "ua");
 
@@ -135,14 +145,14 @@ public class ProductImageServiceTests
     public async Task SetPrimaryAsync_EnforcesSinglePrimary()
     {
         var productId = Guid.NewGuid();
-        var img1 = Image(productId, 0, isPrimary: true);
-        var img2 = Image(productId, 1, isPrimary: false);
-        var img3 = Image(productId, 2, isPrimary: false);
+        ProductImage img1 = Image(productId, 0, isPrimary: true);
+        ProductImage img2 = Image(productId, 1, isPrimary: false);
+        ProductImage img3 = Image(productId, 2, isPrimary: false);
         _images.Setup(r => r.GetByIdAsync(img2.Id)).ReturnsAsync(img2);
         _images.Setup(r => r.GetByProductAsync(productId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<ProductImage> { img1, img2, img3 });
 
-        var result = await CreateService().SetPrimaryAsync(
+        ResponseData<bool> result = await CreateService().SetPrimaryAsync(
             new SetPrimaryRequest { ImageId = img2.Id }, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.IsSuccess.Should().BeTrue();
@@ -158,7 +168,7 @@ public class ProductImageServiceTests
         var img = new ProductImage { Id = Guid.NewGuid(), TenantId = Guid.NewGuid(), ProductId = Guid.NewGuid() };
         _images.Setup(r => r.GetByIdAsync(img.Id)).ReturnsAsync(img);
 
-        var result = await CreateService().SetPrimaryAsync(
+        ResponseData<bool> result = await CreateService().SetPrimaryAsync(
             new SetPrimaryRequest { ImageId = img.Id }, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.StatusCode.Should().Be(404);
@@ -170,14 +180,14 @@ public class ProductImageServiceTests
     public async Task DeleteAsync_StorageThrows_StillRemovesRow()
     {
         var productId = Guid.NewGuid();
-        var img = Image(productId, 0, isPrimary: false);
+        ProductImage img = Image(productId, 0, isPrimary: false);
         _images.Setup(r => r.GetByIdAsync(img.Id)).ReturnsAsync(img);
         _images.Setup(r => r.GetByProductAsync(productId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<ProductImage> { img });
         _storage.Setup(s => s.DeleteAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("cloudinary down"));
 
-        var result = await CreateService().DeleteAsync(img.Id, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<bool> result = await CreateService().DeleteAsync(img.Id, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.IsSuccess.Should().BeTrue();
         _images.Verify(r => r.DeleteAsync(img), Times.Once);
@@ -188,15 +198,15 @@ public class ProductImageServiceTests
     public async Task DeleteAsync_PrimaryDeleted_PromotesNextImageToPrimary()
     {
         var productId = Guid.NewGuid();
-        var primary = Image(productId, 0, isPrimary: true);
-        var next = Image(productId, 1, isPrimary: false);
-        var third = Image(productId, 2, isPrimary: false);
+        ProductImage primary = Image(productId, 0, isPrimary: true);
+        ProductImage next = Image(productId, 1, isPrimary: false);
+        ProductImage third = Image(productId, 2, isPrimary: false);
         _images.Setup(r => r.GetByIdAsync(primary.Id)).ReturnsAsync(primary);
         // After deletion, listing returns the remaining images (service filters out the deleted id too).
         _images.Setup(r => r.GetByProductAsync(productId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<ProductImage> { next, third });
 
-        var result = await CreateService().DeleteAsync(primary.Id, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<bool> result = await CreateService().DeleteAsync(primary.Id, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.IsSuccess.Should().BeTrue();
         next.IsPrimary.Should().BeTrue();
@@ -208,11 +218,11 @@ public class ProductImageServiceTests
     public async Task DeleteAsync_NonPrimaryDeleted_DoesNotPromote()
     {
         var productId = Guid.NewGuid();
-        var primary = Image(productId, 0, isPrimary: true);
-        var target = Image(productId, 1, isPrimary: false);
+        ProductImage primary = Image(productId, 0, isPrimary: true);
+        ProductImage target = Image(productId, 1, isPrimary: false);
         _images.Setup(r => r.GetByIdAsync(target.Id)).ReturnsAsync(target);
 
-        var result = await CreateService().DeleteAsync(target.Id, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<bool> result = await CreateService().DeleteAsync(target.Id, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.IsSuccess.Should().BeTrue();
         primary.IsPrimary.Should().BeTrue();
@@ -225,7 +235,7 @@ public class ProductImageServiceTests
     {
         _images.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync((ProductImage?)null);
 
-        var result = await CreateService().DeleteAsync(Guid.NewGuid(), Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<bool> result = await CreateService().DeleteAsync(Guid.NewGuid(), Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.StatusCode.Should().Be(404);
         _images.Verify(r => r.DeleteAsync(It.IsAny<ProductImage>()), Times.Never);
@@ -237,15 +247,15 @@ public class ProductImageServiceTests
     public async Task ReorderAsync_UpdatesSortOrderToMatchProvidedOrder()
     {
         var productId = Guid.NewGuid();
-        var a = Image(productId, 0);
-        var b = Image(productId, 1);
-        var c = Image(productId, 2);
+        ProductImage a = Image(productId, 0);
+        ProductImage b = Image(productId, 1);
+        ProductImage c = Image(productId, 2);
         _products.Setup(r => r.GetByIdAsync(productId)).ReturnsAsync(Product(productId));
         _images.Setup(r => r.GetByProductAsync(productId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<ProductImage> { a, b, c });
 
         // Desired order: c, a, b
-        var result = await CreateService().ReorderAsync(productId,
+        ResponseData<bool> result = await CreateService().ReorderAsync(productId,
             new ReorderImagesRequest { Ids = new[] { c.Id, a.Id, b.Id } },
             Guid.NewGuid(), "127.0.0.1", "ua");
 
@@ -262,7 +272,7 @@ public class ProductImageServiceTests
         _products.Setup(r => r.GetByIdAsync(productId))
             .ReturnsAsync(new Product { Id = productId, TenantId = Guid.NewGuid() });
 
-        var result = await CreateService().ReorderAsync(productId,
+        ResponseData<bool> result = await CreateService().ReorderAsync(productId,
             new ReorderImagesRequest { Ids = new[] { Guid.NewGuid() } },
             Guid.NewGuid(), "127.0.0.1", "ua");
 
@@ -275,14 +285,14 @@ public class ProductImageServiceTests
     public async Task GetByProductAsync_ReturnsOrderedBySortOrder()
     {
         var productId = Guid.NewGuid();
-        var a = Image(productId, 2);
-        var b = Image(productId, 0);
-        var c = Image(productId, 1);
+        ProductImage a = Image(productId, 2);
+        ProductImage b = Image(productId, 0);
+        ProductImage c = Image(productId, 1);
         _products.Setup(r => r.GetByIdAsync(productId)).ReturnsAsync(Product(productId));
         _images.Setup(r => r.GetByProductAsync(productId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<ProductImage> { a, b, c });
 
-        var result = await CreateService().GetByProductAsync(productId);
+        ResponseData<IReadOnlyList<ProductImageResponse>> result = await CreateService().GetByProductAsync(productId);
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.Select(i => i.Id).Should().ContainInOrder(b.Id, c.Id, a.Id);

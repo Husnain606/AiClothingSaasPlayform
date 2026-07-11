@@ -28,20 +28,20 @@ public class WishlistService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<WishlistResponse>.Failure("Tenant could not be resolved.", 400);
 
-        var customer = await customerRepository.GetByIdAsync(customerId);
+        Customer? customer = await customerRepository.GetByIdAsync(customerId);
         if (customer is null || customer.TenantId != tenantId)
             return ResponseData<WishlistResponse>.Failure("Customer not found.", 404);
 
-        var wishlist = await wishlistRepository.GetByCustomerAsync(customerId, ct);
+        Wishlist? wishlist = await wishlistRepository.GetByCustomerAsync(customerId, ct);
         if (wishlist is null || wishlist.TenantId != tenantId)
             return ResponseData<WishlistResponse>.Failure("Wishlist not found.", 404);
 
         // Resolve product summaries once per distinct product to avoid N+1.
         var productIds = wishlist.Items.Select(i => i.ProductId).Distinct().ToList();
         var products = new Dictionary<Guid, Product>();
-        foreach (var pid in productIds)
+        foreach (Guid pid in productIds)
         {
-            var product = await productRepository.GetByIdWithDetailsAsync(pid, ct);
+            Product? product = await productRepository.GetByIdWithDetailsAsync(pid, ct);
             if (product is not null && product.TenantId == tenantId)
                 products[pid] = product;
         }
@@ -62,7 +62,7 @@ public class WishlistService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<bool>.Failure("Tenant could not be resolved.", 400);
 
-        var item = await wishlistRepository.GetItemAsync(itemId, ct);
+        WishlistItem? item = await wishlistRepository.GetItemAsync(itemId, ct);
         if (item is null || item.TenantId != tenantId)
             return ResponseData<bool>.Failure("Wishlist item not found.", 404);
 

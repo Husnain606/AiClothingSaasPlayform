@@ -1,6 +1,7 @@
 using FashionSaaS.Application.Orders.DTOs;
 using FashionSaaS.Application.Orders.Validators;
 using FluentAssertions;
+using FluentValidation.Results;
 
 namespace FashionSaaS.Application.Tests.Orders;
 
@@ -33,10 +34,10 @@ public class CreateOrderRequestValidatorTests
     [Fact]
     public async Task MaskedCardNumber_IsAccepted()
     {
-        var request = ValidRequest();
+        CreateOrderRequest request = ValidRequest();
         request.PaymentInfo.CardNumber = "****1111";
 
-        var result = await _validator.ValidateAsync(request);
+        ValidationResult result = await _validator.ValidateAsync(request);
 
         result.IsValid.Should().BeTrue();
     }
@@ -44,10 +45,10 @@ public class CreateOrderRequestValidatorTests
     [Fact]
     public async Task ExactlyFourDigitCardNumber_IsAccepted()
     {
-        var request = ValidRequest();
+        CreateOrderRequest request = ValidRequest();
         request.PaymentInfo.CardNumber = "1111";
 
-        var result = await _validator.ValidateAsync(request);
+        ValidationResult result = await _validator.ValidateAsync(request);
 
         result.IsValid.Should().BeTrue();
     }
@@ -55,10 +56,10 @@ public class CreateOrderRequestValidatorTests
     [Fact]
     public async Task FullSixteenDigitPan_IsRejected()
     {
-        var request = ValidRequest();
+        CreateOrderRequest request = ValidRequest();
         request.PaymentInfo.CardNumber = "4111111111111111";
 
-        var result = await _validator.ValidateAsync(request);
+        ValidationResult result = await _validator.ValidateAsync(request);
 
         result.IsValid.Should().BeFalse();
         result.Errors.Should().Contain(e => e.ErrorMessage == "Full card numbers must not be sent; provide the masked form.");
@@ -67,10 +68,10 @@ public class CreateOrderRequestValidatorTests
     [Fact]
     public async Task EmptyItems_IsRejected()
     {
-        var request = ValidRequest();
+        CreateOrderRequest request = ValidRequest();
         request.Items = [];
 
-        var result = await _validator.ValidateAsync(request);
+        ValidationResult result = await _validator.ValidateAsync(request);
 
         result.IsValid.Should().BeFalse();
     }
@@ -78,10 +79,10 @@ public class CreateOrderRequestValidatorTests
     [Fact]
     public async Task ItemQuantityLessThanOne_IsRejected()
     {
-        var request = ValidRequest();
+        CreateOrderRequest request = ValidRequest();
         request.Items = [new CreateOrderItemRequest { ProductId = Guid.NewGuid(), Quantity = 0 }];
 
-        var result = await _validator.ValidateAsync(request);
+        ValidationResult result = await _validator.ValidateAsync(request);
 
         result.IsValid.Should().BeFalse();
     }
@@ -89,10 +90,10 @@ public class CreateOrderRequestValidatorTests
     [Fact]
     public async Task BadEmail_IsRejected()
     {
-        var request = ValidRequest();
+        CreateOrderRequest request = ValidRequest();
         request.ShippingAddress.Email = "not-an-email";
 
-        var result = await _validator.ValidateAsync(request);
+        ValidationResult result = await _validator.ValidateAsync(request);
 
         result.IsValid.Should().BeFalse();
     }
@@ -100,10 +101,10 @@ public class CreateOrderRequestValidatorTests
     [Fact]
     public async Task EmptyShippingField_IsRejected()
     {
-        var request = ValidRequest();
+        CreateOrderRequest request = ValidRequest();
         request.ShippingAddress.Street = "";
 
-        var result = await _validator.ValidateAsync(request);
+        ValidationResult result = await _validator.ValidateAsync(request);
 
         result.IsValid.Should().BeFalse();
     }
@@ -111,10 +112,10 @@ public class CreateOrderRequestValidatorTests
     [Fact]
     public async Task CountryNotTwoLetters_IsRejected()
     {
-        var request = ValidRequest();
+        CreateOrderRequest request = ValidRequest();
         request.ShippingAddress.Country = "QAT";
 
-        var result = await _validator.ValidateAsync(request);
+        ValidationResult result = await _validator.ValidateAsync(request);
 
         result.IsValid.Should().BeFalse();
     }
@@ -122,10 +123,10 @@ public class CreateOrderRequestValidatorTests
     [Fact]
     public async Task EmptyCardholderName_IsRejected()
     {
-        var request = ValidRequest();
+        CreateOrderRequest request = ValidRequest();
         request.PaymentInfo.CardholderName = "";
 
-        var result = await _validator.ValidateAsync(request);
+        ValidationResult result = await _validator.ValidateAsync(request);
 
         result.IsValid.Should().BeFalse();
     }

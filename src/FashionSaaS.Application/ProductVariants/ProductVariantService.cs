@@ -28,7 +28,7 @@ public class ProductVariantService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<VariantResponse>.Failure("Tenant could not be resolved.", 400);
 
-        var product = await productRepository.GetByIdAsync(request.ProductId);
+        Product? product = await productRepository.GetByIdAsync(request.ProductId);
         if (product is null || product.TenantId != tenantId)
             return ResponseData<VariantResponse>.Failure("Product not found.", 404);
 
@@ -37,8 +37,10 @@ public class ProductVariantService(
 
         // (Product, Size, Color) must be unique within the product — DB-side check (§6).
         if (await variantRepository.SizeColorExistsAsync(request.ProductId, request.Size, request.Color, null, ct))
+        {
             return ResponseData<VariantResponse>.Failure(
                 $"A variant with size '{request.Size}' and color '{request.Color}' already exists for this product.", 409);
+        }
 
         var variant = new ProductVariant
         {
@@ -71,11 +73,11 @@ public class ProductVariantService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<VariantResponse>.Failure("Tenant could not be resolved.", 400);
 
-        var variant = await variantRepository.GetByIdAsync(id);
+        ProductVariant? variant = await variantRepository.GetByIdAsync(id);
         if (variant is null || variant.TenantId != tenantId)
             return ResponseData<VariantResponse>.Failure("Variant not found.", 404);
 
-        var product = await productRepository.GetByIdAsync(variant.ProductId);
+        Product? product = await productRepository.GetByIdAsync(variant.ProductId);
         if (product is null || product.TenantId != tenantId)
             return ResponseData<VariantResponse>.Failure("Product not found.", 404);
 
@@ -84,8 +86,10 @@ public class ProductVariantService(
 
         // (Product, Size, Color) uniqueness, excluding the variant being updated — DB-side check (§6).
         if (await variantRepository.SizeColorExistsAsync(variant.ProductId, request.Size, request.Color, id, ct))
+        {
             return ResponseData<VariantResponse>.Failure(
                 $"A variant with size '{request.Size}' and color '{request.Color}' already exists for this product.", 409);
+        }
 
         var old = new { variant.Size, variant.Color, variant.Sku, variant.IsActive, variant.PriceOverride };
         variant.Size = request.Size;
@@ -112,7 +116,7 @@ public class ProductVariantService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<bool>.Failure("Tenant could not be resolved.", 400);
 
-        var variant = await variantRepository.GetByIdAsync(id);
+        ProductVariant? variant = await variantRepository.GetByIdAsync(id);
         if (variant is null || variant.TenantId != tenantId)
             return ResponseData<bool>.Failure("Variant not found.", 404);
 
@@ -135,7 +139,7 @@ public class ProductVariantService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<bool>.Failure("Tenant could not be resolved.", 400);
 
-        var variant = await variantRepository.GetByIdAsync(id);
+        ProductVariant? variant = await variantRepository.GetByIdAsync(id);
         if (variant is null || variant.TenantId != tenantId)
             return ResponseData<bool>.Failure("Variant not found.", 404);
 
@@ -155,11 +159,11 @@ public class ProductVariantService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<IReadOnlyList<VariantResponse>>.Failure("Tenant could not be resolved.", 400);
 
-        var product = await productRepository.GetByIdAsync(productId);
+        Product? product = await productRepository.GetByIdAsync(productId);
         if (product is null || product.TenantId != tenantId)
             return ResponseData<IReadOnlyList<VariantResponse>>.Failure("Product not found.", 404);
 
-        var variants = await variantRepository.GetByProductAsync(productId, ct);
+        IReadOnlyList<ProductVariant> variants = await variantRepository.GetByProductAsync(productId, ct);
         // All variants belong to the same product, so resolve effective price against one base price.
         var responses = variants.Select(v => MapToResponse(v, product.BasePrice)).ToList();
         return ResponseData<IReadOnlyList<VariantResponse>>.Success(responses);

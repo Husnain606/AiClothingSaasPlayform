@@ -2,6 +2,7 @@ using FashionSaaS.API.Constants;
 using FashionSaaS.Application.Common;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Application.Subscriptions;
+using FashionSaaS.Application.Subscriptions.DTOs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -11,7 +12,7 @@ namespace FashionSaaS.API.Controllers.Tenant;
 [ApiController]
 [Authorize(Roles = "AdminOwner")]
 [EnableRateLimiting("AuthenticatedPolicy")]
-public class TenantSubscriptionController(SubscriptionService subscriptionService, ICurrentTenantService currentTenant) : ControllerBase
+internal class TenantSubscriptionController(SubscriptionService subscriptionService, ICurrentTenantService currentTenant) : ControllerBase
 {
     /// <summary>
     /// Returns the active subscription for the current tenant.
@@ -22,7 +23,7 @@ public class TenantSubscriptionController(SubscriptionService subscriptionServic
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Get()
     {
-        var response = await subscriptionService.GetByTenantAsync(currentTenant.TenantId!.Value);
+        ResponseData<SubscriptionResponse> response = await subscriptionService.GetByTenantAsync(currentTenant.TenantId!.Value);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -36,10 +37,11 @@ public class TenantSubscriptionController(SubscriptionService subscriptionServic
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetPayments()
     {
-        var sub = await subscriptionService.GetByTenantAsync(currentTenant.TenantId!.Value);
-        if (!sub.IsSuccess) return StatusCode(sub.StatusCode, sub);
+        ResponseData<SubscriptionResponse> sub = await subscriptionService.GetByTenantAsync(currentTenant.TenantId!.Value);
+        if (!sub.IsSuccess)
+            return StatusCode(sub.StatusCode, sub);
 
-        var payments = await subscriptionService.GetPaymentsBySubscriptionAsync(sub.Data!.Id);
+        ResponseData<IReadOnlyList<PaymentResponse>> payments = await subscriptionService.GetPaymentsBySubscriptionAsync(sub.Data!.Id);
         return StatusCode(payments.StatusCode, payments);
     }
 }

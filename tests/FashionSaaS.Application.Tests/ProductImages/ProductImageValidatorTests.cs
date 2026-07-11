@@ -1,6 +1,7 @@
 using FashionSaaS.Application.ProductImages.DTOs;
 using FashionSaaS.Application.ProductImages.Validators;
 using FluentAssertions;
+using FluentValidation.Results;
 
 namespace FashionSaaS.Application.Tests.ProductImages;
 
@@ -17,7 +18,7 @@ public class ProductImageValidatorTests
     [Fact]
     public void Upload_EmptyProductId_Fails()
     {
-        var result = _upload.Validate(new UploadImageRequest { ProductId = Guid.Empty });
+        ValidationResult result = _upload.Validate(new UploadImageRequest { ProductId = Guid.Empty });
         result.Errors.Should().Contain(e => e.PropertyName == nameof(UploadImageRequest.ProductId));
     }
 
@@ -29,7 +30,7 @@ public class ProductImageValidatorTests
     [Fact]
     public void Upload_AltTextOver500_Fails()
     {
-        var result = _upload.Validate(new UploadImageRequest
+        ValidationResult result = _upload.Validate(new UploadImageRequest
         {
             ProductId = Guid.NewGuid(),
             AltText = new string('a', 501)
@@ -45,7 +46,7 @@ public class ProductImageValidatorTests
     [Fact]
     public void Reorder_EmptyIds_Fails()
     {
-        var result = _reorder.Validate(new ReorderImagesRequest { Ids = [] });
+        ValidationResult result = _reorder.Validate(new ReorderImagesRequest { Ids = [] });
         result.Errors.Should().Contain(e => e.PropertyName == nameof(ReorderImagesRequest.Ids));
     }
 }

@@ -15,7 +15,7 @@ public class CustomerRepository(ApplicationDbContext context)
 
     public async Task<(IReadOnlyList<Customer> Items, int Total)> GetPagedAsync(CustomerFilter filter, CancellationToken ct = default)
     {
-        var query = DbSet
+        IQueryable<Customer> query = DbSet
             .AsNoTracking()
             .AsQueryable()
             .Where(c => c.TenantId == filter.TenantId);
@@ -31,7 +31,7 @@ public class CustomerRepository(ApplicationDbContext context)
 
         var total = await query.CountAsync(ct);
 
-        var items = await query
+        List<Customer> items = await query
             .OrderByDescending(c => c.CreatedAt)
             .Skip((filter.Page - 1) * filter.PageSize)
             .Take(filter.PageSize)
@@ -43,14 +43,19 @@ public class CustomerRepository(ApplicationDbContext context)
     public async Task<Customer> GetOrCreateByEmailAsync(Guid tenantId, string email,
         string firstName, string lastName, string? phone, CancellationToken ct = default)
     {
-        var existing = await DbSet
+        Customer? existing = await DbSet
             .FirstOrDefaultAsync(c => c.TenantId == tenantId && c.Email == email, ct);
-        if (existing is not null) return existing;
+        if (existing is not null)
+            return existing;
 
         var customer = new Customer
         {
-            TenantId = tenantId, Email = email,
-            FirstName = firstName, LastName = lastName, Phone = phone, IsActive = true
+            TenantId = tenantId,
+            Email = email,
+            FirstName = firstName,
+            LastName = lastName,
+            Phone = phone,
+            IsActive = true
         };
         await DbSet.AddAsync(customer, ct);
         return customer;

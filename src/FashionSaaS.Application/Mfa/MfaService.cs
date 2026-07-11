@@ -17,12 +17,12 @@ public class MfaService(
 {
     public async Task<ResponseData<MfaSetupResponse>> SetupAsync(Guid userId)
     {
-        var user = await userRepository.GetByIdWithRolesAsync(userId);
+        User? user = await userRepository.GetByIdWithRolesAsync(userId);
         if (user is null)
             return ResponseData<MfaSetupResponse>.Failure("User not found.", 404);
 
         var issuer = jwtOptions.Value.Issuer is { Length: > 0 } iss ? iss : "FashionSaaS";
-        var (secret, qrUrl) = totpService.GenerateSetup(user.Email, issuer);
+        (var secret, var qrUrl) = totpService.GenerateSetup(user.Email, issuer);
 
         if (user.MfaSettings is null)
         {
@@ -54,7 +54,7 @@ public class MfaService(
 
     public async Task<ResponseData<IReadOnlyList<string>>> VerifySetupAsync(Guid userId, string totpCode)
     {
-        var user = await userRepository.GetByIdWithRolesAsync(userId);
+        User? user = await userRepository.GetByIdWithRolesAsync(userId);
         if (user?.MfaSettings is null)
             return ResponseData<IReadOnlyList<string>>.Failure("MFA setup not started.", 400);
 
@@ -62,7 +62,7 @@ public class MfaService(
         if (!totpService.Verify(secret, totpCode))
             return ResponseData<IReadOnlyList<string>>.Failure("Invalid TOTP code.", 400);
 
-        var rawCodes = totpService.GenerateBackupCodes();
+        IReadOnlyList<string> rawCodes = totpService.GenerateBackupCodes();
         user.MfaSettings.IsEnabled = true;
         user.MfaSettings.IsEnrolled = true;
         user.MfaSettings.BackupCodes.Clear();
@@ -84,11 +84,11 @@ public class MfaService(
 
     public async Task<ResponseData<IReadOnlyList<string>>> RegenerateBackupCodesAsync(Guid userId)
     {
-        var user = await userRepository.GetByIdWithRolesAsync(userId);
+        User? user = await userRepository.GetByIdWithRolesAsync(userId);
         if (user?.MfaSettings is null || !user.MfaSettings.IsEnrolled)
             return ResponseData<IReadOnlyList<string>>.Failure("MFA not enrolled.", 400);
 
-        var rawCodes = totpService.GenerateBackupCodes();
+        IReadOnlyList<string> rawCodes = totpService.GenerateBackupCodes();
         user.MfaSettings.BackupCodes.Clear();
         foreach (var code in rawCodes)
         {

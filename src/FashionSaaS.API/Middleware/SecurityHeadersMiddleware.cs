@@ -1,6 +1,6 @@
 namespace FashionSaaS.API.Middleware;
 
-public class SecurityHeadersMiddleware(RequestDelegate next)
+internal class SecurityHeadersMiddleware(RequestDelegate next)
 {
     public async Task InvokeAsync(HttpContext context)
     {

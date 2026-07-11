@@ -2,6 +2,7 @@ using System.Security.Claims;
 using FashionSaaS.API.Constants;
 using FashionSaaS.Application.Common;
 using FashionSaaS.Application.Mfa;
+using FashionSaaS.Application.Mfa.DTOs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -11,7 +12,7 @@ namespace FashionSaaS.API.Controllers.Admin;
 [ApiController]
 [Authorize(Roles = "SuperAdmin")]
 [EnableRateLimiting("SuperAdminPolicy")]
-public class MfaController(MfaService mfaService) : ControllerBase
+internal class MfaController(MfaService mfaService) : ControllerBase
 {
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
@@ -21,7 +22,7 @@ public class MfaController(MfaService mfaService) : ControllerBase
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Setup()
     {
-        var response = await mfaService.SetupAsync(UserId);
+        ResponseData<MfaSetupResponse> response = await mfaService.SetupAsync(UserId);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -31,7 +32,7 @@ public class MfaController(MfaService mfaService) : ControllerBase
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> VerifySetup([FromBody] VerifySetupRequest request)
     {
-        var response = await mfaService.VerifySetupAsync(UserId, request.Code);
+        ResponseData<IReadOnlyList<string>> response = await mfaService.VerifySetupAsync(UserId, request.Code);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -42,9 +43,9 @@ public class MfaController(MfaService mfaService) : ControllerBase
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> RegenerateBackupCodes()
     {
-        var response = await mfaService.RegenerateBackupCodesAsync(UserId);
+        ResponseData<IReadOnlyList<string>> response = await mfaService.RegenerateBackupCodesAsync(UserId);
         return StatusCode(response.StatusCode, response);
     }
 
-    public record VerifySetupRequest(string Code);
+    internal record VerifySetupRequest(string Code);
 }

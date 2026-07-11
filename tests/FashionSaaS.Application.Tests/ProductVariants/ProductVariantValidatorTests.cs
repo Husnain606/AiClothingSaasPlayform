@@ -1,6 +1,7 @@
 using FashionSaaS.Application.ProductVariants.DTOs;
 using FashionSaaS.Application.ProductVariants.Validators;
 using FluentAssertions;
+using FluentValidation.Results;
 
 namespace FashionSaaS.Application.Tests.ProductVariants;
 
@@ -11,7 +12,11 @@ public class ProductVariantValidatorTests
 
     private static AddVariantRequest ValidAdd() => new()
     {
-        ProductId = Guid.NewGuid(), Size = "M", Color = "Red", Sku = "SKU-1", StockQuantity = 1
+        ProductId = Guid.NewGuid(),
+        Size = "M",
+        Color = "Red",
+        Sku = "SKU-1",
+        StockQuantity = 1
     };
 
     [Fact]
@@ -20,7 +25,7 @@ public class ProductVariantValidatorTests
     [Fact]
     public void Add_BlankSize_Fails()
     {
-        var req = ValidAdd();
+        AddVariantRequest req = ValidAdd();
         req.Size = "";
         _add.Validate(req).Errors.Should().Contain(e => e.PropertyName == nameof(AddVariantRequest.Size));
     }
@@ -28,7 +33,7 @@ public class ProductVariantValidatorTests
     [Fact]
     public void Add_BlankSku_Fails()
     {
-        var req = ValidAdd();
+        AddVariantRequest req = ValidAdd();
         req.Sku = "";
         _add.Validate(req).Errors.Should().Contain(e => e.PropertyName == nameof(AddVariantRequest.Sku));
     }
@@ -36,7 +41,7 @@ public class ProductVariantValidatorTests
     [Fact]
     public void Add_NegativeStock_Fails()
     {
-        var req = ValidAdd();
+        AddVariantRequest req = ValidAdd();
         req.StockQuantity = -1;
         _add.Validate(req).Errors.Should().Contain(e => e.PropertyName == nameof(AddVariantRequest.StockQuantity));
     }
@@ -44,7 +49,7 @@ public class ProductVariantValidatorTests
     [Fact]
     public void Add_NegativePriceOverride_Fails()
     {
-        var req = ValidAdd();
+        AddVariantRequest req = ValidAdd();
         req.PriceOverride = -0.01m;
         _add.Validate(req).Errors.Should().Contain(e => e.PropertyName == nameof(AddVariantRequest.PriceOverride));
     }
@@ -52,7 +57,7 @@ public class ProductVariantValidatorTests
     [Fact]
     public void Add_NullPriceOverride_Passes()
     {
-        var req = ValidAdd();
+        AddVariantRequest req = ValidAdd();
         req.PriceOverride = null;
         _add.Validate(req).IsValid.Should().BeTrue();
     }
@@ -60,7 +65,7 @@ public class ProductVariantValidatorTests
     [Fact]
     public void Update_BlankColor_Fails()
     {
-        var result = _update.Validate(new UpdateVariantRequest { Size = "M", Color = "", Sku = "SKU-1" });
+        ValidationResult result = _update.Validate(new UpdateVariantRequest { Size = "M", Color = "", Sku = "SKU-1" });
         result.Errors.Should().Contain(e => e.PropertyName == nameof(UpdateVariantRequest.Color));
     }
 
@@ -75,7 +80,7 @@ public class ProductVariantValidatorTests
     public void Update_StockQuantity_NotAccepted_OnUpdateRequest()
     {
         // UpdateVariantRequest must not carry StockQuantity — stock changes go through the ledger only.
-        var props = typeof(UpdateVariantRequest).GetProperties().Select(p => p.Name);
+        IEnumerable<string> props = typeof(UpdateVariantRequest).GetProperties().Select(p => p.Name);
         props.Should().NotContain(nameof(AddVariantRequest.StockQuantity),
             "stock must only change via InventoryService.AdjustStock (ledger-only)");
     }

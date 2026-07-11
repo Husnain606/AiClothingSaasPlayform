@@ -32,15 +32,15 @@ public class ProductImageService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<ProductImageResponse>.Failure("Tenant could not be resolved.", 400);
 
-        var product = await productRepository.GetByIdAsync(request.ProductId);
+        Product? product = await productRepository.GetByIdAsync(request.ProductId);
         if (product is null || product.TenantId != tenantId)
             return ResponseData<ProductImageResponse>.Failure("Product not found.", 404);
 
         // Cloudinary assets are namespaced per tenant/product so deletes and listings stay scoped.
         var folder = $"tenants/{tenantId}/products/{request.ProductId}";
-        var (publicId, url) = await imageStorage.UploadAsync(content, fileName, folder, ct);
+        (var publicId, var url) = await imageStorage.UploadAsync(content, fileName, folder, ct);
 
-        var existing = await imageRepository.GetByProductAsync(request.ProductId, ct);
+        IReadOnlyList<ProductImage> existing = await imageRepository.GetByProductAsync(request.ProductId, ct);
         var isFirst = existing.Count == 0;
 
         var image = new ProductImage
@@ -75,12 +75,12 @@ public class ProductImageService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<bool>.Failure("Tenant could not be resolved.", 400);
 
-        var image = await imageRepository.GetByIdAsync(id);
+        ProductImage? image = await imageRepository.GetByIdAsync(id);
         if (image is null || image.TenantId != tenantId)
             return ResponseData<bool>.Failure("Image not found.", 404);
 
         var wasPrimary = image.IsPrimary;
-        var productId = image.ProductId;
+        Guid productId = image.ProductId;
         var publicId = image.CloudinaryPublicId;
 
         // Remove the DB row first and commit — this must succeed regardless of the storage outcome.
@@ -104,6 +104,10 @@ public class ProductImageService(
 
         // Best-effort storage delete. CloudinaryImageStorageService logs failures internally; a
         // storage error must not surface as a failure here since the DB row is already gone.
+        // CA1031 suppressed deliberately: any storage-provider exception (network, auth, 4xx/5xx)
+        // must be swallowed here by design, not just specific ones — the DB row deletion already
+        // succeeded and is the source of truth.
+#pragma warning disable CA1031
         try
         {
             await imageStorage.DeleteAsync(publicId, ct);
@@ -114,6 +118,7 @@ public class ProductImageService(
                 "Cloudinary delete failed for publicId {PublicId} (image {ImageId}); DB row already removed",
                 publicId, id);
         }
+#pragma warning restore CA1031
 
         await auditLogService.LogAsync(deletedByUserId, tenantId, "ProductImageDeleted", "ProductImage", id,
             new { productId, wasPrimary }, null, ipAddress, userAgent);
@@ -129,12 +134,12 @@ public class ProductImageService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<bool>.Failure("Tenant could not be resolved.", 400);
 
-        var image = await imageRepository.GetByIdAsync(request.ImageId);
+        ProductImage? image = await imageRepository.GetByIdAsync(request.ImageId);
         if (image is null || image.TenantId != tenantId)
             return ResponseData<bool>.Failure("Image not found.", 404);
 
-        var images = await imageRepository.GetByProductAsync(image.ProductId, ct);
-        foreach (var img in images)
+        IReadOnlyList<ProductImage> images = await imageRepository.GetByProductAsync(image.ProductId, ct);
+        foreach (ProductImage img in images)
         {
             var shouldBePrimary = img.Id == image.Id;
             if (img.IsPrimary != shouldBePrimary)
@@ -167,7 +172,7 @@ public class ProductImageService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<bool>.Failure("Tenant could not be resolved.", 400);
 
-        var product = await productRepository.GetByIdAsync(productId);
+        Product? product = await productRepository.GetByIdAsync(productId);
         if (product is null || product.TenantId != tenantId)
             return ResponseData<bool>.Failure("Product not found.", 404);
 
@@ -175,7 +180,7 @@ public class ProductImageService(
 
         for (var index = 0; index < request.Ids.Count; index++)
         {
-            if (images.TryGetValue(request.Ids[index], out var image) && image.SortOrder != index)
+            if (images.TryGetValue(request.Ids[index], out ProductImage? image) && image.SortOrder != index)
             {
                 image.SortOrder = index;
                 await imageRepository.UpdateAsync(image);
@@ -197,11 +202,11 @@ public class ProductImageService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<IReadOnlyList<ProductImageResponse>>.Failure("Tenant could not be resolved.", 400);
 
-        var product = await productRepository.GetByIdAsync(productId);
+        Product? product = await productRepository.GetByIdAsync(productId);
         if (product is null || product.TenantId != tenantId)
             return ResponseData<IReadOnlyList<ProductImageResponse>>.Failure("Product not found.", 404);
 
-        var images = await imageRepository.GetByProductAsync(productId, ct);
+        IReadOnlyList<ProductImage> images = await imageRepository.GetByProductAsync(productId, ct);
         var responses = images.OrderBy(i => i.SortOrder).Select(MapToResponse).ToList();
         return ResponseData<IReadOnlyList<ProductImageResponse>>.Success(responses);
     }

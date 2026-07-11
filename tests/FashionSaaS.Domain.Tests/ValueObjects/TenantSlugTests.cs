@@ -11,7 +11,7 @@ public class TenantSlugTests
     [InlineData("brand123")]
     public void ValidSlug_CreatesSuccessfully(string slug)
     {
-        var act = () => new TenantSlug(slug);
+        Func<TenantSlug> act = () => new TenantSlug(slug);
         act.Should().NotThrow();
     }
 
@@ -23,7 +23,7 @@ public class TenantSlugTests
     [InlineData("a-very-long-slug-that-exceeds-the-fifty-character-maximum-limit")] // >50 chars
     public void InvalidSlug_ThrowsArgumentException(string slug)
     {
-        var act = () => new TenantSlug(slug);
+        Func<TenantSlug> act = () => new TenantSlug(slug);
         act.Should().Throw<ArgumentException>();
     }
 

@@ -10,7 +10,7 @@ public class ReviewRepository(ApplicationDbContext context)
 {
     public async Task<(IReadOnlyList<Review> Items, int Total)> GetPagedAsync(ReviewFilter filter, CancellationToken ct = default)
     {
-        var query = DbSet
+        IQueryable<Review> query = DbSet
             .AsNoTracking()
             .AsQueryable()
             .Where(r => r.TenantId == filter.TenantId);
@@ -23,7 +23,7 @@ public class ReviewRepository(ApplicationDbContext context)
 
         var total = await query.CountAsync(ct);
 
-        var items = await query
+        List<Review> items = await query
             .OrderByDescending(r => r.CreatedAt)
             .Skip((filter.Page - 1) * filter.PageSize)
             .Take(filter.PageSize)

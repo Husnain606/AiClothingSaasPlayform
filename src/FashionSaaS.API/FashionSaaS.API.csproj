@@ -4,6 +4,10 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- NU1701: transitively resolves OtpSharp/Base32 (.NET-Framework-only packages) via the
+         Infrastructure project reference — see the justification on those PackageReference
+         entries in FashionSaaS.Infrastructure.csproj. — 2026-07-11 -->
+    <NoWarn>$(NoWarn);NU1701</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

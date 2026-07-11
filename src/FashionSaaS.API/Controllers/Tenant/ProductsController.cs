@@ -12,7 +12,7 @@ namespace FashionSaaS.API.Controllers.Tenant;
 [ApiController]
 [Authorize(Roles = "AdminOwner,StoreManager,ContentManager")]
 [EnableRateLimiting("AuthenticatedPolicy")]
-public class ProductsController(ProductService productService) : ControllerBase
+internal class ProductsController(ProductService productService) : ControllerBase
 {
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     private string Ip => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
@@ -24,7 +24,7 @@ public class ProductsController(ProductService productService) : ControllerBase
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetAll([FromQuery] ProductFilter filter)
     {
-        var response = await productService.GetAllAsync(filter);
+        ResponseData<PagedResult<ProductResponse>> response = await productService.GetAllAsync(filter);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -34,7 +34,7 @@ public class ProductsController(ProductService productService) : ControllerBase
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetById(Guid id)
     {
-        var response = await productService.GetByIdAsync(id);
+        ResponseData<ProductResponse> response = await productService.GetByIdAsync(id);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -44,7 +44,7 @@ public class ProductsController(ProductService productService) : ControllerBase
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetBySlug(string slug)
     {
-        var response = await productService.GetBySlugAsync(slug);
+        ResponseData<ProductResponse> response = await productService.GetBySlugAsync(slug);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -54,7 +54,7 @@ public class ProductsController(ProductService productService) : ControllerBase
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Create([FromBody] CreateProductRequest request)
     {
-        var response = await productService.CreateAsync(request, UserId, Ip, Ua);
+        ResponseData<ProductResponse> response = await productService.CreateAsync(request, UserId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -64,7 +64,7 @@ public class ProductsController(ProductService productService) : ControllerBase
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateProductRequest request)
     {
-        var response = await productService.UpdateAsync(id, request, UserId, Ip, Ua);
+        ResponseData<ProductResponse> response = await productService.UpdateAsync(id, request, UserId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -74,7 +74,7 @@ public class ProductsController(ProductService productService) : ControllerBase
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Publish(Guid id)
     {
-        var response = await productService.PublishAsync(id, UserId, Ip, Ua);
+        ResponseData<ProductResponse> response = await productService.PublishAsync(id, UserId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -84,7 +84,7 @@ public class ProductsController(ProductService productService) : ControllerBase
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Archive(Guid id)
     {
-        var response = await productService.ArchiveAsync(id, UserId, Ip, Ua);
+        ResponseData<ProductResponse> response = await productService.ArchiveAsync(id, UserId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -94,7 +94,7 @@ public class ProductsController(ProductService productService) : ControllerBase
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Delete(Guid id)
     {
-        var response = await productService.DeleteAsync(id, UserId, Ip, Ua);
+        ResponseData<bool> response = await productService.DeleteAsync(id, UserId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 }

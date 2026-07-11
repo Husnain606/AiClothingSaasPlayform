@@ -11,14 +11,14 @@ namespace FashionSaaS.Infrastructure.Tests.Repositories;
 
 public class CustomerRepositoryTests
 {
-    private Guid _tenantId = Guid.NewGuid();
+    private readonly Guid _tenantId = Guid.NewGuid();
 
     private ApplicationDbContext CreateContext()
     {
         var currentTenant = new Mock<ICurrentTenantService>();
         currentTenant.Setup(c => c.TenantId).Returns(_tenantId);
 
-        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+        DbContextOptions<ApplicationDbContext> options = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
         return new ApplicationDbContext(options, currentTenant.Object);
@@ -27,7 +27,7 @@ public class CustomerRepositoryTests
     [Fact]
     public async Task EmailExistsAsync_ExistingEmail_ReturnsTrue()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         var customer = new Customer
         {
             TenantId = _tenantId,
@@ -48,7 +48,7 @@ public class CustomerRepositoryTests
     [Fact]
     public async Task EmailExistsAsync_NonExistentEmail_ReturnsFalse()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
 
         var repo = new CustomerRepository(ctx);
         var exists = await repo.EmailExistsAsync(_tenantId, "notfound@example.com");
@@ -59,7 +59,7 @@ public class CustomerRepositoryTests
     [Fact]
     public async Task EmailExistsAsync_ExcludeId_IgnoresSpecificCustomer()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         var customer = new Customer
         {
             TenantId = _tenantId,
@@ -80,8 +80,8 @@ public class CustomerRepositoryTests
     [Fact]
     public async Task GetPagedAsync_WithPagination_ReturnsPaginatedResults()
     {
-        await using var ctx = CreateContext();
-        for (int i = 1; i <= 5; i++)
+        await using ApplicationDbContext ctx = CreateContext();
+        for (var i = 1; i <= 5; i++)
         {
             var customer = new Customer
             {
@@ -102,7 +102,7 @@ public class CustomerRepositoryTests
             Page = 1,
             PageSize = 2
         };
-        var (items, total) = await repo.GetPagedAsync(filter);
+        (IReadOnlyList<Customer>? items, var total) = await repo.GetPagedAsync(filter);
 
         items.Should().HaveCount(2);
         total.Should().Be(5);
@@ -111,7 +111,7 @@ public class CustomerRepositoryTests
     [Fact]
     public async Task GetPagedAsync_WithSearchTerm_FiltersResults()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         var john = new Customer
         {
             TenantId = _tenantId,
@@ -139,17 +139,17 @@ public class CustomerRepositoryTests
             Page = 1,
             PageSize = 20
         };
-        var (items, total) = await repo.GetPagedAsync(filter);
+        (IReadOnlyList<Customer>? items, var total) = await repo.GetPagedAsync(filter);
 
         items.Should().HaveCount(1);
         total.Should().Be(1);
-        items.First().FirstName.Should().Be("John");
+        items[0].FirstName.Should().Be("John");
     }
 
     [Fact]
     public async Task GetPagedAsync_DifferentTenant_ReturnsNoResults()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         var otherTenantId = Guid.NewGuid();
         var customer = new Customer
         {
@@ -169,7 +169,7 @@ public class CustomerRepositoryTests
             Page = 1,
             PageSize = 20
         };
-        var (items, total) = await repo.GetPagedAsync(filter);
+        (IReadOnlyList<Customer>? items, var total) = await repo.GetPagedAsync(filter);
 
         items.Should().BeEmpty();
         total.Should().Be(0);
@@ -178,14 +178,14 @@ public class CustomerRepositoryTests
     [Fact]
     public async Task GetOrCreateByEmailAsync_CreatesThenReuses()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         var repo = new CustomerRepository(ctx);
 
-        var first = await repo.GetOrCreateByEmailAsync(_tenantId, "jane@x.com", "Jane", "Doe", null);
+        Customer first = await repo.GetOrCreateByEmailAsync(_tenantId, "jane@x.com", "Jane", "Doe", null);
         await ctx.SaveChangesAsync();
-        var second = await repo.GetOrCreateByEmailAsync(_tenantId, "jane@x.com", "Jane", "Doe", null);
+        Customer second = await repo.GetOrCreateByEmailAsync(_tenantId, "jane@x.com", "Jane", "Doe", null);
 
         second.Id.Should().Be(first.Id);
-        ctx.Customers.Count(c => c.Email == "jane@x.com").Should().Be(1);
+        (await ctx.Customers.CountAsync(c => c.Email == "jane@x.com")).Should().Be(1);
     }
 }

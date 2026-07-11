@@ -11,8 +11,11 @@ public class DiscountValidatorTests
 
     private static CreateDiscountRequest Valid() => new()
     {
-        Code = "SAVE10", Type = DiscountType.Percentage, Value = 10,
-        StartsAt = new DateTime(2026, 1, 1), EndsAt = new DateTime(2026, 2, 1)
+        Code = "SAVE10",
+        Type = DiscountType.Percentage,
+        Value = 10,
+        StartsAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+        EndsAt = new DateTime(2026, 2, 1, 0, 0, 0, DateTimeKind.Utc)
     };
 
     [Fact]
@@ -21,21 +24,25 @@ public class DiscountValidatorTests
     [Fact]
     public void BlankCode_Fails()
     {
-        var req = Valid(); req.Code = "";
+        CreateDiscountRequest req = Valid();
+        req.Code = "";
         _create.Validate(req).Errors.Should().Contain(e => e.PropertyName == nameof(CreateDiscountRequest.Code));
     }
 
     [Fact]
     public void ValueZero_Fails()
     {
-        var req = Valid(); req.Value = 0;
+        CreateDiscountRequest req = Valid();
+        req.Value = 0;
         _create.Validate(req).Errors.Should().Contain(e => e.PropertyName == nameof(CreateDiscountRequest.Value));
     }
 
     [Fact]
     public void PercentageOver100_Fails()
     {
-        var req = Valid(); req.Type = DiscountType.Percentage; req.Value = 150;
+        CreateDiscountRequest req = Valid();
+        req.Type = DiscountType.Percentage;
+        req.Value = 150;
         _create.Validate(req).Errors.Should().Contain(e => e.PropertyName == nameof(CreateDiscountRequest.Value));
     }
 
@@ -43,30 +50,34 @@ public class DiscountValidatorTests
     public void FixedAmountOver100_Passes()
     {
         // The ≤100 cap is percentage-only; a fixed-amount discount may exceed 100.
-        var req = Valid(); req.Type = DiscountType.FixedAmount; req.Value = 150;
+        CreateDiscountRequest req = Valid();
+        req.Type = DiscountType.FixedAmount;
+        req.Value = 150;
         _create.Validate(req).IsValid.Should().BeTrue();
     }
 
     [Fact]
     public void StartsAtAfterEndsAt_Fails()
     {
-        var req = Valid();
-        req.StartsAt = new DateTime(2026, 3, 1);
-        req.EndsAt = new DateTime(2026, 2, 1);
+        CreateDiscountRequest req = Valid();
+        req.StartsAt = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc);
+        req.EndsAt = new DateTime(2026, 2, 1, 0, 0, 0, DateTimeKind.Utc);
         _create.Validate(req).Errors.Should().Contain(e => e.PropertyName == nameof(CreateDiscountRequest.StartsAt));
     }
 
     [Fact]
     public void NegativeMinOrderAmount_Fails()
     {
-        var req = Valid(); req.MinOrderAmount = -1;
+        CreateDiscountRequest req = Valid();
+        req.MinOrderAmount = -1;
         _create.Validate(req).Errors.Should().Contain(e => e.PropertyName == nameof(CreateDiscountRequest.MinOrderAmount));
     }
 
     [Fact]
     public void MaxRedemptionsZero_Fails()
     {
-        var req = Valid(); req.MaxRedemptions = 0;
+        CreateDiscountRequest req = Valid();
+        req.MaxRedemptions = 0;
         _create.Validate(req).Errors.Should().Contain(e => e.PropertyName == nameof(CreateDiscountRequest.MaxRedemptions));
     }
 }

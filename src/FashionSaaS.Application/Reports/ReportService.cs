@@ -24,7 +24,13 @@ public class ReportService(
 
     public Task<ResponseData<List<TopProductDto>>> GetTopProductsAsync(DateTime from, DateTime to, int take, string by, CancellationToken ct = default)
     {
+        // CA1308 suppressed: normalizedBy flows into reportRepository.GetTopProductsAsync,
+        // where it's compared/queried against lowercase-stored values — flipping to
+        // ToUpperInvariant here without also verifying every downstream consumer risks a
+        // silent query-matching regression outside this method's visibility.
+#pragma warning disable CA1308
         var normalizedBy = by?.Trim().ToLowerInvariant();
+#pragma warning restore CA1308
         if (normalizedBy is not ("revenue" or "units"))
             return Task.FromResult(ResponseData<List<TopProductDto>>.Failure("'by' must be 'revenue' or 'units'.", 400));
         if (take < 1)
@@ -54,7 +60,7 @@ public class ReportService(
         if (ReportRangeValidator.Validate(from, to) is { } error)
             return ResponseData<T>.Failure(error, 400);
 
-        var data = await query(tenantId);
+        T? data = await query(tenantId);
         logger.LogInformation("Report {Report} generated for tenant {TenantId} ({From:u}..{To:u})", report, tenantId, from, to);
         return ResponseData<T>.Success(data);
     }

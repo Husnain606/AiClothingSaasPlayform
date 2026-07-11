@@ -13,7 +13,7 @@ namespace FashionSaaS.API.Controllers.Admin;
 [Authorize(Roles = "SuperAdmin")]
 [Authorize(Policy = "MfaVerified")]
 [EnableRateLimiting("SuperAdminPolicy")]
-public class TenantsController(TenantService tenantService) : ControllerBase
+internal class TenantsController(TenantService tenantService) : ControllerBase
 {
     private Guid AdminId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     private string Ip => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
@@ -25,7 +25,7 @@ public class TenantsController(TenantService tenantService) : ControllerBase
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetAll([FromQuery] TenantFilterRequest filter)
     {
-        var response = await tenantService.GetAllAsync(filter);
+        ResponseData<PagedResult<TenantResponse>> response = await tenantService.GetAllAsync(filter);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -35,7 +35,7 @@ public class TenantsController(TenantService tenantService) : ControllerBase
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetById(Guid id)
     {
-        var response = await tenantService.GetByIdAsync(id);
+        ResponseData<TenantResponse> response = await tenantService.GetByIdAsync(id);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -45,7 +45,7 @@ public class TenantsController(TenantService tenantService) : ControllerBase
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Create([FromBody] CreateTenantRequest request)
     {
-        var response = await tenantService.CreateAsync(request, AdminId, Ip, Ua);
+        ResponseData<TenantResponse> response = await tenantService.CreateAsync(request, AdminId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -55,7 +55,7 @@ public class TenantsController(TenantService tenantService) : ControllerBase
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateTenantRequest request)
     {
-        var response = await tenantService.UpdateAsync(id, request, AdminId, Ip, Ua);
+        ResponseData<TenantResponse> response = await tenantService.UpdateAsync(id, request, AdminId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -65,7 +65,7 @@ public class TenantsController(TenantService tenantService) : ControllerBase
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Suspend(Guid id)
     {
-        var response = await tenantService.SuspendAsync(id, AdminId, Ip, Ua);
+        ResponseData<bool> response = await tenantService.SuspendAsync(id, AdminId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -75,7 +75,7 @@ public class TenantsController(TenantService tenantService) : ControllerBase
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Activate(Guid id)
     {
-        var response = await tenantService.ActivateAsync(id, AdminId, Ip, Ua);
+        ResponseData<bool> response = await tenantService.ActivateAsync(id, AdminId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -85,7 +85,7 @@ public class TenantsController(TenantService tenantService) : ControllerBase
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Delete(Guid id)
     {
-        var response = await tenantService.DeleteAsync(id, AdminId, Ip, Ua);
+        ResponseData<bool> response = await tenantService.DeleteAsync(id, AdminId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 }

@@ -12,7 +12,7 @@ namespace FashionSaaS.API.Controllers.Admin;
 [Authorize(Roles = "SuperAdmin")]
 [Authorize(Policy = "MfaVerified")]
 [EnableRateLimiting("SuperAdminPolicy")]
-public class LoginAttemptsController(LoginAttemptService loginAttemptService) : ControllerBase
+internal class LoginAttemptsController(LoginAttemptService loginAttemptService) : ControllerBase
 {
     [HttpGet(ApiUrl.AdminLoginAttempts.GetAll)]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -20,7 +20,7 @@ public class LoginAttemptsController(LoginAttemptService loginAttemptService) : 
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetAll([FromQuery] LoginAttemptFilterRequest filter)
     {
-        var response = await loginAttemptService.GetByEmailAsync(filter);
+        ResponseData<PagedResult<LoginAttemptResponse>> response = await loginAttemptService.GetByEmailAsync(filter);
         return StatusCode(response.StatusCode, response);
     }
 }

@@ -11,9 +11,13 @@ using Microsoft.OpenApi;
 using Serilog;
 using Serilog.Events;
 
-var builder = WebApplication.CreateBuilder(args);
+WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 // ── Serilog ──────────────────────────────────────────────────────────────────
+// CA1305 suppressed: Serilog's WriteTo.Console()/File() sink configuration overloads used
+// here don't expose a caller-supplied IFormatProvider parameter — the analyzer's match is
+// against Serilog's own internal formatting, not something this call site can address.
+#pragma warning disable CA1305
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Information()
     .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
@@ -23,6 +27,7 @@ Log.Logger = new LoggerConfiguration()
     .WriteTo.Console()
     .WriteTo.File("logs/fashionsaas-.txt", rollingInterval: RollingInterval.Day)
     .CreateLogger();
+#pragma warning restore CA1305
 
 builder.Host.UseSerilog();
 
@@ -98,7 +103,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("FashionSaaSCors", policy =>
     {
-        var corsSettings = builder.Configuration
+        CorsSettings? corsSettings = builder.Configuration
             .GetSection(CorsSettings.SectionName)
             .Get<CorsSettings>();
         var allowed = corsSettings?.AllowedOrigins is { Length: > 0 }
@@ -112,7 +117,7 @@ builder.Services.AddCors(options =>
     });
 });
 
-var app = builder.Build();
+WebApplication app = builder.Build();
 
 // ── Middleware pipeline — ORDER MATTERS ───────────────────────────────────────
 app.UseHttpsRedirection();
@@ -154,4 +159,4 @@ if (app.Environment.IsDevelopment())
 
 app.MapControllers();
 
-app.Run();
+await app.RunAsync();

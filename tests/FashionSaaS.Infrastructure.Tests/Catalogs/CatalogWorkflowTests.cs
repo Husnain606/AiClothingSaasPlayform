@@ -1,6 +1,8 @@
 using FashionSaaS.Application.Categories;
 using FashionSaaS.Application.Categories.DTOs;
+using FashionSaaS.Application.Common;
 using FashionSaaS.Application.Interfaces;
+using FashionSaaS.Domain.Entities;
 using FashionSaaS.Infrastructure.Persistence;
 using FashionSaaS.Infrastructure.Persistence.Repositories;
 using FluentAssertions;
@@ -12,17 +14,17 @@ namespace FashionSaaS.Infrastructure.Tests.Catalogs;
 
 public class CatalogWorkflowTests
 {
-    private Guid _tenantId = Guid.NewGuid();
-    private Guid _userId = Guid.NewGuid();
-    private string _ipAddress = "127.0.0.1";
-    private string _userAgent = "test-agent";
+    private readonly Guid _tenantId = Guid.NewGuid();
+    private readonly Guid _userId = Guid.NewGuid();
+    private readonly string _ipAddress = "127.0.0.1";
+    private readonly string _userAgent = "test-agent";
 
     private ApplicationDbContext CreateContext()
     {
         var currentTenant = new Mock<ICurrentTenantService>();
         currentTenant.Setup(c => c.TenantId).Returns(_tenantId);
 
-        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+        DbContextOptions<ApplicationDbContext> options = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
         return new ApplicationDbContext(options, currentTenant.Object);
@@ -46,8 +48,8 @@ public class CatalogWorkflowTests
     [Fact]
     public async Task CreateCategory_ValidRequest_SavesAndReturnsSuccess()
     {
-        await using var ctx = CreateContext();
-        var (service, _, _) = GetCategoryDependencies(ctx);
+        await using ApplicationDbContext ctx = CreateContext();
+        (CategoryService? service, CategoryRepository _, IUnitOfWork _) = GetCategoryDependencies(ctx);
 
         var request = new CreateCategoryRequest
         {
@@ -57,22 +59,22 @@ public class CatalogWorkflowTests
             SortOrder = 1
         };
 
-        var response = await service.CreateAsync(request, _userId, _ipAddress, _userAgent);
+        ResponseData<CategoryResponse> response = await service.CreateAsync(request, _userId, _ipAddress, _userAgent);
 
         response.StatusCode.Should().Be(201);
         response.IsSuccess.Should().BeTrue();
         response.Data.Should().NotBeNull();
         response.Data!.Name.Should().Be("Apparel");
 
-        var saved = await ctx.Categories.FirstOrDefaultAsync(c => c.Slug == "apparel");
+        Category? saved = await ctx.Categories.FirstOrDefaultAsync(c => c.Slug == "apparel");
         saved.Should().NotBeNull();
     }
 
     [Fact]
     public async Task CreateCategory_DuplicateSlug_Returns409()
     {
-        await using var ctx = CreateContext();
-        var (service, _, _) = GetCategoryDependencies(ctx);
+        await using ApplicationDbContext ctx = CreateContext();
+        (CategoryService? service, CategoryRepository _, IUnitOfWork _) = GetCategoryDependencies(ctx);
 
         var request1 = new CreateCategoryRequest
         {
@@ -80,7 +82,7 @@ public class CatalogWorkflowTests
             Slug = "apparel",
             SortOrder = 1
         };
-        var response1 = await service.CreateAsync(request1, _userId, _ipAddress, _userAgent);
+        ResponseData<CategoryResponse> response1 = await service.CreateAsync(request1, _userId, _ipAddress, _userAgent);
         response1.StatusCode.Should().Be(201);
 
         var request2 = new CreateCategoryRequest
@@ -89,7 +91,7 @@ public class CatalogWorkflowTests
             Slug = "apparel",
             SortOrder = 2
         };
-        var response2 = await service.CreateAsync(request2, _userId, _ipAddress, _userAgent);
+        ResponseData<CategoryResponse> response2 = await service.CreateAsync(request2, _userId, _ipAddress, _userAgent);
 
         response2.StatusCode.Should().Be(409);
         response2.IsSuccess.Should().BeFalse();
@@ -98,8 +100,8 @@ public class CatalogWorkflowTests
     [Fact]
     public async Task CreateCategoryWithParent_ValidParent_SavesHierarchy()
     {
-        await using var ctx = CreateContext();
-        var (service, _, _) = GetCategoryDependencies(ctx);
+        await using ApplicationDbContext ctx = CreateContext();
+        (CategoryService? service, CategoryRepository _, IUnitOfWork _) = GetCategoryDependencies(ctx);
 
         var parentRequest = new CreateCategoryRequest
         {
@@ -107,9 +109,9 @@ public class CatalogWorkflowTests
             Slug = "apparel",
             SortOrder = 1
         };
-        var parentResponse = await service.CreateAsync(parentRequest, _userId, _ipAddress, _userAgent);
+        ResponseData<CategoryResponse> parentResponse = await service.CreateAsync(parentRequest, _userId, _ipAddress, _userAgent);
         parentResponse.StatusCode.Should().Be(201);
-        var parentId = parentResponse.Data!.Id;
+        Guid parentId = parentResponse.Data!.Id;
 
         var childRequest = new CreateCategoryRequest
         {
@@ -118,10 +120,10 @@ public class CatalogWorkflowTests
             ParentCategoryId = parentId,
             SortOrder = 1
         };
-        var childResponse = await service.CreateAsync(childRequest, _userId, _ipAddress, _userAgent);
+        ResponseData<CategoryResponse> childResponse = await service.CreateAsync(childRequest, _userId, _ipAddress, _userAgent);
 
         childResponse.StatusCode.Should().Be(201);
-        var saved = await ctx.Categories.FirstOrDefaultAsync(c => c.Slug == "shirts");
+        Category? saved = await ctx.Categories.FirstOrDefaultAsync(c => c.Slug == "shirts");
         saved.Should().NotBeNull();
         saved!.ParentCategoryId.Should().Be(parentId);
     }

@@ -14,8 +14,8 @@ public class RefreshTokenRepository(ApplicationDbContext context)
 
     public async Task RevokeAllByUserIdAsync(Guid userId)
     {
-        var tokens = await DbSet.Where(r => r.UserId == userId && !r.IsRevoked).ToListAsync();
-        foreach (var token in tokens)
+        List<RefreshToken> tokens = await DbSet.Where(r => r.UserId == userId && !r.IsRevoked).ToListAsync();
+        foreach (RefreshToken? token in tokens)
         {
             token.IsRevoked = true;
             token.RevokedAt = DateTime.UtcNow;

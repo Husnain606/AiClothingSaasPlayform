@@ -12,7 +12,7 @@ namespace FashionSaaS.API.Controllers.Tenant;
 [ApiController]
 [Authorize(Roles = "AdminOwner,StoreManager,ContentManager")]
 [EnableRateLimiting("AuthenticatedPolicy")]
-public class ProductVariantsController(ProductVariantService variantService) : ControllerBase
+internal class ProductVariantsController(ProductVariantService variantService) : ControllerBase
 {
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     private string Ip => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
@@ -24,7 +24,7 @@ public class ProductVariantsController(ProductVariantService variantService) : C
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetByProduct(Guid productId)
     {
-        var response = await variantService.GetByProductAsync(productId);
+        ResponseData<IReadOnlyList<VariantResponse>> response = await variantService.GetByProductAsync(productId);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -34,7 +34,7 @@ public class ProductVariantsController(ProductVariantService variantService) : C
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Add([FromBody] AddVariantRequest request)
     {
-        var response = await variantService.AddAsync(request, UserId, Ip, Ua);
+        ResponseData<VariantResponse> response = await variantService.AddAsync(request, UserId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -44,7 +44,7 @@ public class ProductVariantsController(ProductVariantService variantService) : C
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateVariantRequest request)
     {
-        var response = await variantService.UpdateAsync(id, request, UserId, Ip, Ua);
+        ResponseData<VariantResponse> response = await variantService.UpdateAsync(id, request, UserId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -54,7 +54,7 @@ public class ProductVariantsController(ProductVariantService variantService) : C
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Deactivate(Guid id)
     {
-        var response = await variantService.DeactivateAsync(id, UserId, Ip, Ua);
+        ResponseData<bool> response = await variantService.DeactivateAsync(id, UserId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -64,7 +64,7 @@ public class ProductVariantsController(ProductVariantService variantService) : C
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Delete(Guid id)
     {
-        var response = await variantService.DeleteAsync(id, UserId, Ip, Ua);
+        ResponseData<bool> response = await variantService.DeleteAsync(id, UserId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 }

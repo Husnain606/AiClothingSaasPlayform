@@ -8,7 +8,7 @@ public static class SpecificationEvaluator<T> where T : BaseEntity
 {
     public static IQueryable<T> GetQuery(IQueryable<T> input, ISpecification<T> spec)
     {
-        var query = input;
+        IQueryable<T> query = input;
 
         if (spec.Criteria is not null)
             query = query.Where(spec.Criteria);

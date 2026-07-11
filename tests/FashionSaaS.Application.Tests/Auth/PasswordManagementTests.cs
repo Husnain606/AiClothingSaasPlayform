@@ -1,5 +1,6 @@
 using FashionSaaS.Application.Auth;
 using FashionSaaS.Application.Auth.DTOs;
+using FashionSaaS.Application.Common;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Domain.Entities;
 using FluentAssertions;
@@ -37,8 +38,8 @@ public class PasswordManagementTests
     {
         _userRepo.Setup(r => r.GetByEmailAsync("nobody@test.com")).ReturnsAsync((User?)null);
 
-        var service = CreateService();
-        var result = await service.ForgotPasswordAsync("nobody@test.com", "https://app.test", _resetTokenRepo.Object);
+        AuthService service = CreateService();
+        ResponseData<bool> result = await service.ForgotPasswordAsync("nobody@test.com", "https://app.test", _resetTokenRepo.Object);
 
         result.IsSuccess.Should().BeTrue();
         // Both branches return the same message to prevent user enumeration
@@ -56,8 +57,8 @@ public class PasswordManagementTests
         _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
         _emailService.Setup(e => e.SendPasswordResetAsync(user.Email, It.IsAny<string>())).Returns(Task.CompletedTask);
 
-        var service = CreateService();
-        var result = await service.ForgotPasswordAsync("user@test.com", "https://app.test", _resetTokenRepo.Object);
+        AuthService service = CreateService();
+        ResponseData<bool> result = await service.ForgotPasswordAsync("user@test.com", "https://app.test", _resetTokenRepo.Object);
 
         result.IsSuccess.Should().BeTrue();
         // Known-email path returns the SAME message as unknown-email — prevents user enumeration
@@ -82,7 +83,7 @@ public class PasswordManagementTests
             .Callback<PasswordResetToken>(t => capturedToken = t)
             .Returns(Task.CompletedTask);
 
-        var service = CreateService();
+        AuthService service = CreateService();
         await service.ForgotPasswordAsync("user@test.com", "https://app.test", _resetTokenRepo.Object);
 
         capturedToken.Should().NotBeNull();
@@ -99,8 +100,8 @@ public class PasswordManagementTests
     [Fact]
     public async Task ResetPasswordAsync_WeakPassword_ReturnsFailure()
     {
-        var service = CreateService();
-        var result = await service.ResetPasswordAsync(
+        AuthService service = CreateService();
+        ResponseData<bool> result = await service.ResetPasswordAsync(
             new ResetPasswordRequest { Token = "tok", NewPassword = "weak" },
             _resetTokenRepo.Object, _historyRepo.Object);
 
@@ -115,8 +116,8 @@ public class PasswordManagementTests
         _resetTokenRepo.Setup(r => r.GetValidByHashAsync(It.IsAny<string>()))
             .ReturnsAsync((PasswordResetToken?)null);
 
-        var service = CreateService();
-        var result = await service.ResetPasswordAsync(
+        AuthService service = CreateService();
+        ResponseData<bool> result = await service.ResetPasswordAsync(
             new ResetPasswordRequest { Token = "badtoken", NewPassword = "Password@1" },
             _resetTokenRepo.Object, _historyRepo.Object);
 
@@ -142,8 +143,8 @@ public class PasswordManagementTests
         _historyRepo.Setup(r => r.GetLastNAsync(userId, 5)).ReturnsAsync(history);
         _passwordHasher.Setup(h => h.Verify("Password@1", "previoushash")).Returns(true);
 
-        var service = CreateService();
-        var result = await service.ResetPasswordAsync(
+        AuthService service = CreateService();
+        ResponseData<bool> result = await service.ResetPasswordAsync(
             new ResetPasswordRequest { Token = "validtoken", NewPassword = "Password@1" },
             _resetTokenRepo.Object, _historyRepo.Object);
 
@@ -169,8 +170,8 @@ public class PasswordManagementTests
         _refreshRepo.Setup(r => r.RevokeAllByUserIdAsync(userId)).Returns(Task.CompletedTask);
         _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
 
-        var service = CreateService();
-        var result = await service.ResetPasswordAsync(
+        AuthService service = CreateService();
+        ResponseData<bool> result = await service.ResetPasswordAsync(
             new ResetPasswordRequest { Token = "validtoken", NewPassword = "Password@1" },
             _resetTokenRepo.Object, _historyRepo.Object);
 
@@ -188,8 +189,8 @@ public class PasswordManagementTests
     [Fact]
     public async Task ChangePasswordAsync_WeakPassword_ReturnsFailure()
     {
-        var service = CreateService();
-        var result = await service.ChangePasswordAsync(Guid.NewGuid(),
+        AuthService service = CreateService();
+        ResponseData<bool> result = await service.ChangePasswordAsync(Guid.NewGuid(),
             new ChangePasswordRequest { CurrentPassword = "Current@1", NewPassword = "weak" },
             _historyRepo.Object);
 
@@ -205,8 +206,8 @@ public class PasswordManagementTests
         _userRepo.Setup(r => r.GetByIdAsync(userId)).ReturnsAsync(user);
         _passwordHasher.Setup(h => h.Verify("WrongCurrent@1", "hash")).Returns(false);
 
-        var service = CreateService();
-        var result = await service.ChangePasswordAsync(userId,
+        AuthService service = CreateService();
+        ResponseData<bool> result = await service.ChangePasswordAsync(userId,
             new ChangePasswordRequest { CurrentPassword = "WrongCurrent@1", NewPassword = "NewPass@1" },
             _historyRepo.Object);
 
@@ -226,8 +227,8 @@ public class PasswordManagementTests
         _historyRepo.Setup(r => r.GetLastNAsync(userId, 5)).ReturnsAsync(history);
         _passwordHasher.Setup(h => h.Verify("NewPass@1", "oldhash")).Returns(true);
 
-        var service = CreateService();
-        var result = await service.ChangePasswordAsync(userId,
+        AuthService service = CreateService();
+        ResponseData<bool> result = await service.ChangePasswordAsync(userId,
             new ChangePasswordRequest { CurrentPassword = "Current@1", NewPassword = "NewPass@1" },
             _historyRepo.Object);
 
@@ -249,8 +250,8 @@ public class PasswordManagementTests
         _refreshRepo.Setup(r => r.RevokeAllByUserIdAsync(userId)).Returns(Task.CompletedTask);
         _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
 
-        var service = CreateService();
-        var result = await service.ChangePasswordAsync(userId,
+        AuthService service = CreateService();
+        ResponseData<bool> result = await service.ChangePasswordAsync(userId,
             new ChangePasswordRequest { CurrentPassword = "Current@1", NewPassword = "NewPass@1" },
             _historyRepo.Object);
 

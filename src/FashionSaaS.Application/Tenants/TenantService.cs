@@ -16,7 +16,8 @@ public class TenantService(
     public async Task<ResponseData<TenantResponse>> CreateAsync(CreateTenantRequest request,
         Guid createdByUserId, string ipAddress, string userAgent)
     {
-        try { _ = new TenantSlug(request.Slug); }
+        try
+        { _ = new TenantSlug(request.Slug); }
         catch (ArgumentException)
         {
             return ResponseData<TenantResponse>.Failure("Slug must be lowercase alphanumeric with hyphens.", 400);
@@ -52,7 +53,7 @@ public class TenantService(
     public async Task<ResponseData<TenantResponse>> UpdateAsync(Guid id, UpdateTenantRequest request,
         Guid updatedByUserId, string ipAddress, string userAgent)
     {
-        var tenant = await tenantRepository.GetByIdAsync(id);
+        Tenant? tenant = await tenantRepository.GetByIdAsync(id);
         if (tenant is null)
             return ResponseData<TenantResponse>.Failure("Tenant not found.", 404);
 
@@ -73,7 +74,7 @@ public class TenantService(
 
     public async Task<ResponseData<TenantResponse>> GetByIdAsync(Guid id)
     {
-        var tenant = await tenantRepository.GetByIdAsync(id);
+        Tenant? tenant = await tenantRepository.GetByIdAsync(id);
         if (tenant is null)
             return ResponseData<TenantResponse>.Failure("Tenant not found.", 404);
         return ResponseData<TenantResponse>.Success(MapToResponse(tenant));
@@ -81,11 +82,14 @@ public class TenantService(
 
     public async Task<ResponseData<PagedResult<TenantResponse>>> GetAllAsync(TenantFilterRequest filter)
     {
-        var tenants = await tenantRepository.GetAllAsync();
-        var filtered = tenants.AsEnumerable();
+        IReadOnlyList<Tenant> tenants = await tenantRepository.GetAllAsync();
+        IEnumerable<Tenant> filtered = tenants.AsEnumerable();
         if (!string.IsNullOrEmpty(filter.Search))
+        {
             filtered = filtered.Where(t => t.Name.Contains(filter.Search, StringComparison.OrdinalIgnoreCase)
                 || t.Slug.Contains(filter.Search, StringComparison.OrdinalIgnoreCase));
+        }
+
         if (filter.IsActive.HasValue)
             filtered = filtered.Where(t => t.IsActive == filter.IsActive.Value);
 
@@ -104,14 +108,14 @@ public class TenantService(
     public async Task<ResponseData<bool>> SuspendAsync(Guid id, Guid adminUserId,
         string ipAddress, string userAgent)
     {
-        var tenant = await tenantRepository.GetByIdAsync(id);
+        Tenant? tenant = await tenantRepository.GetByIdAsync(id);
         if (tenant is null)
             return ResponseData<bool>.Failure("Tenant not found.", 404);
 
         if (!tenant.IsActive)
             return ResponseData<bool>.Failure("Tenant is already suspended.", 409);
 
-        bool wasActive = tenant.IsActive;
+        var wasActive = tenant.IsActive;
         tenant.IsActive = false;
         tenant.AddDomainEvent(new TenantSuspendedEvent(tenant.Id, tenant.Email));
         await tenantRepository.UpdateAsync(tenant);
@@ -127,14 +131,14 @@ public class TenantService(
     public async Task<ResponseData<bool>> ActivateAsync(Guid id, Guid adminUserId,
         string ipAddress, string userAgent)
     {
-        var tenant = await tenantRepository.GetByIdAsync(id);
+        Tenant? tenant = await tenantRepository.GetByIdAsync(id);
         if (tenant is null)
             return ResponseData<bool>.Failure("Tenant not found.", 404);
 
         if (tenant.IsActive)
             return ResponseData<bool>.Failure("Tenant is already active.", 409);
 
-        bool wasActive = tenant.IsActive;
+        var wasActive = tenant.IsActive;
         tenant.IsActive = true;
         tenant.AddDomainEvent(new TenantActivatedEvent(tenant.Id, tenant.Email));
         await tenantRepository.UpdateAsync(tenant);
@@ -149,7 +153,7 @@ public class TenantService(
     public async Task<ResponseData<bool>> DeleteAsync(Guid id, Guid adminUserId,
         string ipAddress, string userAgent)
     {
-        var tenant = await tenantRepository.GetByIdAsync(id);
+        Tenant? tenant = await tenantRepository.GetByIdAsync(id);
         if (tenant is null)
             return ResponseData<bool>.Failure("Tenant not found.", 404);
 
@@ -164,7 +168,13 @@ public class TenantService(
 
     private static TenantResponse MapToResponse(Tenant t) => new()
     {
-        Id = t.Id, Name = t.Name, Slug = t.Slug, Email = t.Email,
-        Phone = t.Phone, LogoUrl = t.LogoUrl, IsActive = t.IsActive, CreatedAt = t.CreatedAt
+        Id = t.Id,
+        Name = t.Name,
+        Slug = t.Slug,
+        Email = t.Email,
+        Phone = t.Phone,
+        LogoUrl = t.LogoUrl,
+        IsActive = t.IsActive,
+        CreatedAt = t.CreatedAt
     };
 }

@@ -61,7 +61,7 @@ public class DiscountService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<DiscountResponse>.Failure("Tenant could not be resolved.", 400);
 
-        var discount = await discountRepository.GetByIdAsync(id);
+        Discount? discount = await discountRepository.GetByIdAsync(id);
         if (discount is null || discount.TenantId != tenantId)
             return ResponseData<DiscountResponse>.Failure("Discount not found.", 404);
 
@@ -95,7 +95,7 @@ public class DiscountService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<bool>.Failure("Tenant could not be resolved.", 400);
 
-        var discount = await discountRepository.GetByIdAsync(id);
+        Discount? discount = await discountRepository.GetByIdAsync(id);
         if (discount is null || discount.TenantId != tenantId)
             return ResponseData<bool>.Failure("Discount not found.", 404);
 
@@ -118,7 +118,7 @@ public class DiscountService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<bool>.Failure("Tenant could not be resolved.", 400);
 
-        var discount = await discountRepository.GetByIdAsync(id);
+        Discount? discount = await discountRepository.GetByIdAsync(id);
         if (discount is null || discount.TenantId != tenantId)
             return ResponseData<bool>.Failure("Discount not found.", 404);
 
@@ -141,7 +141,7 @@ public class DiscountService(
         // Enforce tenant scope regardless of the inbound filter value.
         filter.TenantId = tenantId;
 
-        var (items, total) = await discountRepository.GetPagedAsync(filter, ct);
+        (IReadOnlyList<Discount>? items, var total) = await discountRepository.GetPagedAsync(filter, ct);
 
         var page = new PagedResult<DiscountResponse>
         {
@@ -159,7 +159,7 @@ public class DiscountService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<DiscountResponse>.Failure("Tenant could not be resolved.", 400);
 
-        var discount = await discountRepository.GetByIdAsync(id);
+        Discount? discount = await discountRepository.GetByIdAsync(id);
         if (discount is null || discount.TenantId != tenantId)
             return ResponseData<DiscountResponse>.Failure("Discount not found.", 404);
 
@@ -171,7 +171,7 @@ public class DiscountService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<DiscountResponse>.Failure("Tenant could not be resolved.", 400);
 
-        var discount = await discountRepository.GetByCodeAsync(tenantId, code, ct);
+        Discount? discount = await discountRepository.GetByCodeAsync(tenantId, code, ct);
         if (discount is null)
             return ResponseData<DiscountResponse>.Failure("Discount not found.", 404);
 

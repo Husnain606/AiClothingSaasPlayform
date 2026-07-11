@@ -14,7 +14,7 @@ public class SuperAdminIpGuardService(ILoginAttemptRepository loginAttemptReposi
     /// </summary>
     public async Task<bool> IsNewIpAsync(string email, string currentIp)
     {
-        var knownIps = await loginAttemptRepository.GetRecentIpsByUserEmailAsync(email, 20);
-        return !knownIps.Contains(currentIp);
+        IReadOnlyList<string> knownIps = await loginAttemptRepository.GetRecentIpsByUserEmailAsync(email, 20);
+        return !knownIps.Contains(currentIp, StringComparer.Ordinal);
     }
 }

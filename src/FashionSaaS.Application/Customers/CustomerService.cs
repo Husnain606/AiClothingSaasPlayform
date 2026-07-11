@@ -55,7 +55,7 @@ public class CustomerService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<CustomerResponse>.Failure("Tenant could not be resolved.", 400);
 
-        var customer = await customerRepository.GetByIdAsync(id);
+        Customer? customer = await customerRepository.GetByIdAsync(id);
         if (customer is null || customer.TenantId != tenantId)
             return ResponseData<CustomerResponse>.Failure("Customer not found.", 404);
 
@@ -85,7 +85,7 @@ public class CustomerService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<bool>.Failure("Tenant could not be resolved.", 400);
 
-        var customer = await customerRepository.GetByIdAsync(id);
+        Customer? customer = await customerRepository.GetByIdAsync(id);
         if (customer is null || customer.TenantId != tenantId)
             return ResponseData<bool>.Failure("Customer not found.", 404);
 
@@ -111,7 +111,7 @@ public class CustomerService(
         // Enforce tenant scope regardless of the inbound filter value.
         filter.TenantId = tenantId;
 
-        var (items, total) = await customerRepository.GetPagedAsync(filter, ct);
+        (IReadOnlyList<Customer>? items, var total) = await customerRepository.GetPagedAsync(filter, ct);
 
         var page = new PagedResult<CustomerResponse>
         {
@@ -129,7 +129,7 @@ public class CustomerService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<CustomerResponse>.Failure("Tenant could not be resolved.", 400);
 
-        var customer = await customerRepository.GetByIdAsync(id);
+        Customer? customer = await customerRepository.GetByIdAsync(id);
         if (customer is null || customer.TenantId != tenantId)
             return ResponseData<CustomerResponse>.Failure("Customer not found.", 404);
 

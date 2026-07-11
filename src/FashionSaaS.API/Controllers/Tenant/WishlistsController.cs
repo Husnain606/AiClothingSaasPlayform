@@ -2,6 +2,7 @@ using System.Security.Claims;
 using FashionSaaS.API.Constants;
 using FashionSaaS.Application.Common;
 using FashionSaaS.Application.Wishlists;
+using FashionSaaS.Application.Wishlists.DTOs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -11,7 +12,7 @@ namespace FashionSaaS.API.Controllers.Tenant;
 [ApiController]
 [Authorize(Roles = "AdminOwner,StoreManager")]
 [EnableRateLimiting("AuthenticatedPolicy")]
-public class WishlistsController(WishlistService wishlistService) : ControllerBase
+internal class WishlistsController(WishlistService wishlistService) : ControllerBase
 {
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     private string Ip => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
@@ -23,7 +24,7 @@ public class WishlistsController(WishlistService wishlistService) : ControllerBa
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetByCustomer(Guid customerId)
     {
-        var response = await wishlistService.GetByCustomerAsync(customerId);
+        ResponseData<WishlistResponse> response = await wishlistService.GetByCustomerAsync(customerId);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -33,7 +34,7 @@ public class WishlistsController(WishlistService wishlistService) : ControllerBa
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> RemoveItem(Guid itemId)
     {
-        var response = await wishlistService.RemoveItemAsync(itemId, UserId, Ip, Ua);
+        ResponseData<bool> response = await wishlistService.RemoveItemAsync(itemId, UserId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 }

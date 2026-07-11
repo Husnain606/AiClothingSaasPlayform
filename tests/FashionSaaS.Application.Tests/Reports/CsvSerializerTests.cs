@@ -10,7 +10,7 @@ public class CsvSerializerTests
     [Fact]
     public void Serialize_WritesHeaderAndRows_InvariantCulture()
     {
-        var rows = new[] { new Row("Tee", 1234.5m, new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc)) };
+        Row[] rows = new[] { new Row("Tee", 1234.5m, new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc)) };
         var csv = CsvSerializer.Serialize(rows);
         var lines = csv.TrimEnd().Split('\n').Select(l => l.TrimEnd('\r')).ToArray();
         lines[0].Should().Be("Name,Amount,When");
@@ -20,7 +20,7 @@ public class CsvSerializerTests
     [Fact]
     public void Serialize_QuotesFieldsWithCommasAndQuotes()
     {
-        var rows = new[] { new Row("Tee, \"Large\"", 1m, DateTime.UtcNow) };
+        Row[] rows = new[] { new Row("Tee, \"Large\"", 1m, DateTime.UtcNow) };
         var csv = CsvSerializer.Serialize(rows);
         csv.Should().Contain("\"Tee, \"\"Large\"\"\"");
     }

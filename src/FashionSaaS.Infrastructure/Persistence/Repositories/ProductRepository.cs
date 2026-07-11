@@ -35,7 +35,7 @@ public class ProductRepository(ApplicationDbContext context)
 
     public async Task<(IReadOnlyList<Product> Items, int Total)> GetPagedAsync(ProductFilter filter, CancellationToken ct = default)
     {
-        var query = DbSet
+        IQueryable<Product> query = DbSet
             .AsNoTracking()
             .AsQueryable()
             .Where(p => p.TenantId == filter.TenantId);
@@ -51,7 +51,7 @@ public class ProductRepository(ApplicationDbContext context)
 
         var total = await query.CountAsync(ct);
 
-        var items = await query
+        List<Product> items = await query
             .OrderBy(p => p.Name)
             .Skip((filter.Page - 1) * filter.PageSize)
             .Take(filter.PageSize)

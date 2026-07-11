@@ -1,13 +1,14 @@
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace FashionSaaS.Infrastructure.Persistence.Repositories;
 
 public class GenericRepository<T>(ApplicationDbContext context) : IGenericRepository<T> where T : BaseEntity
 {
-    protected readonly DbSet<T> DbSet = context.Set<T>();
-    protected readonly ApplicationDbContext Context = context;
+    protected DbSet<T> DbSet { get; } = context.Set<T>();
+    protected ApplicationDbContext Context { get; } = context;
 
     public async Task<T?> GetByIdAsync(Guid id) => await DbSet.FindAsync(id);
 
@@ -34,7 +35,7 @@ public class GenericRepository<T>(ApplicationDbContext context) : IGenericReposi
         // mutated a value fetched via an AsNoTracking query), copy the values onto the
         // tracked instance instead of attaching — attaching a second instance with the
         // same key throws.
-        var tracked = Context.ChangeTracker.Entries<T>()
+        EntityEntry<T>? tracked = Context.ChangeTracker.Entries<T>()
             .FirstOrDefault(e => e.Entity.Id == entity.Id && !ReferenceEquals(e.Entity, entity));
 
         if (tracked is not null)

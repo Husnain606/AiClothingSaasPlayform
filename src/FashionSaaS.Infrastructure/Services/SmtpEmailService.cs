@@ -13,7 +13,7 @@ public class SmtpEmailService(IOptions<SmtpSettings> smtpOptions) : IEmailServic
 
     private async Task SendEmailAsync(string to, string subject, string htmlBody)
     {
-        var message = new MimeMessage();
+        using var message = new MimeMessage();
         message.From.Add(MailboxAddress.Parse(_smtp.From is { Length: > 0 } f ? f
             : throw new InvalidOperationException("SmtpSettings:From not configured.")));
         message.To.Add(MailboxAddress.Parse(to));

@@ -21,7 +21,7 @@ public class LoginAttemptRepository(ApplicationDbContext context)
 
     public async Task<int> GetRecentFailureCountAsync(string email, int windowMinutes)
     {
-        var since = DateTime.UtcNow.AddMinutes(-windowMinutes);
+        DateTime since = DateTime.UtcNow.AddMinutes(-windowMinutes);
         return await DbSet.Where(a => a.Email == email && !a.IsSuccess && a.CreatedAt >= since)
             .CountAsync();
     }
@@ -29,8 +29,8 @@ public class LoginAttemptRepository(ApplicationDbContext context)
     public async Task ResetRecentFailedAttemptsAsync(string email, CancellationToken cancellationToken = default)
     {
         // Use the same 15-minute window that AuthService uses for lockout evaluation.
-        var since = DateTime.UtcNow.AddMinutes(-15);
-        var failedAttempts = await DbSet
+        DateTime since = DateTime.UtcNow.AddMinutes(-15);
+        List<UserLoginAttempt> failedAttempts = await DbSet
             .Where(a => a.Email == email && !a.IsSuccess && a.CreatedAt >= since)
             .ToListAsync(cancellationToken);
         DbSet.RemoveRange(failedAttempts);

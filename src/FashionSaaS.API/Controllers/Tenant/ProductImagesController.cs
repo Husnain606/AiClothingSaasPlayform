@@ -12,7 +12,7 @@ namespace FashionSaaS.API.Controllers.Tenant;
 [ApiController]
 [Authorize(Roles = "AdminOwner,StoreManager,ContentManager")]
 [EnableRateLimiting("AuthenticatedPolicy")]
-public class ProductImagesController(ProductImageService imageService) : ControllerBase
+internal class ProductImagesController(ProductImageService imageService) : ControllerBase
 {
     /// <summary>Maximum accepted upload size (5 MB).</summary>
     private const long MaxImageBytes = 5 * 1024 * 1024;
@@ -27,7 +27,7 @@ public class ProductImagesController(ProductImageService imageService) : Control
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetByProduct(Guid productId)
     {
-        var response = await imageService.GetByProductAsync(productId);
+        ResponseData<IReadOnlyList<ProductImageResponse>> response = await imageService.GetByProductAsync(productId);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -42,13 +42,15 @@ public class ProductImagesController(ProductImageService imageService) : Control
     [RequestSizeLimit(MaxImageBytes)]
     public async Task<IActionResult> Upload([FromForm] UploadImageForm form)
     {
-        var file = form.File;
+        IFormFile? file = form.File;
         if (file is null || file.Length == 0)
             return StatusCode(400, ResponseData<string>.Failure("An image file is required.", 400));
 
         if (string.IsNullOrWhiteSpace(file.ContentType) ||
             !file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        {
             return StatusCode(400, ResponseData<string>.Failure("Only image files are accepted.", 400));
+        }
 
         if (file.Length > MaxImageBytes)
             return StatusCode(400, ResponseData<string>.Failure("Image must be 5 MB or smaller.", 400));
@@ -60,8 +62,8 @@ public class ProductImagesController(ProductImageService imageService) : Control
             AltText = form.AltText
         };
 
-        await using var stream = file.OpenReadStream();
-        var response = await imageService.UploadAsync(request, stream, file.FileName, UserId, Ip, Ua);
+        await using Stream stream = file.OpenReadStream();
+        ResponseData<ProductImageResponse> response = await imageService.UploadAsync(request, stream, file.FileName, UserId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -71,7 +73,7 @@ public class ProductImagesController(ProductImageService imageService) : Control
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Reorder(Guid productId, [FromBody] ReorderImagesRequest request)
     {
-        var response = await imageService.ReorderAsync(productId, request, UserId, Ip, Ua);
+        ResponseData<bool> response = await imageService.ReorderAsync(productId, request, UserId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -82,7 +84,7 @@ public class ProductImagesController(ProductImageService imageService) : Control
     public async Task<IActionResult> SetPrimary(Guid id)
     {
         var request = new SetPrimaryRequest { ImageId = id };
-        var response = await imageService.SetPrimaryAsync(request, UserId, Ip, Ua);
+        ResponseData<bool> response = await imageService.SetPrimaryAsync(request, UserId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -92,12 +94,12 @@ public class ProductImagesController(ProductImageService imageService) : Control
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Delete(Guid id)
     {
-        var response = await imageService.DeleteAsync(id, UserId, Ip, Ua);
+        ResponseData<bool> response = await imageService.DeleteAsync(id, UserId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 
     /// <summary>multipart/form-data binding model: the uploaded file plus image metadata.</summary>
-    public class UploadImageForm
+    internal class UploadImageForm
     {
         public IFormFile? File { get; set; }
         public Guid ProductId { get; set; }

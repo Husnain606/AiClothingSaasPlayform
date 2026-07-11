@@ -13,12 +13,12 @@ public class LoginAttemptService(ILoginAttemptRepository loginAttemptRepository)
         if (string.IsNullOrEmpty(filter.Email))
             return ResponseData<PagedResult<LoginAttemptResponse>>.Failure("Email is required.", 400);
 
-        var items = await loginAttemptRepository.GetByEmailAsync(filter.Email, 200);
-        var filtered = items.AsEnumerable();
+        IReadOnlyList<UserLoginAttempt> items = await loginAttemptRepository.GetByEmailAsync(filter.Email, 200);
+        IEnumerable<UserLoginAttempt> filtered = items.AsEnumerable();
         if (filter.IsSuccess.HasValue)
             filtered = filtered.Where(a => a.IsSuccess == filter.IsSuccess);
         if (!string.IsNullOrEmpty(filter.IpAddress))
-            filtered = filtered.Where(a => a.IpAddress == filter.IpAddress);
+            filtered = filtered.Where(a => string.Equals(a.IpAddress, filter.IpAddress, StringComparison.Ordinal));
 
         var list = filtered.ToList();
         var paged = new PagedResult<LoginAttemptResponse>
@@ -34,7 +34,11 @@ public class LoginAttemptService(ILoginAttemptRepository loginAttemptRepository)
 
     private static LoginAttemptResponse Map(UserLoginAttempt a) => new()
     {
-        Id = a.Id, Email = a.Email, IpAddress = a.IpAddress,
-        IsSuccess = a.IsSuccess, FailureReason = a.FailureReason, CreatedAt = a.CreatedAt
+        Id = a.Id,
+        Email = a.Email,
+        IpAddress = a.IpAddress,
+        IsSuccess = a.IsSuccess,
+        FailureReason = a.FailureReason,
+        CreatedAt = a.CreatedAt
     };
 }

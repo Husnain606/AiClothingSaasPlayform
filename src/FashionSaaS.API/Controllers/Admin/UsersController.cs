@@ -13,7 +13,7 @@ namespace FashionSaaS.API.Controllers.Admin;
 [Authorize(Roles = "SuperAdmin")]
 [Authorize(Policy = "MfaVerified")]
 [EnableRateLimiting("SuperAdminPolicy")]
-public class UsersController(UserService userService) : ControllerBase
+internal class UsersController(UserService userService) : ControllerBase
 {
     private Guid AdminId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     private string Ip => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
@@ -25,7 +25,7 @@ public class UsersController(UserService userService) : ControllerBase
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetAll([FromQuery] UserFilterRequest filter)
     {
-        var response = await userService.GetByTenantAsync(Guid.Empty, filter);
+        ResponseData<PagedResult<UserResponse>> response = await userService.GetByTenantAsync(Guid.Empty, filter);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -35,7 +35,7 @@ public class UsersController(UserService userService) : ControllerBase
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetById(Guid id)
     {
-        var response = await userService.GetByIdAsync(id);
+        ResponseData<UserResponse> response = await userService.GetByIdAsync(id);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -45,7 +45,7 @@ public class UsersController(UserService userService) : ControllerBase
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Create([FromBody] CreateUserRequest request)
     {
-        var response = await userService.CreateAsync(request, AdminId, Ip, Ua);
+        ResponseData<UserResponse> response = await userService.CreateAsync(request, AdminId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -56,7 +56,7 @@ public class UsersController(UserService userService) : ControllerBase
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateUserRequest request)
     {
-        var response = await userService.UpdateAsync(id, request, AdminId, Ip, Ua);
+        ResponseData<UserResponse> response = await userService.UpdateAsync(id, request, AdminId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -66,7 +66,7 @@ public class UsersController(UserService userService) : ControllerBase
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Unlock(Guid id)
     {
-        var response = await userService.UnlockAsync(id, AdminId, Ip, Ua);
+        ResponseData<bool> response = await userService.UnlockAsync(id, AdminId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 }

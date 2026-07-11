@@ -1,6 +1,9 @@
+using System.Collections.ObjectModel;
+using FashionSaaS.Application.Common;
 using FashionSaaS.Application.Configuration;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Application.Mfa;
+using FashionSaaS.Application.Mfa.DTOs;
 using FashionSaaS.Domain.Entities;
 using FluentAssertions;
 using Microsoft.Extensions.Options;
@@ -35,8 +38,8 @@ public class MfaServiceTests
     {
         _userRepo.Setup(r => r.GetByIdWithRolesAsync(It.IsAny<Guid>())).ReturnsAsync((User?)null);
 
-        var service = CreateService();
-        var result = await service.SetupAsync(Guid.NewGuid());
+        MfaService service = CreateService();
+        ResponseData<MfaSetupResponse> result = await service.SetupAsync(Guid.NewGuid());
 
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Should().Be(404);
@@ -54,8 +57,8 @@ public class MfaServiceTests
         _userRepo.Setup(r => r.UpdateAsync(user)).Returns(Task.CompletedTask);
         _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
 
-        var service = CreateService();
-        var result = await service.SetupAsync(userId);
+        MfaService service = CreateService();
+        ResponseData<MfaSetupResponse> result = await service.SetupAsync(userId);
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.SecretBase32.Should().Be("RAWSECRET");
@@ -79,8 +82,8 @@ public class MfaServiceTests
         _userRepo.Setup(r => r.UpdateAsync(user)).Returns(Task.CompletedTask);
         _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
 
-        var service = CreateService();
-        var result = await service.SetupAsync(userId);
+        MfaService service = CreateService();
+        ResponseData<MfaSetupResponse> result = await service.SetupAsync(userId);
 
         result.IsSuccess.Should().BeTrue();
         // IsEnrolled must be reset so user has to re-verify
@@ -98,8 +101,8 @@ public class MfaServiceTests
         var user = new User { Id = Guid.NewGuid(), Email = "u@test.com", PasswordHash = "h", IsActive = true, MfaSettings = null };
         _userRepo.Setup(r => r.GetByIdWithRolesAsync(It.IsAny<Guid>())).ReturnsAsync(user);
 
-        var service = CreateService();
-        var result = await service.VerifySetupAsync(user.Id, "123456");
+        MfaService service = CreateService();
+        ResponseData<IReadOnlyList<string>> result = await service.VerifySetupAsync(user.Id, "123456");
 
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Should().Be(400);
@@ -114,8 +117,8 @@ public class MfaServiceTests
         _fieldEncryption.Setup(e => e.Decrypt("enc")).Returns("RAWSECRET");
         _totpService.Setup(t => t.Verify("RAWSECRET", "000000")).Returns(false);
 
-        var service = CreateService();
-        var result = await service.VerifySetupAsync(user.Id, "000000");
+        MfaService service = CreateService();
+        ResponseData<IReadOnlyList<string>> result = await service.VerifySetupAsync(user.Id, "000000");
 
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Should().Be(400);
@@ -132,14 +135,14 @@ public class MfaServiceTests
         _fieldEncryption.Setup(e => e.Decrypt("enc")).Returns("RAWSECRET");
         _totpService.Setup(t => t.Verify("RAWSECRET", "123456")).Returns(true);
 
-        var rawCodes = Enumerable.Range(1, 8).Select(i => $"code{i:D8}").ToList().AsReadOnly();
+        ReadOnlyCollection<string> rawCodes = Enumerable.Range(1, 8).Select(i => $"code{i:D8}").ToList().AsReadOnly();
         _totpService.Setup(t => t.GenerateBackupCodes()).Returns(rawCodes);
         _passwordHasher.Setup(h => h.Hash(It.IsAny<string>())).Returns<string>(c => $"hashed_{c}");
         _userRepo.Setup(r => r.UpdateAsync(user)).Returns(Task.CompletedTask);
         _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
 
-        var service = CreateService();
-        var result = await service.VerifySetupAsync(user.Id, "123456");
+        MfaService service = CreateService();
+        ResponseData<IReadOnlyList<string>> result = await service.VerifySetupAsync(user.Id, "123456");
 
         result.IsSuccess.Should().BeTrue();
         result.Data.Should().HaveCount(8);
@@ -147,7 +150,7 @@ public class MfaServiceTests
         user.MfaSettings.IsEnrolled.Should().BeTrue();
         // Backup codes should be stored hashed, not raw
         user.MfaSettings.BackupCodes.Should().HaveCount(8);
-        user.MfaSettings.BackupCodes.All(c => c.CodeHash.StartsWith("hashed_")).Should().BeTrue();
+        user.MfaSettings.BackupCodes.All(c => c.CodeHash.StartsWith("hashed_", StringComparison.Ordinal)).Should().BeTrue();
     }
 
     // ------------------------------------------------------------------
@@ -161,8 +164,8 @@ public class MfaServiceTests
         var user = new User { Id = Guid.NewGuid(), Email = "u@test.com", PasswordHash = "h", IsActive = true, MfaSettings = mfaSettings };
         _userRepo.Setup(r => r.GetByIdWithRolesAsync(user.Id)).ReturnsAsync(user);
 
-        var service = CreateService();
-        var result = await service.RegenerateBackupCodesAsync(user.Id);
+        MfaService service = CreateService();
+        ResponseData<IReadOnlyList<string>> result = await service.RegenerateBackupCodesAsync(user.Id);
 
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Should().Be(400);
@@ -178,14 +181,14 @@ public class MfaServiceTests
         var user = new User { Id = Guid.NewGuid(), Email = "u@test.com", PasswordHash = "h", IsActive = true, MfaSettings = mfaSettings };
 
         _userRepo.Setup(r => r.GetByIdWithRolesAsync(user.Id)).ReturnsAsync(user);
-        var rawCodes = Enumerable.Range(1, 8).Select(i => $"code{i:D8}").ToList().AsReadOnly();
+        ReadOnlyCollection<string> rawCodes = Enumerable.Range(1, 8).Select(i => $"code{i:D8}").ToList().AsReadOnly();
         _totpService.Setup(t => t.GenerateBackupCodes()).Returns(rawCodes);
         _passwordHasher.Setup(h => h.Hash(It.IsAny<string>())).Returns<string>(c => $"hashed_{c}");
         _userRepo.Setup(r => r.UpdateAsync(user)).Returns(Task.CompletedTask);
         _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
 
-        var service = CreateService();
-        var result = await service.RegenerateBackupCodesAsync(user.Id);
+        MfaService service = CreateService();
+        ResponseData<IReadOnlyList<string>> result = await service.RegenerateBackupCodesAsync(user.Id);
 
         result.IsSuccess.Should().BeTrue();
         result.Data.Should().HaveCount(8);

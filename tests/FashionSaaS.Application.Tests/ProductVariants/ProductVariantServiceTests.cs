@@ -1,3 +1,4 @@
+using FashionSaaS.Application.Common;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Application.ProductVariants;
 using FashionSaaS.Application.ProductVariants.DTOs;
@@ -28,12 +29,22 @@ public class ProductVariantServiceTests
 
     private Product Product(Guid id, decimal basePrice = 20m) => new()
     {
-        Id = id, TenantId = _tenantId, CategoryId = Guid.NewGuid(), Name = "Tee", Slug = "tee", BasePrice = basePrice
+        Id = id,
+        TenantId = _tenantId,
+        CategoryId = Guid.NewGuid(),
+        Name = "Tee",
+        Slug = "tee",
+        BasePrice = basePrice
     };
 
     private ProductVariant Variant(Guid productId, string size = "M", string color = "Red") => new()
     {
-        Id = Guid.NewGuid(), TenantId = _tenantId, ProductId = productId, Size = size, Color = color, Sku = "SKU-1"
+        Id = Guid.NewGuid(),
+        TenantId = _tenantId,
+        ProductId = productId,
+        Size = size,
+        Color = color,
+        Sku = "SKU-1"
     };
 
     // ── Add ───────────────────────────────────────────────────────────────────────
@@ -47,7 +58,7 @@ public class ProductVariantServiceTests
         _variants.Setup(r => r.SizeColorExistsAsync(productId, "M", "Red", null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
 
-        var result = await CreateService().AddAsync(
+        ResponseData<VariantResponse> result = await CreateService().AddAsync(
             new AddVariantRequest { ProductId = productId, Size = "M", Color = "Red", Sku = "SKU-NEW", StockQuantity = 3 },
             Guid.NewGuid(), "127.0.0.1", "ua");
 
@@ -67,7 +78,7 @@ public class ProductVariantServiceTests
         _variants.Setup(r => r.SizeColorExistsAsync(productId, "M", "Red", null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
 
-        var result = await CreateService().AddAsync(
+        ResponseData<VariantResponse> result = await CreateService().AddAsync(
             new AddVariantRequest { ProductId = productId, Size = "M", Color = "Red", Sku = "SKU-NEW", PriceOverride = 9.99m },
             Guid.NewGuid(), "127.0.0.1", "ua");
 
@@ -82,7 +93,7 @@ public class ProductVariantServiceTests
         _products.Setup(r => r.GetByIdAsync(productId))
             .ReturnsAsync(new Product { Id = productId, TenantId = Guid.NewGuid() });
 
-        var result = await CreateService().AddAsync(
+        ResponseData<VariantResponse> result = await CreateService().AddAsync(
             new AddVariantRequest { ProductId = productId, Size = "M", Color = "Red", Sku = "SKU" },
             Guid.NewGuid(), "127.0.0.1", "ua");
 
@@ -97,7 +108,7 @@ public class ProductVariantServiceTests
         _products.Setup(r => r.GetByIdAsync(productId)).ReturnsAsync(Product(productId));
         _variants.Setup(r => r.SkuExistsAsync(_tenantId, "SKU-DUP", null, It.IsAny<CancellationToken>())).ReturnsAsync(true);
 
-        var result = await CreateService().AddAsync(
+        ResponseData<VariantResponse> result = await CreateService().AddAsync(
             new AddVariantRequest { ProductId = productId, Size = "M", Color = "Red", Sku = "SKU-DUP" },
             Guid.NewGuid(), "127.0.0.1", "ua");
 
@@ -115,7 +126,7 @@ public class ProductVariantServiceTests
         _variants.Setup(r => r.SizeColorExistsAsync(productId, "M", "Red", null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
-        var result = await CreateService().AddAsync(
+        ResponseData<VariantResponse> result = await CreateService().AddAsync(
             new AddVariantRequest { ProductId = productId, Size = "M", Color = "Red", Sku = "SKU-X" },
             Guid.NewGuid(), "127.0.0.1", "ua");
 
@@ -129,10 +140,10 @@ public class ProductVariantServiceTests
     public async Task DeactivateAsync_SetsInactive()
     {
         var productId = Guid.NewGuid();
-        var variant = Variant(productId);
+        ProductVariant variant = Variant(productId);
         _variants.Setup(r => r.GetByIdAsync(variant.Id)).ReturnsAsync(variant);
 
-        var result = await CreateService().DeactivateAsync(variant.Id, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<bool> result = await CreateService().DeactivateAsync(variant.Id, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.IsSuccess.Should().BeTrue();
         variant.IsActive.Should().BeFalse();
@@ -144,10 +155,10 @@ public class ProductVariantServiceTests
     public async Task DeleteAsync_RemovesVariant()
     {
         var productId = Guid.NewGuid();
-        var variant = Variant(productId);
+        ProductVariant variant = Variant(productId);
         _variants.Setup(r => r.GetByIdAsync(variant.Id)).ReturnsAsync(variant);
 
-        var result = await CreateService().DeleteAsync(variant.Id, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<bool> result = await CreateService().DeleteAsync(variant.Id, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.IsSuccess.Should().BeTrue();
         _variants.Verify(r => r.DeleteAsync(variant), Times.Once);
@@ -159,14 +170,14 @@ public class ProductVariantServiceTests
     public async Task GetByProductAsync_ComputesEffectivePricePerVariant()
     {
         var productId = Guid.NewGuid();
-        var v1 = Variant(productId, "S", "Red");
-        var v2 = Variant(productId, "M", "Blue");
+        ProductVariant v1 = Variant(productId, "S", "Red");
+        ProductVariant v2 = Variant(productId, "M", "Blue");
         v2.PriceOverride = 5m;
         _products.Setup(r => r.GetByIdAsync(productId)).ReturnsAsync(Product(productId, 20m));
         _variants.Setup(r => r.GetByProductAsync(productId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<ProductVariant> { v1, v2 });
 
-        var result = await CreateService().GetByProductAsync(productId);
+        ResponseData<IReadOnlyList<VariantResponse>> result = await CreateService().GetByProductAsync(productId);
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.Single(r => r.Id == v1.Id).EffectivePrice.Should().Be(20m);

@@ -1,3 +1,4 @@
+using FashionSaaS.Application.Common;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Application.Tenants;
 using FashionSaaS.Application.Tenants.DTOs;
@@ -22,10 +23,12 @@ public class TenantServiceTests
         _tenantRepo.Setup(r => r.SlugExistsAsync("nike")).ReturnsAsync(false);
         _tenantRepo.Setup(r => r.EmailExistsAsync("admin@nike.com")).ReturnsAsync(false);
 
-        var service = CreateService();
-        var result = await service.CreateAsync(new CreateTenantRequest
+        TenantService service = CreateService();
+        ResponseData<TenantResponse> result = await service.CreateAsync(new CreateTenantRequest
         {
-            Name = "Nike", Slug = "nike", Email = "admin@nike.com"
+            Name = "Nike",
+            Slug = "nike",
+            Email = "admin@nike.com"
         }, Guid.NewGuid(), "127.0.0.1", "Mozilla");
 
         result.IsSuccess.Should().BeTrue();
@@ -38,10 +41,12 @@ public class TenantServiceTests
     {
         _tenantRepo.Setup(r => r.SlugExistsAsync("nike")).ReturnsAsync(true);
 
-        var service = CreateService();
-        var result = await service.CreateAsync(new CreateTenantRequest
+        TenantService service = CreateService();
+        ResponseData<TenantResponse> result = await service.CreateAsync(new CreateTenantRequest
         {
-            Name = "Nike", Slug = "nike", Email = "admin@nike.com"
+            Name = "Nike",
+            Slug = "nike",
+            Email = "admin@nike.com"
         }, Guid.NewGuid(), "127.0.0.1", "Mozilla");
 
         result.IsSuccess.Should().BeFalse();
@@ -54,8 +59,8 @@ public class TenantServiceTests
         var tenant = new Tenant { Id = Guid.NewGuid(), IsActive = true, Email = "admin@nike.com", Name = "Nike" };
         _tenantRepo.Setup(r => r.GetByIdAsync(tenant.Id)).ReturnsAsync(tenant);
 
-        var service = CreateService();
-        var result = await service.SuspendAsync(tenant.Id, Guid.NewGuid(), "127.0.0.1", "Mozilla");
+        TenantService service = CreateService();
+        ResponseData<bool> result = await service.SuspendAsync(tenant.Id, Guid.NewGuid(), "127.0.0.1", "Mozilla");
 
         result.IsSuccess.Should().BeTrue();
         tenant.IsActive.Should().BeFalse();
@@ -65,10 +70,12 @@ public class TenantServiceTests
     public async Task CreateAsync_MalformedSlug_Returns400BeforeUniquenessCheck()
     {
         // "My Brand!" contains uppercase, spaces and special characters — TenantSlug should reject it
-        var service = CreateService();
-        var result = await service.CreateAsync(new CreateTenantRequest
+        TenantService service = CreateService();
+        ResponseData<TenantResponse> result = await service.CreateAsync(new CreateTenantRequest
         {
-            Name = "My Brand", Slug = "My Brand!", Email = "admin@mybrand.com"
+            Name = "My Brand",
+            Slug = "My Brand!",
+            Email = "admin@mybrand.com"
         }, Guid.NewGuid(), "127.0.0.1", "Mozilla");
 
         result.IsSuccess.Should().BeFalse();
@@ -83,8 +90,8 @@ public class TenantServiceTests
         var tenant = new Tenant { Id = Guid.NewGuid(), IsActive = false, Email = "admin@nike.com", Name = "Nike" };
         _tenantRepo.Setup(r => r.GetByIdAsync(tenant.Id)).ReturnsAsync(tenant);
 
-        var service = CreateService();
-        var result = await service.SuspendAsync(tenant.Id, Guid.NewGuid(), "127.0.0.1", "Mozilla");
+        TenantService service = CreateService();
+        ResponseData<bool> result = await service.SuspendAsync(tenant.Id, Guid.NewGuid(), "127.0.0.1", "Mozilla");
 
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Should().Be(409);

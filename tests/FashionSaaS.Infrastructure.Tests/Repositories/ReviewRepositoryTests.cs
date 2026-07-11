@@ -12,21 +12,21 @@ namespace FashionSaaS.Infrastructure.Tests.Repositories;
 
 public class ReviewRepositoryTests
 {
-    private Guid _tenantId = Guid.NewGuid();
-    private Guid _productId = Guid.NewGuid();
+    private readonly Guid _tenantId = Guid.NewGuid();
+    private readonly Guid _productId = Guid.NewGuid();
 
     private ApplicationDbContext CreateContext()
     {
         var currentTenant = new Mock<ICurrentTenantService>();
         currentTenant.Setup(c => c.TenantId).Returns(_tenantId);
 
-        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+        DbContextOptions<ApplicationDbContext> options = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
         return new ApplicationDbContext(options, currentTenant.Object);
     }
 
-    private Customer CreateCustomer() => new Customer
+    private Customer CreateCustomer() => new()
     {
         TenantId = _tenantId,
         FirstName = "John",
@@ -38,8 +38,8 @@ public class ReviewRepositoryTests
     [Fact]
     public async Task GetPagedAsync_ProductWithReviews_ReturnsReviewsOrderedByDateDescending()
     {
-        await using var ctx = CreateContext();
-        var customer = CreateCustomer();
+        await using ApplicationDbContext ctx = CreateContext();
+        Customer customer = CreateCustomer();
         ctx.Customers.Add(customer);
 
         var review1 = new Review
@@ -73,7 +73,7 @@ public class ReviewRepositoryTests
             Page = 1,
             PageSize = 20
         };
-        var (items, total) = await repo.GetPagedAsync(filter);
+        (IReadOnlyList<Review>? items, var total) = await repo.GetPagedAsync(filter);
 
         items.Should().HaveCount(2);
         total.Should().Be(2);
@@ -83,8 +83,8 @@ public class ReviewRepositoryTests
     [Fact]
     public async Task GetPagedAsync_FilterByStatus_ReturnsOnlyMatchingReviews()
     {
-        await using var ctx = CreateContext();
-        var customer = CreateCustomer();
+        await using ApplicationDbContext ctx = CreateContext();
+        Customer customer = CreateCustomer();
         ctx.Customers.Add(customer);
 
         var approved = new Review
@@ -116,18 +116,18 @@ public class ReviewRepositoryTests
             Page = 1,
             PageSize = 20
         };
-        var (items, total) = await repo.GetPagedAsync(filter);
+        (IReadOnlyList<Review>? items, var total) = await repo.GetPagedAsync(filter);
 
         items.Should().HaveCount(1);
         total.Should().Be(1);
-        items.First().Status.Should().Be(ReviewStatus.Approved);
+        items[0].Status.Should().Be(ReviewStatus.Approved);
     }
 
     [Fact]
     public async Task GetPagedAsync_FilterByProductId_ReturnsOnlyProductReviews()
     {
-        await using var ctx = CreateContext();
-        var customer = CreateCustomer();
+        await using ApplicationDbContext ctx = CreateContext();
+        Customer customer = CreateCustomer();
         ctx.Customers.Add(customer);
 
         var otherProductId = Guid.NewGuid();
@@ -160,21 +160,21 @@ public class ReviewRepositoryTests
             Page = 1,
             PageSize = 20
         };
-        var (items, total) = await repo.GetPagedAsync(filter);
+        (IReadOnlyList<Review>? items, var total) = await repo.GetPagedAsync(filter);
 
         items.Should().HaveCount(1);
         total.Should().Be(1);
-        items.First().ProductId.Should().Be(_productId);
+        items[0].ProductId.Should().Be(_productId);
     }
 
     [Fact]
     public async Task GetPagedAsync_WithPagination_ReturnsPaginatedResults()
     {
-        await using var ctx = CreateContext();
-        var customer = CreateCustomer();
+        await using ApplicationDbContext ctx = CreateContext();
+        Customer customer = CreateCustomer();
         ctx.Customers.Add(customer);
 
-        for (int i = 1; i <= 5; i++)
+        for (var i = 1; i <= 5; i++)
         {
             var review = new Review
             {
@@ -197,7 +197,7 @@ public class ReviewRepositoryTests
             Page = 1,
             PageSize = 2
         };
-        var (items, total) = await repo.GetPagedAsync(filter);
+        (IReadOnlyList<Review>? items, var total) = await repo.GetPagedAsync(filter);
 
         items.Should().HaveCount(2);
         total.Should().Be(5);

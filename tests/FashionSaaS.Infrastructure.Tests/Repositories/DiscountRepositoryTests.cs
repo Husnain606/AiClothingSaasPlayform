@@ -12,14 +12,14 @@ namespace FashionSaaS.Infrastructure.Tests.Repositories;
 
 public class DiscountRepositoryTests
 {
-    private Guid _tenantId = Guid.NewGuid();
+    private readonly Guid _tenantId = Guid.NewGuid();
 
     private ApplicationDbContext CreateContext()
     {
         var currentTenant = new Mock<ICurrentTenantService>();
         currentTenant.Setup(c => c.TenantId).Returns(_tenantId);
 
-        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+        DbContextOptions<ApplicationDbContext> options = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
         return new ApplicationDbContext(options, currentTenant.Object);
@@ -28,7 +28,7 @@ public class DiscountRepositoryTests
     [Fact]
     public async Task GetByCodeAsync_ExistingCode_ReturnsDiscount()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         var discount = new Discount
         {
             TenantId = _tenantId,
@@ -43,7 +43,7 @@ public class DiscountRepositoryTests
         await ctx.SaveChangesAsync();
 
         var repo = new DiscountRepository(ctx);
-        var result = await repo.GetByCodeAsync(_tenantId, "SUMMER20");
+        Discount? result = await repo.GetByCodeAsync(_tenantId, "SUMMER20");
 
         result.Should().NotBeNull();
         result!.Value.Should().Be(20);
@@ -53,10 +53,10 @@ public class DiscountRepositoryTests
     [Fact]
     public async Task GetByCodeAsync_NonExistentCode_ReturnsNull()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
 
         var repo = new DiscountRepository(ctx);
-        var result = await repo.GetByCodeAsync(_tenantId, "NONEXISTENT");
+        Discount? result = await repo.GetByCodeAsync(_tenantId, "NONEXISTENT");
 
         result.Should().BeNull();
     }
@@ -64,7 +64,7 @@ public class DiscountRepositoryTests
     [Fact]
     public async Task GetByCodeAsync_DifferentTenant_ReturnsNull()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         var otherTenantId = Guid.NewGuid();
         var discount = new Discount
         {
@@ -80,7 +80,7 @@ public class DiscountRepositoryTests
         await ctx.SaveChangesAsync();
 
         var repo = new DiscountRepository(ctx);
-        var result = await repo.GetByCodeAsync(_tenantId, "SUMMER20");
+        Discount? result = await repo.GetByCodeAsync(_tenantId, "SUMMER20");
 
         result.Should().BeNull();
     }
@@ -88,7 +88,7 @@ public class DiscountRepositoryTests
     [Fact]
     public async Task CodeExistsAsync_ExistingCode_ReturnsTrue()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         var discount = new Discount
         {
             TenantId = _tenantId,
@@ -111,7 +111,7 @@ public class DiscountRepositoryTests
     [Fact]
     public async Task CodeExistsAsync_ExcludeId_IgnoresSpecificDiscount()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         var discount = new Discount
         {
             TenantId = _tenantId,
@@ -134,7 +134,7 @@ public class DiscountRepositoryTests
     [Fact]
     public async Task GetPagedAsync_WithIsActiveFilter_ReturnsOnlyActiveDiscounts()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         var active = new Discount
         {
             TenantId = _tenantId,
@@ -166,18 +166,18 @@ public class DiscountRepositoryTests
             Page = 1,
             PageSize = 20
         };
-        var (items, total) = await repo.GetPagedAsync(filter);
+        (IReadOnlyList<Discount>? items, var total) = await repo.GetPagedAsync(filter);
 
         items.Should().HaveCount(1);
         total.Should().Be(1);
-        items.First().Code.Should().Be("SUMMER20");
+        items[0].Code.Should().Be("SUMMER20");
     }
 
     [Fact]
     public async Task GetPagedAsync_WithPagination_ReturnsPaginatedResults()
     {
-        await using var ctx = CreateContext();
-        for (int i = 1; i <= 5; i++)
+        await using ApplicationDbContext ctx = CreateContext();
+        for (var i = 1; i <= 5; i++)
         {
             var discount = new Discount
             {
@@ -200,7 +200,7 @@ public class DiscountRepositoryTests
             Page = 1,
             PageSize = 2
         };
-        var (items, total) = await repo.GetPagedAsync(filter);
+        (IReadOnlyList<Discount>? items, var total) = await repo.GetPagedAsync(filter);
 
         items.Should().HaveCount(2);
         total.Should().Be(5);

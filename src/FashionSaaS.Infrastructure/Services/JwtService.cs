@@ -22,9 +22,9 @@ public class JwtService(IOptions<JwtSettings> jwtOptions) : IJwtService
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
         // Materialize once so we don't enumerate the IEnumerable twice (Contains + Select below).
-        var roleList = roles as IReadOnlyList<string> ?? roles.ToList();
+        IReadOnlyList<string> roleList = roles as IReadOnlyList<string> ?? roles.ToList();
 
-        var isSuperAdmin = roleList.Contains(nameof(Domain.Enums.RoleType.SuperAdmin));
+        var isSuperAdmin = roleList.Contains(nameof(Domain.Enums.RoleType.SuperAdmin), StringComparer.Ordinal);
         var expiryMinutes = isSuperAdmin ? 10 : 15;
 
         var claims = new List<Claim>
@@ -33,7 +33,12 @@ public class JwtService(IOptions<JwtSettings> jwtOptions) : IJwtService
             new(JwtRegisteredClaimNames.Email, user.Email),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
             new("tenant_id", user.TenantId?.ToString() ?? string.Empty),
-            new("mfa_verified", mfaVerified.ToString().ToLower())
+            // CA1308 suppressed: "true"/"false" lowercase is the exact literal value compared
+            // by the "MfaVerified" authorization policy (RequireClaim("mfa_verified", "true"))
+            // — flipping to uppercase would break that exact-match check.
+#pragma warning disable CA1308
+            new("mfa_verified", mfaVerified.ToString().ToLowerInvariant())
+#pragma warning restore CA1308
         };
 
         if (!string.IsNullOrEmpty(tenantSlug))
@@ -74,10 +79,19 @@ public class JwtService(IOptions<JwtSettings> jwtOptions) : IJwtService
             ValidIssuer = _jwt.Issuer,
             ValidateAudience = true,
             ValidAudience = _jwt.Audience,
-            ValidateLifetime = false  // intentionally skipped — refresh cookie is the credential
+            // CA5404 suppressed: this method exists specifically to read claims out of an
+            // EXPIRED token during the refresh flow (see the class-level doc comment) — the
+            // caller presents an expired access token by design; the HttpOnly refresh cookie
+            // is the actual credential being validated, not the access token's lifetime.
+#pragma warning disable CA5404
+            ValidateLifetime = false
+#pragma warning restore CA5404
         };
 
         var handler = new JwtSecurityTokenHandler();
+        // CA1031 suppressed deliberately: any validation failure (signature, issuer, audience,
+        // malformed token) must uniformly return null — the caller only cares "valid or not".
+#pragma warning disable CA1031
         try
         {
             return handler.ValidateToken(token, validationParameters, out _);
@@ -86,6 +100,7 @@ public class JwtService(IOptions<JwtSettings> jwtOptions) : IJwtService
         {
             return null;
         }
+#pragma warning restore CA1031
     }
 
     /// <inheritdoc />
@@ -131,22 +146,25 @@ public class JwtService(IOptions<JwtSettings> jwtOptions) : IJwtService
         };
 
         var handler = new JwtSecurityTokenHandler();
+        // CA1031 suppressed deliberately: any validation failure must uniformly return null.
+#pragma warning disable CA1031
         try
         {
-            var principal = handler.ValidateToken(token, validationParameters, out _);
+            ClaimsPrincipal principal = handler.ValidateToken(token, validationParameters, out _);
 
             // Must carry purpose=mfa_challenge to prevent access tokens being substituted
             var purpose = principal.FindFirstValue("purpose");
-            if (purpose != "mfa_challenge")
+            if (!string.Equals(purpose, "mfa_challenge", StringComparison.Ordinal))
                 return null;
 
             var sub = principal.FindFirstValue(JwtRegisteredClaimNames.Sub)
                       ?? principal.FindFirstValue(ClaimTypes.NameIdentifier);
-            return Guid.TryParse(sub, out var userId) ? userId : null;
+            return Guid.TryParse(sub, out Guid userId) ? userId : null;
         }
         catch
         {
             return null;
         }
+#pragma warning restore CA1031
     }
 }

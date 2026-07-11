@@ -10,7 +10,7 @@ public class TotpServiceTests
     [Fact]
     public void GenerateSetup_ReturnsNonEmptySecretAndUrl()
     {
-        var (secret, url) = _service.GenerateSetup("admin@test.com", "FashionSaaS");
+        (var secret, var url) = _service.GenerateSetup("admin@test.com", "FashionSaaS");
         secret.Should().NotBeEmpty();
         url.Should().StartWith("otpauth://totp/");
     }
@@ -22,7 +22,7 @@ public class TotpServiceTests
     [Fact]
     public void GenerateBackupCodes_AllUnique()
     {
-        var codes = _service.GenerateBackupCodes();
-        codes.Distinct().Should().HaveCount(8);
+        IReadOnlyList<string> codes = _service.GenerateBackupCodes();
+        codes.Distinct(StringComparer.Ordinal).Should().HaveCount(8);
     }
 }

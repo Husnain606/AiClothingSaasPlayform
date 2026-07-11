@@ -11,7 +11,10 @@ public class CustomerValidatorTests
 
     private static CreateCustomerRequest Valid() => new()
     {
-        FirstName = "Ann", LastName = "Lee", Email = "ann@example.com", Phone = "12345"
+        FirstName = "Ann",
+        LastName = "Lee",
+        Email = "ann@example.com",
+        Phone = "12345"
     };
 
     [Fact]
@@ -20,28 +23,32 @@ public class CustomerValidatorTests
     [Fact]
     public void Create_BlankFirstName_Fails()
     {
-        var req = Valid(); req.FirstName = "";
+        CreateCustomerRequest req = Valid();
+        req.FirstName = "";
         _create.Validate(req).Errors.Should().Contain(e => e.PropertyName == nameof(CreateCustomerRequest.FirstName));
     }
 
     [Fact]
     public void Create_InvalidEmail_Fails()
     {
-        var req = Valid(); req.Email = "not-an-email";
+        CreateCustomerRequest req = Valid();
+        req.Email = "not-an-email";
         _create.Validate(req).Errors.Should().Contain(e => e.PropertyName == nameof(CreateCustomerRequest.Email));
     }
 
     [Fact]
     public void Create_LongFirstName_Fails()
     {
-        var req = Valid(); req.FirstName = new string('a', 101);
+        CreateCustomerRequest req = Valid();
+        req.FirstName = new string('a', 101);
         _create.Validate(req).IsValid.Should().BeFalse();
     }
 
     [Fact]
     public void Create_LongPhone_Fails()
     {
-        var req = Valid(); req.Phone = new string('1', 51);
+        CreateCustomerRequest req = Valid();
+        req.Phone = new string('1', 51);
         _create.Validate(req).Errors.Should().Contain(e => e.PropertyName == nameof(CreateCustomerRequest.Phone));
     }
 

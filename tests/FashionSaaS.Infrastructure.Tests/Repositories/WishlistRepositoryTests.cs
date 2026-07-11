@@ -10,15 +10,15 @@ namespace FashionSaaS.Infrastructure.Tests.Repositories;
 
 public class WishlistRepositoryTests
 {
-    private Guid _tenantId = Guid.NewGuid();
-    private Guid _customerId = Guid.NewGuid();
+    private readonly Guid _tenantId = Guid.NewGuid();
+    private readonly Guid _customerId = Guid.NewGuid();
 
     private ApplicationDbContext CreateContext()
     {
         var currentTenant = new Mock<ICurrentTenantService>();
         currentTenant.Setup(c => c.TenantId).Returns(_tenantId);
 
-        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+        DbContextOptions<ApplicationDbContext> options = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
         return new ApplicationDbContext(options, currentTenant.Object);
@@ -27,7 +27,7 @@ public class WishlistRepositoryTests
     [Fact]
     public async Task GetByCustomerAsync_CustomerWithWishlist_ReturnsWishlistWithItems()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         var customer = new Customer
         {
             Id = _customerId,
@@ -54,7 +54,7 @@ public class WishlistRepositoryTests
         await ctx.SaveChangesAsync();
 
         var repo = new WishlistRepository(ctx);
-        var result = await repo.GetByCustomerAsync(_customerId);
+        Wishlist? result = await repo.GetByCustomerAsync(_customerId);
 
         result.Should().NotBeNull();
         result!.CustomerId.Should().Be(_customerId);
@@ -64,10 +64,10 @@ public class WishlistRepositoryTests
     [Fact]
     public async Task GetByCustomerAsync_CustomerWithNoWishlist_ReturnsNull()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
 
         var repo = new WishlistRepository(ctx);
-        var result = await repo.GetByCustomerAsync(_customerId);
+        Wishlist? result = await repo.GetByCustomerAsync(_customerId);
 
         result.Should().BeNull();
     }
@@ -75,7 +75,7 @@ public class WishlistRepositoryTests
     [Fact]
     public async Task GetItemAsync_ExistingItem_ReturnsItem()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         var wishlist = new Wishlist
         {
             TenantId = _tenantId,
@@ -92,7 +92,7 @@ public class WishlistRepositoryTests
         await ctx.SaveChangesAsync();
 
         var repo = new WishlistRepository(ctx);
-        var result = await repo.GetItemAsync(wishlistItem.Id);
+        WishlistItem? result = await repo.GetItemAsync(wishlistItem.Id);
 
         result.Should().NotBeNull();
         result!.Id.Should().Be(wishlistItem.Id);
@@ -101,10 +101,10 @@ public class WishlistRepositoryTests
     [Fact]
     public async Task GetItemAsync_NonExistentItem_ReturnsNull()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
 
         var repo = new WishlistRepository(ctx);
-        var result = await repo.GetItemAsync(Guid.NewGuid());
+        WishlistItem? result = await repo.GetItemAsync(Guid.NewGuid());
 
         result.Should().BeNull();
     }
@@ -112,7 +112,7 @@ public class WishlistRepositoryTests
     [Fact]
     public async Task RemoveItemAsync_ExistingItem_RemovesFromContext()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         var wishlist = new Wishlist
         {
             TenantId = _tenantId,
@@ -129,13 +129,13 @@ public class WishlistRepositoryTests
         await ctx.SaveChangesAsync();
 
         var repo = new WishlistRepository(ctx);
-        var item = await repo.GetItemAsync(wishlistItem.Id);
+        WishlistItem? item = await repo.GetItemAsync(wishlistItem.Id);
         item.Should().NotBeNull();
 
         await repo.RemoveItemAsync(item!);
         await ctx.SaveChangesAsync();
 
-        var deleted = await ctx.WishlistItems.FindAsync(wishlistItem.Id);
+        WishlistItem? deleted = await ctx.WishlistItems.FindAsync(wishlistItem.Id);
         deleted.Should().BeNull();
     }
 }

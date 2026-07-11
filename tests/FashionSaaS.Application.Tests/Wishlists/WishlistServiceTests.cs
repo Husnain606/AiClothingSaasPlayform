@@ -1,5 +1,7 @@
+using FashionSaaS.Application.Common;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Application.Wishlists;
+using FashionSaaS.Application.Wishlists.DTOs;
 using FashionSaaS.Domain.Entities;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -38,7 +40,9 @@ public class WishlistServiceTests
 
         var wishlist = new Wishlist
         {
-            Id = Guid.NewGuid(), TenantId = _tenantId, CustomerId = customerId,
+            Id = Guid.NewGuid(),
+            TenantId = _tenantId,
+            CustomerId = customerId,
             Items = new List<WishlistItem>
             {
                 new() { Id = Guid.NewGuid(), TenantId = _tenantId, ProductId = productId }
@@ -49,7 +53,11 @@ public class WishlistServiceTests
 
         var product = new Product
         {
-            Id = productId, TenantId = _tenantId, Name = "Blue Tee", Slug = "blue-tee", BasePrice = 25m,
+            Id = productId,
+            TenantId = _tenantId,
+            Name = "Blue Tee",
+            Slug = "blue-tee",
+            BasePrice = 25m,
             Images = new List<ProductImage>
             {
                 new() { Id = Guid.NewGuid(), TenantId = _tenantId, ProductId = productId, Url = "http://img/1", IsPrimary = true }
@@ -58,12 +66,12 @@ public class WishlistServiceTests
         _products.Setup(r => r.GetByIdWithDetailsAsync(productId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(product);
 
-        var result = await CreateService().GetByCustomerAsync(customerId);
+        ResponseData<WishlistResponse> result = await CreateService().GetByCustomerAsync(customerId);
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.CustomerId.Should().Be(customerId);
         result.Data.Items.Should().HaveCount(1);
-        var item = result.Data.Items.Single();
+        WishlistItemResponse item = result.Data.Items.Single();
         item.ProductName.Should().Be("Blue Tee");
         item.ProductBasePrice.Should().Be(25m);
         item.PrimaryImageUrl.Should().Be("http://img/1");
@@ -76,7 +84,7 @@ public class WishlistServiceTests
         _customers.Setup(r => r.GetByIdAsync(customerId))
             .ReturnsAsync(new Customer { Id = customerId, TenantId = Guid.NewGuid() });
 
-        var result = await CreateService().GetByCustomerAsync(customerId);
+        ResponseData<WishlistResponse> result = await CreateService().GetByCustomerAsync(customerId);
 
         result.StatusCode.Should().Be(404);
     }
@@ -89,7 +97,7 @@ public class WishlistServiceTests
         var item = new WishlistItem { Id = Guid.NewGuid(), TenantId = _tenantId, ProductId = Guid.NewGuid() };
         _wishlists.Setup(r => r.GetItemAsync(item.Id, It.IsAny<CancellationToken>())).ReturnsAsync(item);
 
-        var result = await CreateService().RemoveItemAsync(item.Id, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<bool> result = await CreateService().RemoveItemAsync(item.Id, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.IsSuccess.Should().BeTrue();
         _wishlists.Verify(r => r.RemoveItemAsync(item), Times.Once);
@@ -104,7 +112,7 @@ public class WishlistServiceTests
         var item = new WishlistItem { Id = Guid.NewGuid(), TenantId = Guid.NewGuid() };
         _wishlists.Setup(r => r.GetItemAsync(item.Id, It.IsAny<CancellationToken>())).ReturnsAsync(item);
 
-        var result = await CreateService().RemoveItemAsync(item.Id, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<bool> result = await CreateService().RemoveItemAsync(item.Id, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.StatusCode.Should().Be(404);
         _wishlists.Verify(r => r.RemoveItemAsync(It.IsAny<WishlistItem>()), Times.Never);
@@ -116,7 +124,7 @@ public class WishlistServiceTests
         _wishlists.Setup(r => r.GetItemAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((WishlistItem?)null);
 
-        var result = await CreateService().RemoveItemAsync(Guid.NewGuid(), Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<bool> result = await CreateService().RemoveItemAsync(Guid.NewGuid(), Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.StatusCode.Should().Be(404);
     }

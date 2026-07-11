@@ -1,4 +1,5 @@
 using FashionSaaS.Application.Interfaces;
+using FashionSaaS.Domain.Entities;
 using FashionSaaS.Domain.Enums;
 using FashionSaaS.Domain.Events;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,6 +17,11 @@ public class SubscriptionExpiryJob(
         using var timer = new PeriodicTimer(TimeSpan.FromHours(24));
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
+            // CA1031 suppressed deliberately: this is a BackgroundService's timer loop — any
+            // unhandled exception from one run must not crash the host or stop future runs.
+            // OperationCanceledException is rethrown (shutdown), everything else is logged
+            // and the loop continues.
+#pragma warning disable CA1031
             try
             {
                 await RunAsync(stoppingToken);
@@ -28,25 +34,26 @@ public class SubscriptionExpiryJob(
             {
                 logger.LogError(ex, "SubscriptionExpiryJob failed");
             }
+#pragma warning restore CA1031
         }
     }
 
     internal async Task RunAsync(CancellationToken ct)
     {
-        using var scope = scopeFactory.CreateScope();
-        var subscriptions = scope.ServiceProvider.GetRequiredService<ISubscriptionRepository>();
-        var payments     = scope.ServiceProvider.GetRequiredService<IPaymentRepository>();
-        var tenants      = scope.ServiceProvider.GetRequiredService<ITenantRepository>();
-        var email        = scope.ServiceProvider.GetRequiredService<IEmailService>();
-        var uow          = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        using IServiceScope scope = scopeFactory.CreateScope();
+        ISubscriptionRepository subscriptions = scope.ServiceProvider.GetRequiredService<ISubscriptionRepository>();
+        IPaymentRepository payments = scope.ServiceProvider.GetRequiredService<IPaymentRepository>();
+        ITenantRepository tenants = scope.ServiceProvider.GetRequiredService<ITenantRepository>();
+        IEmailService email = scope.ServiceProvider.GetRequiredService<IEmailService>();
+        IUnitOfWork uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
-        var now = DateTime.UtcNow;
+        DateTime now = DateTime.UtcNow;
 
         // ── 1. Expire active subscriptions past their end date ───────────────
-        var expired = await subscriptions.GetExpiredActiveAsync(now);
-        foreach (var sub in expired)
+        IReadOnlyList<TenantSubscription> expired = await subscriptions.GetExpiredActiveAsync(now);
+        foreach (TenantSubscription sub in expired)
         {
-            var gracePeriod = sub.EndDate.AddDays(3);
+            DateTime gracePeriod = sub.EndDate.AddDays(3);
             if (now >= gracePeriod)
             {
                 sub.Status = SubscriptionStatus.Expired;
@@ -64,8 +71,8 @@ public class SubscriptionExpiryJob(
         }
 
         // ── 2. Mark overdue payments ─────────────────────────────────────────
-        var overduePayments = await payments.GetPendingOverdueAsync(now);
-        foreach (var payment in overduePayments)
+        IReadOnlyList<SubscriptionPayment> overduePayments = await payments.GetPendingOverdueAsync(now);
+        foreach (SubscriptionPayment payment in overduePayments)
         {
             payment.Status = PaymentStatus.Overdue;
             payment.AddDomainEvent(new PaymentOverdueEvent(
@@ -75,7 +82,7 @@ public class SubscriptionExpiryJob(
                 payment.DueDate));
             await payments.UpdateAsync(payment);
 
-            var tenant = await tenants.GetByIdAsync(payment.TenantId);
+            Tenant? tenant = await tenants.GetByIdAsync(payment.TenantId);
             if (tenant is not null)
                 await email.SendPaymentOverdueAsync(tenant.Email, payment.Amount, payment.DueDate);
 
@@ -83,8 +90,8 @@ public class SubscriptionExpiryJob(
         }
 
         // ── 3. Send 7-day payment reminders ──────────────────────────────────
-        var dueSoon = await payments.GetDueSoonAsync(now.AddDays(7));
-        foreach (var payment in dueSoon)
+        IReadOnlyList<SubscriptionPayment> dueSoon = await payments.GetDueSoonAsync(now.AddDays(7));
+        foreach (SubscriptionPayment payment in dueSoon)
         {
             payment.AddDomainEvent(new PaymentReminderEvent(
                 payment.TenantId,
@@ -92,7 +99,7 @@ public class SubscriptionExpiryJob(
                 payment.Amount,
                 payment.DueDate));
 
-            var tenant = await tenants.GetByIdAsync(payment.TenantId);
+            Tenant? tenant = await tenants.GetByIdAsync(payment.TenantId);
             if (tenant is not null)
                 await email.SendPaymentReminderAsync(tenant.Email, payment.Amount, payment.DueDate);
 

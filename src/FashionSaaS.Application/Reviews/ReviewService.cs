@@ -32,14 +32,14 @@ public class ReviewService(
             return ResponseData<ReviewResponse>.Failure("Tenant could not be resolved.", 400);
 
         // Tracked load so the status mutation and the domain event flow through SaveChanges.
-        var review = await reviewRepository.GetByIdAsync(id);
+        Review? review = await reviewRepository.GetByIdAsync(id);
         if (review is null || review.TenantId != tenantId)
             return ResponseData<ReviewResponse>.Failure("Review not found.", 404);
 
         if (review.Status == ReviewStatus.Approved)
             return ResponseData<ReviewResponse>.Failure("Review is already approved.", 409);
 
-        var previous = review.Status;
+        ReviewStatus previous = review.Status;
         review.Status = ReviewStatus.Approved;
         review.AddDomainEvent(new ReviewModeratedEvent(review.Id, tenantId, ReviewStatus.Approved));
 
@@ -59,14 +59,14 @@ public class ReviewService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<ReviewResponse>.Failure("Tenant could not be resolved.", 400);
 
-        var review = await reviewRepository.GetByIdAsync(id);
+        Review? review = await reviewRepository.GetByIdAsync(id);
         if (review is null || review.TenantId != tenantId)
             return ResponseData<ReviewResponse>.Failure("Review not found.", 404);
 
         if (review.Status == ReviewStatus.Rejected)
             return ResponseData<ReviewResponse>.Failure("Review is already rejected.", 409);
 
-        var previous = review.Status;
+        ReviewStatus previous = review.Status;
         review.Status = ReviewStatus.Rejected;
         review.AddDomainEvent(new ReviewModeratedEvent(review.Id, tenantId, ReviewStatus.Rejected));
 
@@ -86,7 +86,7 @@ public class ReviewService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<bool>.Failure("Tenant could not be resolved.", 400);
 
-        var review = await reviewRepository.GetByIdAsync(id);
+        Review? review = await reviewRepository.GetByIdAsync(id);
         if (review is null || review.TenantId != tenantId)
             return ResponseData<bool>.Failure("Review not found.", 404);
 
@@ -110,7 +110,7 @@ public class ReviewService(
         // Status filter lets moderators list Pending reviews (storefront sees Approved only).
         filter.TenantId = tenantId;
 
-        var (items, total) = await reviewRepository.GetPagedAsync(filter, ct);
+        (IReadOnlyList<Review>? items, var total) = await reviewRepository.GetPagedAsync(filter, ct);
 
         var page = new PagedResult<ReviewResponse>
         {
@@ -128,7 +128,7 @@ public class ReviewService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<ReviewResponse>.Failure("Tenant could not be resolved.", 400);
 
-        var review = await reviewRepository.GetByIdAsync(id);
+        Review? review = await reviewRepository.GetByIdAsync(id);
         if (review is null || review.TenantId != tenantId)
             return ResponseData<ReviewResponse>.Failure("Review not found.", 404);
 

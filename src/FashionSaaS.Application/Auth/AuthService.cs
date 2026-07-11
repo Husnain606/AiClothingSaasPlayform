@@ -22,13 +22,16 @@ public class AuthService(
     IFieldEncryptionService fieldEncryption,
     ISuperAdminIpGuardService ipGuardService)
 {
+    // No nested/unbounded-then-overlapping quantifiers (each lookahead is independent and
+    // anchored), so catastrophic backtracking isn't reachable here either — the timeout is
+    // defense-in-depth, matching the same treatment as TenantSlug's pattern.
     private static readonly Regex PasswordPolicy =
-        new(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z\d]).{8,}$", RegexOptions.Compiled);
+        new(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z\d]).{8,}$", RegexOptions.Compiled, TimeSpan.FromMilliseconds(100));
 
     public async Task<ResponseData<LoginResponse>> LoginAsync(
         LoginRequest request, string ipAddress, string userAgent)
     {
-        var user = await userRepository.GetByEmailAsync(request.Email);
+        User? user = await userRepository.GetByEmailAsync(request.Email);
 
         // B3 — Persistent lock check: a SuperAdmin unlock is required to clear this.
         if (user is not null && user.IsLocked)
@@ -65,8 +68,8 @@ public class AuthService(
             return ResponseData<LoginResponse>.Failure("Account is disabled.", 403);
 
         // Load with roles + Tenant navigation (needed for tenantSlug and role check)
-        var userWithRoles = await userRepository.GetByIdWithRolesAsync(user.Id);
-        var roles = userWithRoles?.UserRoles.Select(ur => ur.Role.Name.ToString()).ToList()
+        User? userWithRoles = await userRepository.GetByIdWithRolesAsync(user.Id);
+        List<string> roles = userWithRoles?.UserRoles.Select(ur => ur.Role.Name.ToString()).ToList()
                     ?? new List<string>();
 
         var isSuperAdmin = roles.Contains(RoleType.SuperAdmin.ToString());
@@ -86,7 +89,7 @@ public class AuthService(
         }
 
         var tenantSlug = userWithRoles?.Tenant?.Slug;
-        var (accessToken, rawRefreshToken) = await IssueTokensAsync(userWithRoles ?? user, roles, tenantSlug, mfaVerified: false);
+        (var accessToken, var rawRefreshToken) = await IssueTokensAsync(userWithRoles ?? user, roles, tenantSlug, mfaVerified: false);
 
         return ResponseData<LoginResponse>.Success(new LoginResponse
         {
@@ -101,11 +104,11 @@ public class AuthService(
     {
         // B1 — Validate the MFA-challenge token issued by the password step.
         // Returns null if the token is invalid, expired, or has the wrong purpose.
-        var userId = jwtService.ValidateMfaChallengeToken(request.MfaToken);
+        Guid? userId = jwtService.ValidateMfaChallengeToken(request.MfaToken);
         if (userId is null)
             return ResponseData<LoginResponse>.Failure("Invalid or expired MFA challenge.", 401);
 
-        var user = await userRepository.GetByIdWithRolesAsync(userId.Value);
+        User? user = await userRepository.GetByIdWithRolesAsync(userId.Value);
         if (user is null)
             return ResponseData<LoginResponse>.Failure("User not found.", 404);
 
@@ -149,7 +152,7 @@ public class AuthService(
         }
 
         // mfaVerified=true is mandatory for SuperAdmin JWT (security requirement)
-        var (accessToken, rawRefreshToken) = await IssueTokensAsync(user, roles, tenantSlug, mfaVerified: true);
+        (var accessToken, var rawRefreshToken) = await IssueTokensAsync(user, roles, tenantSlug, mfaVerified: true);
 
         await auditLogService.LogAsync(
             user.Id, user.TenantId, "SuperAdminLogin", "User", user.Id,
@@ -169,7 +172,7 @@ public class AuthService(
     public async Task<ResponseData<LoginResponse>> RefreshTokenByUserIdAsync(
         Guid userId, string rawToken, string ipAddress, string userAgent)
     {
-        var existing = await refreshTokenRepository.GetActiveByUserIdAsync(userId);
+        RefreshToken? existing = await refreshTokenRepository.GetActiveByUserIdAsync(userId);
         if (existing is null || !passwordHasher.Verify(rawToken, existing.TokenHash))
             return ResponseData<LoginResponse>.Failure("Invalid or expired refresh token.", 401);
 
@@ -177,7 +180,7 @@ public class AuthService(
         existing.RevokedAt = DateTime.UtcNow;
         await refreshTokenRepository.UpdateAsync(existing);
 
-        var userWithRoles = await userRepository.GetByIdWithRolesAsync(userId);
+        User? userWithRoles = await userRepository.GetByIdWithRolesAsync(userId);
         if (userWithRoles is null || !userWithRoles.IsActive)
             return ResponseData<LoginResponse>.Failure("User not found or disabled.", 401);
 
@@ -188,7 +191,7 @@ public class AuthService(
         // SuperAdmin refresh preserves mfa_verified=true (they already completed TOTP)
         // IssueTokensAsync stages the new token and calls SaveChangesAsync once, covering
         // both the revocation (staged above via UpdateAsync) and the new token — single commit.
-        var (accessToken, newRawToken) = await IssueTokensAsync(
+        (var accessToken, var newRawToken) = await IssueTokensAsync(
             userWithRoles, roles, tenantSlug, mfaVerified: isSuperAdmin);
 
         return ResponseData<LoginResponse>.Success(new LoginResponse
@@ -209,10 +212,15 @@ public class AuthService(
     // Password management
     // -------------------------------------------------------------------------
 
+    // CA1054 suppressed: baseUrl is a plain string built by string-concatenating a reset
+    // link (email templating), consumed by IEmailService as a string, not a System.Uri —
+    // converting the whole call chain (controller → service → email service) to Uri is a
+    // cross-cutting change unrelated to the current task.
+#pragma warning disable CA1054
     public async Task<ResponseData<bool>> ForgotPasswordAsync(string email, string baseUrl,
         IPasswordResetTokenRepository resetTokenRepo)
     {
-        var user = await userRepository.GetByEmailAsync(email);
+        User? user = await userRepository.GetByEmailAsync(email);
         if (user is null)
             return ResponseData<bool>.Success(true, "If this email is registered, a reset link has been sent.");
 
@@ -235,6 +243,7 @@ public class AuthService(
 
         return ResponseData<bool>.Success(true, "If this email is registered, a reset link has been sent.");
     }
+#pragma warning restore CA1054
 
     public async Task<ResponseData<bool>> ResetPasswordAsync(ResetPasswordRequest request,
         IPasswordResetTokenRepository resetTokenRepo, IPasswordHistoryRepository historyRepo)
@@ -243,16 +252,16 @@ public class AuthService(
             return ResponseData<bool>.Failure("Password does not meet complexity requirements.", 400);
 
         var tokenHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(request.Token)));
-        var resetToken = await resetTokenRepo.GetValidByHashAsync(tokenHash);
+        PasswordResetToken? resetToken = await resetTokenRepo.GetValidByHashAsync(tokenHash);
         if (resetToken is null)
             return ResponseData<bool>.Failure("Invalid or expired reset token.", 400);
 
-        var user = await userRepository.GetByIdAsync(resetToken.UserId);
+        User? user = await userRepository.GetByIdAsync(resetToken.UserId);
         if (user is null)
             return ResponseData<bool>.Failure("User not found.", 404);
 
         // Check last 5 passwords
-        var history = await historyRepo.GetLastNAsync(user.Id, 5);
+        IReadOnlyList<PasswordHistory> history = await historyRepo.GetLastNAsync(user.Id, 5);
         if (history.Any(h => passwordHasher.Verify(request.NewPassword, h.PasswordHash)))
             return ResponseData<bool>.Failure("Cannot reuse one of your last 5 passwords.", 400);
 
@@ -278,14 +287,14 @@ public class AuthService(
         if (!IsPasswordCompliant(request.NewPassword))
             return ResponseData<bool>.Failure("Password does not meet complexity requirements.", 400);
 
-        var user = await userRepository.GetByIdAsync(userId);
+        User? user = await userRepository.GetByIdAsync(userId);
         if (user is null)
             return ResponseData<bool>.Failure("User not found.", 404);
 
         if (!passwordHasher.Verify(request.CurrentPassword, user.PasswordHash))
             return ResponseData<bool>.Failure("Current password is incorrect.", 401);
 
-        var history = await historyRepo.GetLastNAsync(userId, 5);
+        IReadOnlyList<PasswordHistory> history = await historyRepo.GetLastNAsync(userId, 5);
         if (history.Any(h => passwordHasher.Verify(request.NewPassword, h.PasswordHash)))
             return ResponseData<bool>.Failure("Cannot reuse one of your last 5 passwords.", 400);
 
@@ -309,7 +318,7 @@ public class AuthService(
         User user, IEnumerable<string> roles, string? tenantSlug, bool mfaVerified)
     {
         // Materialize once — roles is used for both JWT generation and SuperAdmin check below.
-        var roleList = roles as IReadOnlyList<string> ?? roles.ToList();
+        IReadOnlyList<string> roleList = roles as IReadOnlyList<string> ?? roles.ToList();
 
         // Pass tenantSlug so the JWT carries the tenant_slug claim (security requirement)
         var accessToken = jwtService.GenerateAccessToken(user, roleList, tenantSlug, mfaVerified);
@@ -319,9 +328,9 @@ public class AuthService(
         // Revoke any existing tokens before issuing new one (rotation)
         await refreshTokenRepository.RevokeAllByUserIdAsync(user.Id);
 
-        var isSuperAdmin = roleList.Contains(RoleType.SuperAdmin.ToString());
+        var isSuperAdmin = roleList.Contains(RoleType.SuperAdmin.ToString(), StringComparer.Ordinal);
         // SuperAdmin gets 24-hour refresh window; all others get 7 days
-        var expiry = isSuperAdmin ? DateTime.UtcNow.AddHours(24) : DateTime.UtcNow.AddDays(7);
+        DateTime expiry = isSuperAdmin ? DateTime.UtcNow.AddHours(24) : DateTime.UtcNow.AddDays(7);
 
         var refreshToken = new RefreshToken
         {

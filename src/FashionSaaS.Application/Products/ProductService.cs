@@ -34,7 +34,7 @@ public class ProductService(
         if (await productRepository.SlugExistsAsync(tenantId, request.Slug, null, ct))
             return ResponseData<ProductResponse>.Failure($"Slug '{request.Slug}' is already in use.", 409);
 
-        var category = await categoryRepository.GetByIdAsync(request.CategoryId);
+        Category? category = await categoryRepository.GetByIdAsync(request.CategoryId);
         if (category is null || category.TenantId != tenantId)
             return ResponseData<ProductResponse>.Failure("Category not found.", 404);
 
@@ -61,7 +61,7 @@ public class ProductService(
         // Re-fetch with full nav graph so the response object is consistent with GetById
         // (counts are genuinely 0 for a brand-new product, but this avoids relying on
         //  unloaded collections and keeps Create/Update symmetric).
-        var created = await productRepository.GetByIdWithDetailsAsync(product.Id, ct)
+        Product created = await productRepository.GetByIdWithDetailsAsync(product.Id, ct)
                       ?? product; // fallback — should never be null immediately after insert
         return ResponseData<ProductResponse>.Success(
             MapDetailedResponse(created), "Product created.", 201);
@@ -73,7 +73,7 @@ public class ProductService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<ProductResponse>.Failure("Tenant could not be resolved.", 400);
 
-        var product = await productRepository.GetByIdAsync(id);
+        Product? product = await productRepository.GetByIdAsync(id);
         if (product is null || product.TenantId != tenantId)
             return ResponseData<ProductResponse>.Failure("Product not found.", 404);
 
@@ -81,18 +81,17 @@ public class ProductService(
             return ResponseData<ProductResponse>.Failure($"Slug '{request.Slug}' is already in use.", 409);
 
         // Capture category name before save — re-fetch only if CategoryId actually changed.
-        string? categoryName;
         if (request.CategoryId != product.CategoryId)
         {
-            var newCategory = await categoryRepository.GetByIdAsync(request.CategoryId);
+            Category? newCategory = await categoryRepository.GetByIdAsync(request.CategoryId);
             if (newCategory is null || newCategory.TenantId != tenantId)
                 return ResponseData<ProductResponse>.Failure("Category not found.", 404);
-            categoryName = newCategory.Name;
+            _ = newCategory.Name;
         }
         else
         {
             // CategoryId unchanged — resolve name without an extra round-trip.
-            categoryName = (await categoryRepository.GetByIdAsync(product.CategoryId))?.Name;
+            _ = (await categoryRepository.GetByIdAsync(product.CategoryId))?.Name;
         }
 
         var old = new { product.Name, product.Slug, product.Description, product.CategoryId, product.BasePrice, product.Tags };
@@ -113,7 +112,7 @@ public class ProductService(
         logger.LogInformation("Product {ProductId} updated for tenant {TenantId}", product.Id, tenantId);
 
         // Re-fetch with nav graph so VariantCount/PrimaryImageUrl/review stats reflect reality.
-        var updated = await productRepository.GetByIdWithDetailsAsync(product.Id, ct);
+        Product? updated = await productRepository.GetByIdWithDetailsAsync(product.Id, ct);
         return ResponseData<ProductResponse>.Success(MapDetailedResponse(updated!), "Product updated.");
     }
 
@@ -123,26 +122,30 @@ public class ProductService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<ProductResponse>.Failure("Tenant could not be resolved.", 400);
 
-        var product = await productRepository.GetByIdAsync(id);
+        Product? product = await productRepository.GetByIdAsync(id);
         if (product is null || product.TenantId != tenantId)
             return ResponseData<ProductResponse>.Failure("Product not found.", 404);
 
         if (string.IsNullOrWhiteSpace(product.Name))
             return ResponseData<ProductResponse>.Failure("Cannot publish: product has no name.", 400);
 
-        var category = await categoryRepository.GetByIdAsync(product.CategoryId);
+        Category? category = await categoryRepository.GetByIdAsync(product.CategoryId);
         if (category is null || category.TenantId != tenantId)
             return ResponseData<ProductResponse>.Failure("Cannot publish: product has no valid category.", 400);
 
-        var variants = await variantRepository.GetByProductAsync(product.Id, ct);
+        IReadOnlyList<ProductVariant> variants = await variantRepository.GetByProductAsync(product.Id, ct);
         if (!variants.Any(v => v.IsActive))
+        {
             return ResponseData<ProductResponse>.Failure(
                 "Cannot publish: product needs at least one active variant.", 400);
+        }
 
-        var images = await imageRepository.GetByProductAsync(product.Id, ct);
+        IReadOnlyList<ProductImage> images = await imageRepository.GetByProductAsync(product.Id, ct);
         if (images.Count == 0)
+        {
             return ResponseData<ProductResponse>.Failure(
                 "Cannot publish: product needs at least one image.", 400);
+        }
 
         product.Status = ProductStatus.Active;
         product.AddDomainEvent(new ProductPublishedEvent(product.Id, tenantId));
@@ -163,11 +166,11 @@ public class ProductService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<ProductResponse>.Failure("Tenant could not be resolved.", 400);
 
-        var product = await productRepository.GetByIdAsync(id);
+        Product? product = await productRepository.GetByIdAsync(id);
         if (product is null || product.TenantId != tenantId)
             return ResponseData<ProductResponse>.Failure("Product not found.", 404);
 
-        var previousStatus = product.Status;
+        ProductStatus previousStatus = product.Status;
         product.Status = ProductStatus.Archived;
         product.AddDomainEvent(new ProductArchivedEvent(product.Id, tenantId));
 
@@ -179,7 +182,7 @@ public class ProductService(
 
         logger.LogInformation("Product {ProductId} archived for tenant {TenantId}", product.Id, tenantId);
         // Category didn't change during archive — resolve name in one fetch; no second category lookup.
-        var archivedCategory = await categoryRepository.GetByIdAsync(product.CategoryId);
+        Category? archivedCategory = await categoryRepository.GetByIdAsync(product.CategoryId);
         return ResponseData<ProductResponse>.Success(MapToResponse(product, archivedCategory?.Name), "Product archived.");
     }
 
@@ -189,15 +192,17 @@ public class ProductService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<bool>.Failure("Tenant could not be resolved.", 400);
 
-        var product = await productRepository.GetByIdAsync(id);
+        Product? product = await productRepository.GetByIdAsync(id);
         if (product is null || product.TenantId != tenantId)
             return ResponseData<bool>.Failure("Product not found.", 404);
 
         // Only Draft products may be hard-deleted; Active products should be archived first,
         // and Archived products are kept for records (spec §8).
         if (product.Status != ProductStatus.Draft)
+        {
             return ResponseData<bool>.Failure(
                 "Only draft products can be deleted; archive active products and keep archived ones for records.", 409);
+        }
 
         await productRepository.DeleteAsync(product);
         await unitOfWork.SaveChangesAsync(ct);
@@ -218,7 +223,7 @@ public class ProductService(
         // Enforce tenant scope regardless of the inbound filter value.
         filter.TenantId = tenantId;
 
-        var (items, total) = await productRepository.GetPagedAsync(filter, ct);
+        (IReadOnlyList<Product>? items, var total) = await productRepository.GetPagedAsync(filter, ct);
 
         var page = new PagedResult<ProductResponse>
         {
@@ -236,7 +241,7 @@ public class ProductService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<ProductResponse>.Failure("Tenant could not be resolved.", 400);
 
-        var product = await productRepository.GetByIdWithDetailsAsync(id, ct);
+        Product? product = await productRepository.GetByIdWithDetailsAsync(id, ct);
         if (product is null || product.TenantId != tenantId)
             return ResponseData<ProductResponse>.Failure("Product not found.", 404);
 
@@ -248,7 +253,7 @@ public class ProductService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<ProductResponse>.Failure("Tenant could not be resolved.", 400);
 
-        var product = await productRepository.GetBySlugWithDetailsAsync(tenantId, slug, ct);
+        Product? product = await productRepository.GetBySlugWithDetailsAsync(tenantId, slug, ct);
         if (product is null)
             return ResponseData<ProductResponse>.Failure("Product not found.", 404);
 

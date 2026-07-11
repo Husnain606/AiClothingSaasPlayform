@@ -22,7 +22,7 @@ public class CloudinaryImageStorageService : IImageStorageService
         IOptions<CloudinarySettings> options,
         ILogger<CloudinaryImageStorageService> logger)
     {
-        var settings = options.Value;
+        CloudinarySettings settings = options.Value;
         _cloudinary = new Cloudinary(new Account(settings.CloudName, settings.ApiKey, settings.ApiSecret));
         _cloudinary.Api.Secure = true;
         _logger = logger;
@@ -37,7 +37,7 @@ public class CloudinaryImageStorageService : IImageStorageService
             Folder = folder,
         };
 
-        var result = await _cloudinary.UploadAsync(uploadParams, ct);
+        ImageUploadResult result = await _cloudinary.UploadAsync(uploadParams, ct);
 
         if (result.Error is not null || result.SecureUrl is null)
         {
@@ -55,9 +55,12 @@ public class CloudinaryImageStorageService : IImageStorageService
         ct.ThrowIfCancellationRequested();
 
         // Best-effort: a Cloudinary delete failure must never block the DB row removal.
+        // CA1031 suppressed deliberately: any exception from the storage provider must be
+        // swallowed here by design, not just specific ones.
+#pragma warning disable CA1031
         try
         {
-            var result = await _cloudinary.DestroyAsync(new DeletionParams(publicId));
+            DeletionResult result = await _cloudinary.DestroyAsync(new DeletionParams(publicId));
             if (!string.Equals(result.Result, "ok", StringComparison.OrdinalIgnoreCase))
             {
                 _logger.LogWarning("Cloudinary delete returned {Result} for {PublicId}",
@@ -68,5 +71,6 @@ public class CloudinaryImageStorageService : IImageStorageService
         {
             _logger.LogWarning(ex, "Cloudinary delete failed for {PublicId}", publicId);
         }
+#pragma warning restore CA1031
     }
 }

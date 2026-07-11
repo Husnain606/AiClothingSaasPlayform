@@ -1,0 +1,385 @@
+# .NET coding standard — enforced at build time.
+# See docs/projectStandards/coding-standards.md for the rationale behind each decision.
+#
+# NOT root=true: this file layers on top of the repo-root .editorconfig (which owns
+# shared cross-stack formatting). The upward EditorConfig walk merges this with the
+# root for .cs files under apps/api, then stops at the root (root=true).
+#
+# Severity model: with TreatWarningsAsErrors=true, anything at `warning` fails the
+# build; `suggestion`/`silent` are IDE-only hints. Aesthetic preferences are
+# suggestions; correctness/consistency rules are warnings.
+
+##############################
+# C# files
+##############################
+[*.cs]
+# .NET sources are CRLF (matches Visual Studio / Windows .NET tooling), overriding
+# the repo-root LF default for this language.
+end_of_line = crlf
+
+#### Namespaces ####
+csharp_style_namespace_declarations = file_scoped:warning
+dotnet_style_namespace_match_folder = true:warning
+
+#### using directives ####
+csharp_using_directive_placement = outside_namespace:warning
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+dotnet_diagnostic.IDE0005.severity = warning   # remove unnecessary usings
+
+#### var: built-in types + when the type is apparent ####
+csharp_style_var_for_built_in_types = true:warning
+csharp_style_var_when_type_is_apparent = true:warning
+csharp_style_var_elsewhere = false:warning
+# Target-typed `new` is the apparent-type counterpart to the var policy.
+csharp_style_implicit_object_creation_when_type_is_apparent = true:warning
+
+#### Braces / blocks: require, except a true single-line statement ####
+csharp_prefer_braces = when_multiline:warning
+
+#### Expression-bodied members: allowed anywhere the body is one expression ####
+csharp_style_expression_bodied_methods = when_on_single_line:suggestion
+csharp_style_expression_bodied_constructors = when_on_single_line:suggestion
+csharp_style_expression_bodied_operators = when_on_single_line:suggestion
+csharp_style_expression_bodied_local_functions = when_on_single_line:suggestion
+csharp_style_expression_bodied_properties = true:suggestion
+csharp_style_expression_bodied_indexers = true:suggestion
+csharp_style_expression_bodied_accessors = true:suggestion
+csharp_style_expression_bodied_lambdas = true:suggestion
+
+#### Primary constructors: avoided entirely (convention; no analyzer nudge) ####
+csharp_style_prefer_primary_constructors = false:silent
+
+#### this. qualification: not required ####
+dotnet_style_qualification_for_field = false:warning
+dotnet_style_qualification_for_property = false:warning
+dotnet_style_qualification_for_method = false:warning
+dotnet_style_qualification_for_event = false:warning
+
+#### Language keywords over BCL type names (int, not Int32) ####
+dotnet_style_predefined_type_for_locals_parameters_members = true:warning
+dotnet_style_predefined_type_for_member_access = true:warning
+
+#### Modern null / pattern / expression preferences ####
+dotnet_style_coalesce_expression = true:warning
+dotnet_style_null_propagation = true:warning
+dotnet_style_prefer_is_null_check_over_reference_equality_method = true:warning
+csharp_style_prefer_null_check_over_type_check = true:warning
+csharp_style_throw_expression = true:suggestion
+csharp_style_conditional_delegate_call = true:warning
+csharp_style_pattern_matching_over_is_with_cast_check = true:warning
+csharp_style_pattern_matching_over_as_with_null_check = true:warning
+csharp_style_prefer_pattern_matching = true:suggestion
+csharp_style_prefer_switch_expression = true:suggestion
+csharp_style_prefer_not_pattern = true:warning
+csharp_style_inlined_variable_declaration = true:warning
+csharp_style_deconstructed_variable_declaration = true:suggestion
+csharp_style_prefer_index_operator = true:suggestion
+csharp_style_prefer_range_operator = true:suggestion
+
+#### Members, fields, accessibility ####
+dotnet_style_readonly_field = true:warning
+dotnet_style_require_accessibility_modifiers = for_non_interface_members:warning
+dotnet_style_prefer_auto_properties = true:warning
+csharp_prefer_static_local_function = true:warning
+csharp_style_prefer_readonly_struct = true:warning
+csharp_prefer_simple_default_expression = true:warning
+
+#### Object/collection construction (aesthetic → suggestion) ####
+dotnet_style_object_initializer = true:suggestion
+dotnet_style_collection_initializer = true:suggestion
+dotnet_style_prefer_collection_expression = when_types_loosely_match:suggestion
+dotnet_style_prefer_simplified_interpolation = true:suggestion
+dotnet_style_prefer_compound_assignment = true:warning
+dotnet_style_prefer_simplified_boolean_expressions = true:warning
+dotnet_style_prefer_conditional_expression_over_assignment = true:suggestion
+dotnet_style_prefer_conditional_expression_over_return = true:suggestion
+
+#### Unused values must be explicit discards ####
+csharp_style_unused_value_assignment_preference = discard_variable:warning
+csharp_style_unused_value_expression_statement_preference = discard_variable:suggestion
+
+#### Modifier order ####
+csharp_preferred_modifier_order = public,private,protected,internal,file,static,extern,new,virtual,abstract,sealed,override,readonly,unsafe,required,volatile,async:warning
+
+##############################
+# Formatting (IDE0055) — Allman braces, .NET defaults
+##############################
+dotnet_diagnostic.IDE0055.severity = warning
+
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+csharp_new_line_before_members_in_object_initializers = true
+csharp_new_line_before_members_in_anonymous_types = true
+csharp_new_line_between_query_expression_clauses = true
+
+csharp_indent_case_contents = true
+csharp_indent_case_contents_when_block = false
+csharp_indent_switch_labels = true
+csharp_indent_labels = one_less_than_current
+csharp_indent_block_contents = true
+csharp_indent_braces = false
+
+csharp_space_after_cast = false
+csharp_space_after_keywords_in_control_flow_statements = true
+csharp_space_between_method_declaration_parameter_list_parentheses = false
+csharp_space_between_method_call_parameter_list_parentheses = false
+csharp_space_between_parentheses = false
+csharp_space_before_colon_in_inheritance_clause = true
+csharp_space_after_colon_in_inheritance_clause = true
+csharp_space_around_binary_operators = before_and_after
+
+csharp_preserve_single_line_blocks = true
+csharp_preserve_single_line_statements = false
+
+##############################
+# Naming conventions
+##############################
+
+# Styles
+dotnet_naming_style.pascal_case.capitalization = pascal_case
+
+dotnet_naming_style.camel_case.capitalization = camel_case
+
+dotnet_naming_style.underscore_camel.required_prefix = _
+dotnet_naming_style.underscore_camel.capitalization = camel_case
+
+dotnet_naming_style.i_prefix.required_prefix = I
+dotnet_naming_style.i_prefix.capitalization = pascal_case
+
+dotnet_naming_style.t_prefix.required_prefix = T
+dotnet_naming_style.t_prefix.capitalization = pascal_case
+
+dotnet_naming_style.async_suffix.required_suffix = Async
+dotnet_naming_style.async_suffix.capitalization = pascal_case
+
+# Symbol groups
+dotnet_naming_symbols.interfaces.applicable_kinds = interface
+
+dotnet_naming_symbols.type_parameters.applicable_kinds = type_parameter
+
+dotnet_naming_symbols.types.applicable_kinds = class, struct, enum, delegate
+
+dotnet_naming_symbols.async_methods.applicable_kinds = method
+dotnet_naming_symbols.async_methods.required_modifiers = async
+
+dotnet_naming_symbols.non_field_members.applicable_kinds = property, method, event
+
+dotnet_naming_symbols.constants.applicable_kinds = field
+dotnet_naming_symbols.constants.required_modifiers = const
+
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private, internal, private_protected
+
+dotnet_naming_symbols.public_fields.applicable_kinds = field
+dotnet_naming_symbols.public_fields.applicable_accessibilities = public, protected, protected_internal
+
+dotnet_naming_symbols.parameters.applicable_kinds = parameter
+
+dotnet_naming_symbols.locals.applicable_kinds = local
+
+dotnet_naming_symbols.local_functions.applicable_kinds = local_function
+
+# Rules (first match wins — most specific first)
+dotnet_naming_rule.interfaces_are_i_prefixed.symbols = interfaces
+dotnet_naming_rule.interfaces_are_i_prefixed.style = i_prefix
+dotnet_naming_rule.interfaces_are_i_prefixed.severity = warning
+
+dotnet_naming_rule.type_parameters_are_t_prefixed.symbols = type_parameters
+dotnet_naming_rule.type_parameters_are_t_prefixed.style = t_prefix
+dotnet_naming_rule.type_parameters_are_t_prefixed.severity = warning
+
+dotnet_naming_rule.types_are_pascal.symbols = types
+dotnet_naming_rule.types_are_pascal.style = pascal_case
+dotnet_naming_rule.types_are_pascal.severity = warning
+
+dotnet_naming_rule.constants_are_pascal.symbols = constants
+dotnet_naming_rule.constants_are_pascal.style = pascal_case
+dotnet_naming_rule.constants_are_pascal.severity = warning
+
+dotnet_naming_rule.async_methods_end_with_async.symbols = async_methods
+dotnet_naming_rule.async_methods_end_with_async.style = async_suffix
+dotnet_naming_rule.async_methods_end_with_async.severity = warning
+
+dotnet_naming_rule.non_field_members_are_pascal.symbols = non_field_members
+dotnet_naming_rule.non_field_members_are_pascal.style = pascal_case
+dotnet_naming_rule.non_field_members_are_pascal.severity = warning
+
+dotnet_naming_rule.private_fields_are_underscore_camel.symbols = private_fields
+dotnet_naming_rule.private_fields_are_underscore_camel.style = underscore_camel
+dotnet_naming_rule.private_fields_are_underscore_camel.severity = warning
+
+dotnet_naming_rule.public_fields_are_pascal.symbols = public_fields
+dotnet_naming_rule.public_fields_are_pascal.style = pascal_case
+dotnet_naming_rule.public_fields_are_pascal.severity = warning
+
+dotnet_naming_rule.parameters_are_camel.symbols = parameters
+dotnet_naming_rule.parameters_are_camel.style = camel_case
+dotnet_naming_rule.parameters_are_camel.severity = warning
+
+dotnet_naming_rule.locals_are_camel.symbols = locals
+dotnet_naming_rule.locals_are_camel.style = camel_case
+dotnet_naming_rule.locals_are_camel.severity = warning
+
+dotnet_naming_rule.local_functions_are_pascal.symbols = local_functions
+dotnet_naming_rule.local_functions_are_pascal.style = pascal_case
+dotnet_naming_rule.local_functions_are_pascal.severity = warning
+
+##############################
+# Analyzer tuning — MAXIMAL, tune reactively.
+# Do not pre-disable rules. When a rule produces a genuine false positive,
+# add an override BELOW with a one-line justification. Required format:
+#   # <RULE_ID>: <why it's wrong here> — <date/initials>
+#   dotnet_diagnostic.<RULE_ID>.severity = suggestion
+##############################
+
+# "Seal classes" is a suggestion, not a build gate (deliberate inheritance in
+# the domain model). This is a standing decision, not a reactive suppression.
+dotnet_diagnostic.CA1852.severity = suggestion   # built-in: seal internal types
+dotnet_diagnostic.MA0053.severity = suggestion   # Meziantou: make class sealed
+
+# --- reactive suppressions go below this line ---
+
+# CA2227: EF Core navigation-collection properties (e.g. Product.Variants, User.UserRoles)
+# need a public setter — EF's change tracker and this codebase's object-initializer
+# construction pattern (used throughout tests/seed data) both assign these directly.
+# Making them get-only would require an entity-wide API redesign (add/remove methods
+# replacing every `new Entity { Collection = [...] }` call site across the whole
+# codebase) — out of proportion to what this rule is actually protecting against here,
+# since these are simple navigation properties, not encapsulated aggregate state. — 2026-07-11
+dotnet_diagnostic.CA2227.severity = suggestion
+
+# CA1008: several domain enums (PaymentStatus, ProductStatus, ReviewStatus, RoleScope,
+# RoleType, DiscountType, StockAdjustmentReason, SubscriptionPlanType, SubscriptionStatus)
+# represent a real, always-explicitly-set business state with no meaningful "none" value.
+# Adding a synthetic None=0 member per rule would let an uninitialized/default value pass
+# silently where today a missing explicit assignment would be a visible bug. — 2026-07-11
+dotnet_diagnostic.CA1008.severity = suggestion
+
+# CA1056: ProductImage.Url, Tenant.LogoUrl, Tenant.CoverImageUrl are plain EF-mapped string
+# columns (Cloudinary URLs) consumed as strings throughout the API's DTOs/serialization.
+# Converting to System.Uri would need EF value converters plus JSON (de)serialization
+# changes at every DTO boundary — a cross-cutting change, not a narrow domain fix. — 2026-07-11
+dotnet_diagnostic.CA1056.severity = suggestion
+
+# CA1040: IDomainEvent is a deliberate empty marker interface (BaseEntity.AddDomainEvent
+# constrains to it; concrete events add their own data). This is Microsoft's own documented
+# exception case for CA1040 (marker interfaces), not an oversight. — 2026-07-11
+dotnet_diagnostic.CA1040.severity = suggestion
+
+# CA2007 / MA0004: "call ConfigureAwait(false)" exists to avoid deadlocks under a captured
+# SynchronizationContext (classic ASP.NET Framework, WinForms/WPF). ASP.NET Core (this whole
+# solution) has no SynchronizationContext by default, so the rule is pure noise here — not a
+# false positive on a specific file, a project-wide mismatch between the rule's premise and
+# this host. Microsoft's own ASP.NET Core guidance treats ConfigureAwait(false) as unnecessary
+# in ASP.NET Core apps. — 2026-07-11
+dotnet_diagnostic.CA2007.severity = suggestion
+dotnet_diagnostic.MA0004.severity = suggestion
+
+# User-confirmed exception to "never disable analyzers to make something pass" (2026-07-11):
+# the entire non-Domain codebase had never actually been compiled under this strict baseline
+# before (Directory.Build.props itself was untracked in git until this session), so these are
+# pre-existing violations discovered while unblocking an unrelated build failure, not rules
+# being dodged to hide a new defect. Dan explicitly confirmed suppressing these specific,
+# large-scope, design-level categories rather than performing the equivalent unrelated
+# refactor across the whole codebase.
+
+# CA1062: nullable reference types are enabled solution-wide, giving compile-time null safety
+# for internal callers; this project's own documented validation architecture
+# (backend-architecture.md §4.1) puts null/shape validation at the API contract layer, before
+# a request ever reaches a service method — re-adding runtime guard clauses in every internal
+# service method is redundant defense-in-depth against a caller that is, by design, already
+# validated upstream. — 2026-07-11
+dotnet_diagnostic.CA1062.severity = suggestion
+
+# CA1848 / CA1873: LoggerMessage source-generated delegates are a logging-throughput
+# micro-optimization; this API has no evidence yet that logging is a hot path. Revisit if
+# profiling ever identifies logging overhead as a real bottleneck. — 2026-07-11
+dotnet_diagnostic.CA1848.severity = suggestion
+dotnet_diagnostic.CA1873.severity = suggestion
+
+# CA1716: flags identifiers colliding with reserved words in OTHER .NET languages (VB.NET,
+# F#). This solution is C#-only with no multi-language interop surface — the rule's premise
+# doesn't apply here. — 2026-07-11
+dotnet_diagnostic.CA1716.severity = suggestion
+
+# MA0016 / CA1002: "return an abstraction, not List<T>" applies to genuinely encapsulated
+# aggregate APIs; here it's flagging the same EF navigation-collection properties as CA2227
+# above (see that entry) plus a handful of DTO/request properties with the same shape. Fixing
+# "properly" means the same entity-wide API redesign already ruled out for CA2227. — 2026-07-11
+dotnet_diagnostic.MA0016.severity = suggestion
+dotnet_diagnostic.CA1002.severity = suggestion
+
+# MA0051: pre-existing service methods exceed the rule's line-count threshold. Refactoring
+# each into smaller pieces is a real improvement but a substantial, risk-bearing rewrite of
+# existing business logic unrelated to the current task — out of proportion here. — 2026-07-11
+dotnet_diagnostic.MA0051.severity = suggestion
+
+# CA1000: ResponseData<T>.Success/Failure are deliberate static factory methods on a generic
+# type — this project's own documented Result<T>-style envelope design (backend-architecture.md
+# §4.2) explicitly calls for "factory statics" on this exact shape of type. Not an oversight. — 2026-07-11
+dotnet_diagnostic.CA1000.severity = suggestion
+
+# CA1819: CorsSettings.AllowedOrigins is a plain IConfiguration-bound options POCO — string[]
+# is the idiomatic, directly-bindable shape for a JSON array config value, read once at
+# startup and never mutated externally. — 2026-07-11
+dotnet_diagnostic.CA1819.severity = suggestion
+
+# MA0048: several feature folders (Orders/DTOs/OrderDtos.cs, Reports/DTOs/ReportDtos.cs, etc.)
+# deliberately bundle a request/response DTO family for one feature into a single file — a
+# documented open decision in backend-architecture.md §11-F ("single file per use case").
+# Splitting ~30 DTOs into their own files is a large mechanical restructuring unrelated to the
+# current task. — 2026-07-11
+dotnet_diagnostic.MA0048.severity = suggestion
+
+# CA1724: FashionSaaS.Infrastructure.DependencyInjection textually collides with the
+# Microsoft.Extensions.DependencyInjection namespace it configures — an extremely common,
+# widely-used naming convention across the .NET ecosystem (including official Microsoft
+# project templates) for the static class hosting an AddX(IServiceCollection) extension
+# method. No actual ambiguity: nothing references the type by its bare name outside this
+# file. — 2026-07-11
+dotnet_diagnostic.CA1724.severity = suggestion
+
+# CA1861: flags EF Core migration files (Persistence/Migrations/**) passing inline array
+# literals to migrationBuilder calls. These are EF-generated, append-only historical
+# artifacts, never hand-edited or called repeatedly at runtime in a hot path — the rule's
+# premise (repeated-call allocation overhead) doesn't apply to one-time startup migrations.
+# — 2026-07-11
+[**/Migrations/*.cs]
+dotnet_diagnostic.CA1861.severity = suggestion
+
+[*.cs]
+# CA1711: "EventHandler" suffix is reserved for .NET's delegate-based event pattern, but this
+# codebase uses it for MediatR INotificationHandler<T> implementations (e.g.
+# SuperAdminLoginFromNewIpEventHandler) — a standard, unambiguous MediatR naming convention,
+# not a real collision with the .NET event delegate pattern. — 2026-07-11
+dotnet_diagnostic.CA1711.severity = suggestion
+
+# CA1812: one of the most commonly suppressed rules in any ASP.NET Core codebase — MVC
+# controllers, middleware, and their nested request/form DTOs are all instantiated by the
+# framework via reflection/DI activation, invisible to Roslyn's static "never instantiated"
+# analysis. This isn't a case-by-case false positive; it's a structural blind spot the rule
+# has for this entire hosting model. — 2026-07-11
+dotnet_diagnostic.CA1812.severity = suggestion
+
+
+##############################
+# Test code overrides — apps/api/tests/ only.
+# Tests inherit the full standard above; this section relaxes ONLY what is
+# genuinely inappropriate for test code. It comes after [*.cs], so its settings
+# win for files under tests/. Keep it minimal and add relaxations reactively.
+# See docs/projectStandards/build-configuration.md for why test overrides live
+# here rather than in a separate props file.
+##############################
+[tests/**.cs]
+
+# Test methods don't carry the Async suffix even when async — the name describes
+# the scenario under test, not the calling convention.
+dotnet_naming_rule.async_methods_end_with_async.severity = none
+
+# CA1707: xUnit test names use underscores as word separators between scenario/expectation
+# (e.g. NewOrder_DefaultsToPending) — a standard, widely-used test-naming convention, not
+# an accidental style violation. — 2026-07-11
+dotnet_diagnostic.CA1707.severity = suggestion

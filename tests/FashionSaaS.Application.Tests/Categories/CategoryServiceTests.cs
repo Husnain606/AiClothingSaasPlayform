@@ -1,5 +1,6 @@
 using FashionSaaS.Application.Categories;
 using FashionSaaS.Application.Categories.DTOs;
+using FashionSaaS.Application.Common;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Domain.Entities;
 using FluentAssertions;
@@ -26,7 +27,12 @@ public class CategoryServiceTests
 
     private Category Cat(Guid id, Guid? parent = null, int sort = 0) => new()
     {
-        Id = id, TenantId = _tenantId, Name = "C", Slug = "c", ParentCategoryId = parent, SortOrder = sort
+        Id = id,
+        TenantId = _tenantId,
+        Name = "C",
+        Slug = "c",
+        ParentCategoryId = parent,
+        SortOrder = sort
     };
 
     // ── Create ──────────────────────────────────────────────────────────────────
@@ -37,7 +43,7 @@ public class CategoryServiceTests
         _repo.Setup(r => r.SlugExistsAsync(_tenantId, "shoes", null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
 
-        var result = await CreateService().CreateAsync(
+        ResponseData<CategoryResponse> result = await CreateService().CreateAsync(
             new CreateCategoryRequest { Name = "Shoes", Slug = "shoes" },
             Guid.NewGuid(), "127.0.0.1", "ua");
 
@@ -53,7 +59,7 @@ public class CategoryServiceTests
         _repo.Setup(r => r.SlugExistsAsync(_tenantId, "shoes", null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
-        var result = await CreateService().CreateAsync(
+        ResponseData<CategoryResponse> result = await CreateService().CreateAsync(
             new CreateCategoryRequest { Name = "Shoes", Slug = "shoes" },
             Guid.NewGuid(), "127.0.0.1", "ua");
 
@@ -71,7 +77,7 @@ public class CategoryServiceTests
         _repo.Setup(r => r.GetByIdAsync(parentId))
             .ReturnsAsync(new Category { Id = parentId, TenantId = Guid.NewGuid() }); // different tenant
 
-        var result = await CreateService().CreateAsync(
+        ResponseData<CategoryResponse> result = await CreateService().CreateAsync(
             new CreateCategoryRequest { Name = "Shoes", Slug = "shoes", ParentCategoryId = parentId },
             Guid.NewGuid(), "127.0.0.1", "ua");
 
@@ -89,7 +95,7 @@ public class CategoryServiceTests
         _repo.Setup(r => r.SlugExistsAsync(_tenantId, "taken", id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
-        var result = await CreateService().UpdateAsync(id,
+        ResponseData<CategoryResponse> result = await CreateService().UpdateAsync(id,
             new UpdateCategoryRequest { Name = "X", Slug = "taken" },
             Guid.NewGuid(), "127.0.0.1", "ua");
 
@@ -104,7 +110,7 @@ public class CategoryServiceTests
         var id = Guid.NewGuid();
         _repo.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(Cat(id));
 
-        var result = await CreateService().MoveAsync(
+        ResponseData<CategoryResponse> result = await CreateService().MoveAsync(
             new MoveCategoryRequest { Id = id, NewParentId = id },
             Guid.NewGuid(), "127.0.0.1", "ua");
 
@@ -124,7 +130,7 @@ public class CategoryServiceTests
         _repo.Setup(r => r.GetTreeAsync(_tenantId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<Category> { Cat(root), Cat(child, root), Cat(grandchild, child) });
 
-        var result = await CreateService().MoveAsync(
+        ResponseData<CategoryResponse> result = await CreateService().MoveAsync(
             new MoveCategoryRequest { Id = root, NewParentId = grandchild },
             Guid.NewGuid(), "127.0.0.1", "ua");
 
@@ -144,7 +150,7 @@ public class CategoryServiceTests
         _repo.Setup(r => r.GetTreeAsync(_tenantId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<Category> { Cat(node), Cat(newParent) });
 
-        var result = await CreateService().MoveAsync(
+        ResponseData<CategoryResponse> result = await CreateService().MoveAsync(
             new MoveCategoryRequest { Id = node, NewParentId = newParent },
             Guid.NewGuid(), "127.0.0.1", "ua");
 
@@ -161,7 +167,7 @@ public class CategoryServiceTests
         _repo.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(Cat(id));
         _repo.Setup(r => r.HasChildrenAsync(_tenantId, id, It.IsAny<CancellationToken>())).ReturnsAsync(true);
 
-        var result = await CreateService().DeleteAsync(id, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<bool> result = await CreateService().DeleteAsync(id, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.StatusCode.Should().Be(409);
         _repo.Verify(r => r.DeleteAsync(It.IsAny<Category>()), Times.Never);
@@ -175,7 +181,7 @@ public class CategoryServiceTests
         _repo.Setup(r => r.HasChildrenAsync(_tenantId, id, It.IsAny<CancellationToken>())).ReturnsAsync(false);
         _repo.Setup(r => r.HasProductsAsync(_tenantId, id, It.IsAny<CancellationToken>())).ReturnsAsync(true);
 
-        var result = await CreateService().DeleteAsync(id, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<bool> result = await CreateService().DeleteAsync(id, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.StatusCode.Should().Be(409);
         _repo.Verify(r => r.DeleteAsync(It.IsAny<Category>()), Times.Never);
@@ -189,7 +195,7 @@ public class CategoryServiceTests
         _repo.Setup(r => r.HasChildrenAsync(_tenantId, id, It.IsAny<CancellationToken>())).ReturnsAsync(false);
         _repo.Setup(r => r.HasProductsAsync(_tenantId, id, It.IsAny<CancellationToken>())).ReturnsAsync(false);
 
-        var result = await CreateService().DeleteAsync(id, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<bool> result = await CreateService().DeleteAsync(id, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.IsSuccess.Should().BeTrue();
         _repo.Verify(r => r.DeleteAsync(It.IsAny<Category>()), Times.Once);
@@ -214,11 +220,11 @@ public class CategoryServiceTests
                 Cat(grandchild, childA)
             });
 
-        var result = await CreateService().GetTreeAsync();
+        ResponseData<IReadOnlyList<CategoryTreeNode>> result = await CreateService().GetTreeAsync();
 
         result.IsSuccess.Should().BeTrue();
         result.Data.Should().ContainSingle(n => n.Id == root);
-        var rootNode = result.Data!.Single(n => n.Id == root);
+        CategoryTreeNode rootNode = result.Data!.Single(n => n.Id == root);
         rootNode.Children.Should().HaveCount(2);
         rootNode.Children[0].Id.Should().Be(childA); // ordered by SortOrder
         rootNode.Children[0].Children.Should().ContainSingle(n => n.Id == grandchild);
@@ -230,7 +236,7 @@ public class CategoryServiceTests
     {
         _tenant.SetupGet(t => t.TenantId).Returns((Guid?)null);
 
-        var result = await CreateService().CreateAsync(
+        ResponseData<CategoryResponse> result = await CreateService().CreateAsync(
             new CreateCategoryRequest { Name = "X", Slug = "x" }, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.StatusCode.Should().Be(400);

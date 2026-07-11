@@ -1,7 +1,21 @@
 namespace FashionSaaS.Application.Exceptions;
 
-public class NotFoundException(string message) : Exception(message)
+public class NotFoundException : Exception
 {
+    public NotFoundException()
+    {
+    }
+
+    public NotFoundException(string message) : base(message)
+    {
+    }
+
+    public NotFoundException(string message, Exception innerException) : base(message, innerException)
+    {
+    }
+
     public NotFoundException(string name, object key)
-        : this($"{name} with key '{key}' was not found.") { }
+        : base($"{name} with key '{key}' was not found.")
+    {
+    }
 }

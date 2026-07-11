@@ -1,3 +1,4 @@
+using FashionSaaS.Application.Common;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Application.Reviews;
 using FashionSaaS.Application.Reviews.DTOs;
@@ -29,8 +30,12 @@ public class ReviewServiceTests
 
     private Review Review(ReviewStatus status = ReviewStatus.Pending) => new()
     {
-        Id = Guid.NewGuid(), TenantId = _tenantId, ProductId = Guid.NewGuid(), CustomerId = Guid.NewGuid(),
-        Rating = 5, Status = status
+        Id = Guid.NewGuid(),
+        TenantId = _tenantId,
+        ProductId = Guid.NewGuid(),
+        CustomerId = Guid.NewGuid(),
+        Rating = 5,
+        Status = status
     };
 
     // ── Approve ───────────────────────────────────────────────────────────────────
@@ -38,14 +43,14 @@ public class ReviewServiceTests
     [Fact]
     public async Task ApproveAsync_PendingReview_TransitionsAndRaisesEventBeforeSave()
     {
-        var review = Review();
+        Review review = Review();
         _reviews.Setup(r => r.GetByIdAsync(review.Id)).ReturnsAsync(review);
         var eventPresentAtSave = false;
         _uow.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
             .Callback(() => eventPresentAtSave = review.DomainEvents.Any(e => e is ReviewModeratedEvent))
             .ReturnsAsync(1);
 
-        var result = await CreateService().ApproveAsync(review.Id, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<ReviewResponse> result = await CreateService().ApproveAsync(review.Id, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.IsSuccess.Should().BeTrue();
         review.Status.Should().Be(ReviewStatus.Approved);
@@ -56,10 +61,10 @@ public class ReviewServiceTests
     [Fact]
     public async Task ApproveAsync_AlreadyApproved_Returns409()
     {
-        var review = Review(ReviewStatus.Approved);
+        Review review = Review(ReviewStatus.Approved);
         _reviews.Setup(r => r.GetByIdAsync(review.Id)).ReturnsAsync(review);
 
-        var result = await CreateService().ApproveAsync(review.Id, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<ReviewResponse> result = await CreateService().ApproveAsync(review.Id, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.StatusCode.Should().Be(409);
         _uow.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
@@ -70,10 +75,10 @@ public class ReviewServiceTests
     [Fact]
     public async Task RejectAsync_PendingReview_TransitionsAndRaisesEvent()
     {
-        var review = Review();
+        Review review = Review();
         _reviews.Setup(r => r.GetByIdAsync(review.Id)).ReturnsAsync(review);
 
-        var result = await CreateService().RejectAsync(review.Id,
+        ResponseData<ReviewResponse> result = await CreateService().RejectAsync(review.Id,
             new RejectReviewRequest { Reason = "spam" }, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.IsSuccess.Should().BeTrue();
@@ -87,7 +92,7 @@ public class ReviewServiceTests
         var review = new Review { Id = Guid.NewGuid(), TenantId = Guid.NewGuid(), Status = ReviewStatus.Pending };
         _reviews.Setup(r => r.GetByIdAsync(review.Id)).ReturnsAsync(review);
 
-        var result = await CreateService().RejectAsync(review.Id,
+        ResponseData<ReviewResponse> result = await CreateService().RejectAsync(review.Id,
             new RejectReviewRequest { Reason = "x" }, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.StatusCode.Should().Be(404);
@@ -98,10 +103,10 @@ public class ReviewServiceTests
     [Fact]
     public async Task DeleteAsync_RemovesReview()
     {
-        var review = Review();
+        Review review = Review();
         _reviews.Setup(r => r.GetByIdAsync(review.Id)).ReturnsAsync(review);
 
-        var result = await CreateService().DeleteAsync(review.Id, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<bool> result = await CreateService().DeleteAsync(review.Id, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.IsSuccess.Should().BeTrue();
         _reviews.Verify(r => r.DeleteAsync(review), Times.Once);
@@ -118,7 +123,7 @@ public class ReviewServiceTests
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync((new List<Review> { Review() }, 3));
 
-        var result = await CreateService().GetAllAsync(filter);
+        ResponseData<PagedResult<ReviewResponse>> result = await CreateService().GetAllAsync(filter);
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.TotalCount.Should().Be(3);

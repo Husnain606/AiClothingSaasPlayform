@@ -1,3 +1,4 @@
+using FashionSaaS.Application.Common;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Application.Reports;
 using FashionSaaS.Application.Reports.DTOs;
@@ -38,18 +39,18 @@ public class ReportServiceTests
     private static readonly DateTime From = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
     private static readonly DateTime To = new(2026, 2, 28, 23, 59, 59, DateTimeKind.Utc);
 
-    private ApplicationDbContext CreateContext(Guid tenantId, string dbName)
+    private static ApplicationDbContext CreateContext(Guid tenantId, string dbName)
     {
         var currentTenant = new Mock<ICurrentTenantService>();
         currentTenant.Setup(c => c.TenantId).Returns(tenantId);
 
-        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+        DbContextOptions<ApplicationDbContext> options = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseInMemoryDatabase(dbName)
             .Options;
         return new ApplicationDbContext(options, currentTenant.Object);
     }
 
-    private ReportService CreateService(ApplicationDbContext ctx, Guid? tenantId)
+    private static ReportService CreateService(ApplicationDbContext ctx, Guid? tenantId)
     {
         var currentTenant = new Mock<ICurrentTenantService>();
         currentTenant.Setup(c => c.TenantId).Returns(tenantId);
@@ -61,7 +62,7 @@ public class ReportServiceTests
     private async Task<(ReportService Service, ApplicationDbContext Ctx, string DbName)> SetupAsync()
     {
         var dbName = Guid.NewGuid().ToString();
-        var ctx = CreateContext(_tenantA, dbName);
+        ApplicationDbContext ctx = CreateContext(_tenantA, dbName);
         await SeedAsync(ctx);
         return (CreateService(ctx, _tenantA), ctx, dbName);
     }
@@ -143,7 +144,7 @@ public class ReportServiceTests
             Subtotal = total,
             Total = total
         };
-        foreach (var (productId, name, price, qty) in items)
+        foreach ((Guid productId, var name, var price, var qty) in items)
             order.Items.Add(new OrderItem { ProductId = productId, ProductName = name, UnitPrice = price, Quantity = qty });
         return order;
     }
@@ -153,13 +154,13 @@ public class ReportServiceTests
     [Fact]
     public async Task Summary_ExcludesCancelledRevenue()
     {
-        var (service, ctx, _) = await SetupAsync();
-        await using var _ctx = ctx;
+        (ReportService? service, ApplicationDbContext? ctx, var _) = await SetupAsync();
+        await using ApplicationDbContext _ctx = ctx;
 
-        var result = await service.GetSummaryAsync(From, To);
+        ResponseData<SummaryReportDto> result = await service.GetSummaryAsync(From, To);
 
         result.IsSuccess.Should().BeTrue();
-        var s = result.Data!;
+        SummaryReportDto s = result.Data!;
         s.Revenue.Should().Be(500m);          // 100 + 50 + 200 + 150 (999 cancelled excluded)
         s.OrderCount.Should().Be(4);          // cancelled excluded
         s.AvgOrderValue.Should().Be(125m);    // 500 / 4
@@ -171,10 +172,10 @@ public class ReportServiceTests
     [Fact]
     public async Task Summary_AvgOrderValue_ZeroWhenNoOrders()
     {
-        var (service, ctx, _) = await SetupAsync();
-        await using var _ctx = ctx;
+        (ReportService? service, ApplicationDbContext? ctx, var _) = await SetupAsync();
+        await using ApplicationDbContext _ctx = ctx;
 
-        var result = await service.GetSummaryAsync(
+        ResponseData<SummaryReportDto> result = await service.GetSummaryAsync(
             new DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc),
             new DateTime(2025, 6, 30, 0, 0, 0, DateTimeKind.Utc));
 
@@ -189,18 +190,18 @@ public class ReportServiceTests
     [Fact]
     public async Task SalesOverTime_MonthBuckets_CorrectTotals()
     {
-        var (service, ctx, _) = await SetupAsync();
-        await using var _ctx = ctx;
+        (ReportService? service, ApplicationDbContext? ctx, var _) = await SetupAsync();
+        await using ApplicationDbContext _ctx = ctx;
 
-        var result = await service.GetSalesOverTimeAsync(From, To, ReportInterval.Month);
+        ResponseData<List<SalesPointDto>> result = await service.GetSalesOverTimeAsync(From, To, ReportInterval.Month);
 
         result.IsSuccess.Should().BeTrue();
-        var points = result.Data!;
+        List<SalesPointDto> points = result.Data!;
         points.Should().HaveCount(2);
-        points[0].PeriodStart.Should().Be(new DateTime(2026, 1, 1));
+        points[0].PeriodStart.Should().Be(new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
         points[0].Revenue.Should().Be(150m);  // 100 + 50 (cancelled 999 excluded)
         points[0].OrderCount.Should().Be(2);
-        points[1].PeriodStart.Should().Be(new DateTime(2026, 2, 1));
+        points[1].PeriodStart.Should().Be(new DateTime(2026, 2, 1, 0, 0, 0, DateTimeKind.Utc));
         points[1].Revenue.Should().Be(350m);  // 200 + 150
         points[1].OrderCount.Should().Be(2);
     }
@@ -208,22 +209,22 @@ public class ReportServiceTests
     [Fact]
     public async Task SalesOverTime_WeekBuckets_MondayStart()
     {
-        var (service, ctx, _) = await SetupAsync();
-        await using var _ctx = ctx;
+        (ReportService? service, ApplicationDbContext? ctx, var _) = await SetupAsync();
+        await using ApplicationDbContext _ctx = ctx;
 
-        var result = await service.GetSalesOverTimeAsync(From, To, ReportInterval.Week);
+        ResponseData<List<SalesPointDto>> result = await service.GetSalesOverTimeAsync(From, To, ReportInterval.Week);
 
         result.IsSuccess.Should().BeTrue();
-        var points = result.Data!;
+        List<SalesPointDto> points = result.Data!;
         // Jan 7 (Wed) and Jan 11 (Sun) both fall in the Monday-start week of Jan 5.
         points.Should().HaveCount(3);
-        points[0].PeriodStart.Should().Be(new DateTime(2026, 1, 5));
+        points[0].PeriodStart.Should().Be(new DateTime(2026, 1, 5, 0, 0, 0, DateTimeKind.Utc));
         points[0].Revenue.Should().Be(150m);
         points[0].OrderCount.Should().Be(2);
-        points[1].PeriodStart.Should().Be(new DateTime(2026, 2, 2));  // Feb 3 is a Tuesday
+        points[1].PeriodStart.Should().Be(new DateTime(2026, 2, 2, 0, 0, 0, DateTimeKind.Utc));  // Feb 3 is a Tuesday
         points[1].Revenue.Should().Be(200m);
         points[1].OrderCount.Should().Be(1);
-        points[2].PeriodStart.Should().Be(new DateTime(2026, 2, 9));  // Feb 10 is a Tuesday
+        points[2].PeriodStart.Should().Be(new DateTime(2026, 2, 9, 0, 0, 0, DateTimeKind.Utc));  // Feb 10 is a Tuesday
         points[2].Revenue.Should().Be(150m);
         points[2].OrderCount.Should().Be(1);
     }
@@ -233,13 +234,13 @@ public class ReportServiceTests
     [Fact]
     public async Task TopProducts_ByUnits_OrdersCorrectly()
     {
-        var (service, ctx, _) = await SetupAsync();
-        await using var _ctx = ctx;
+        (ReportService? service, ApplicationDbContext? ctx, var _) = await SetupAsync();
+        await using ApplicationDbContext _ctx = ctx;
 
         // P1: units 2+10+2 = 14, revenue 60+50+100 = 210
         // P2: units 1+8 = 9,     revenue 40+200 = 240
         // P3: units 1,           revenue 50
-        var byUnits = await service.GetTopProductsAsync(From, To, 10, "units");
+        ResponseData<List<TopProductDto>> byUnits = await service.GetTopProductsAsync(From, To, 10, "units");
         byUnits.IsSuccess.Should().BeTrue();
         byUnits.Data![0].ProductId.Should().Be(_p1);
         byUnits.Data[0].Units.Should().Be(14);
@@ -247,7 +248,7 @@ public class ReportServiceTests
         byUnits.Data[1].ProductId.Should().Be(_p2);
         byUnits.Data[1].Units.Should().Be(9);
 
-        var byRevenue = await service.GetTopProductsAsync(From, To, 10, "revenue");
+        ResponseData<List<TopProductDto>> byRevenue = await service.GetTopProductsAsync(From, To, 10, "revenue");
         byRevenue.IsSuccess.Should().BeTrue();
         byRevenue.Data![0].ProductId.Should().Be(_p2);   // 240 > 210
         byRevenue.Data[0].Revenue.Should().Be(240m);
@@ -255,17 +256,17 @@ public class ReportServiceTests
         byRevenue.Data[1].ProductId.Should().Be(_p1);
         byRevenue.Data.Should().HaveCount(3);
 
-        var takeOne = await service.GetTopProductsAsync(From, To, 1, "revenue");
+        ResponseData<List<TopProductDto>> takeOne = await service.GetTopProductsAsync(From, To, 1, "revenue");
         takeOne.Data.Should().HaveCount(1);
     }
 
     [Fact]
     public async Task TopProducts_InvalidBy_Returns400()
     {
-        var (service, ctx, _) = await SetupAsync();
-        await using var _ctx = ctx;
+        (ReportService? service, ApplicationDbContext? ctx, var _) = await SetupAsync();
+        await using ApplicationDbContext _ctx = ctx;
 
-        var result = await service.GetTopProductsAsync(From, To, 10, "price");
+        ResponseData<List<TopProductDto>> result = await service.GetTopProductsAsync(From, To, 10, "price");
 
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Should().Be(400);
@@ -276,22 +277,22 @@ public class ReportServiceTests
     [Fact]
     public async Task StatusBreakdown_CountsPerStatus()
     {
-        var (service, ctx, _) = await SetupAsync();
-        await using var _ctx = ctx;
+        (ReportService? service, ApplicationDbContext? ctx, var _) = await SetupAsync();
+        await using ApplicationDbContext _ctx = ctx;
 
-        var result = await service.GetStatusBreakdownAsync(From, To);
+        ResponseData<List<StatusBreakdownDto>> result = await service.GetStatusBreakdownAsync(From, To);
 
         result.IsSuccess.Should().BeTrue();
-        var rows = result.Data!;
+        List<StatusBreakdownDto> rows = result.Data!;
         rows.Should().HaveCount(4);
-        rows.Single(r => r.Status == "Pending").Count.Should().Be(1);
-        rows.Single(r => r.Status == "Pending").Revenue.Should().Be(200m);
-        rows.Single(r => r.Status == "Confirmed").Count.Should().Be(1);
-        rows.Single(r => r.Status == "Confirmed").Revenue.Should().Be(50m);
-        rows.Single(r => r.Status == "Delivered").Count.Should().Be(2);
-        rows.Single(r => r.Status == "Delivered").Revenue.Should().Be(250m);
-        rows.Single(r => r.Status == "Cancelled").Count.Should().Be(1);   // breakdown reports all statuses
-        rows.Single(r => r.Status == "Cancelled").Revenue.Should().Be(999m);
+        rows.Single(r => string.Equals(r.Status, "Pending", StringComparison.Ordinal)).Count.Should().Be(1);
+        rows.Single(r => string.Equals(r.Status, "Pending", StringComparison.Ordinal)).Revenue.Should().Be(200m);
+        rows.Single(r => string.Equals(r.Status, "Confirmed", StringComparison.Ordinal)).Count.Should().Be(1);
+        rows.Single(r => string.Equals(r.Status, "Confirmed", StringComparison.Ordinal)).Revenue.Should().Be(50m);
+        rows.Single(r => string.Equals(r.Status, "Delivered", StringComparison.Ordinal)).Count.Should().Be(2);
+        rows.Single(r => string.Equals(r.Status, "Delivered", StringComparison.Ordinal)).Revenue.Should().Be(250m);
+        rows.Single(r => string.Equals(r.Status, "Cancelled", StringComparison.Ordinal)).Count.Should().Be(1);   // breakdown reports all statuses
+        rows.Single(r => string.Equals(r.Status, "Cancelled", StringComparison.Ordinal)).Revenue.Should().Be(999m);
     }
 
     // ---------------------------------------------------------------- Customer analytics
@@ -299,13 +300,13 @@ public class ReportServiceTests
     [Fact]
     public async Task CustomerAnalytics_RepeatRate_Exact()
     {
-        var (service, ctx, _) = await SetupAsync();
-        await using var _ctx = ctx;
+        (ReportService? service, ApplicationDbContext? ctx, var _) = await SetupAsync();
+        await using ApplicationDbContext _ctx = ctx;
 
-        var result = await service.GetCustomerAnalyticsAsync(From, To, ReportInterval.Month);
+        ResponseData<CustomerAnalyticsDto> result = await service.GetCustomerAnalyticsAsync(From, To, ReportInterval.Month);
 
         result.IsSuccess.Should().BeTrue();
-        var a = result.Data!;
+        CustomerAnalyticsDto a = result.Data!;
         // C1 has 3 non-cancelled orders, C2 has 1 -> 1 of 2 customers repeat
         a.RepeatPurchaseRate.Should().Be(0.5);
 
@@ -317,9 +318,9 @@ public class ReportServiceTests
         a.TopCustomers[1].TotalSpend.Should().Be(200m);
 
         a.NewCustomersOverTime.Should().HaveCount(2);
-        a.NewCustomersOverTime[0].PeriodStart.Should().Be(new DateTime(2026, 1, 1));
+        a.NewCustomersOverTime[0].PeriodStart.Should().Be(new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
         a.NewCustomersOverTime[0].OrderCount.Should().Be(1);
-        a.NewCustomersOverTime[1].PeriodStart.Should().Be(new DateTime(2026, 2, 1));
+        a.NewCustomersOverTime[1].PeriodStart.Should().Be(new DateTime(2026, 2, 1, 0, 0, 0, DateTimeKind.Utc));
         a.NewCustomersOverTime[1].OrderCount.Should().Be(1);
     }
 
@@ -328,13 +329,13 @@ public class ReportServiceTests
     [Fact]
     public async Task InventoryTrends_LowStockThreshold5()
     {
-        var (service, ctx, _) = await SetupAsync();
-        await using var _ctx = ctx;
+        (ReportService? service, ApplicationDbContext? ctx, var _) = await SetupAsync();
+        await using ApplicationDbContext _ctx = ctx;
 
-        var result = await service.GetInventoryTrendsAsync(From, To);
+        ResponseData<InventoryTrendsDto> result = await service.GetInventoryTrendsAsync(From, To);
 
         result.IsSuccess.Should().BeTrue();
-        var low = result.Data!.LowStock;
+        List<LowStockItemDto> low = result.Data!.LowStock;
         low.Should().HaveCount(1);            // V1 only: stock 3 <= 5 and active; V3 inactive excluded
         low[0].VariantId.Should().Be(_v1);
         low[0].Sku.Should().Be("TS-S");
@@ -345,19 +346,19 @@ public class ReportServiceTests
     [Fact]
     public async Task InventoryTrends_AdjustmentsBucketedByDay()
     {
-        var (service, ctx, _) = await SetupAsync();
-        await using var _ctx = ctx;
+        (ReportService? service, ApplicationDbContext? ctx, var _) = await SetupAsync();
+        await using ApplicationDbContext _ctx = ctx;
 
-        var result = await service.GetInventoryTrendsAsync(From, To);
+        ResponseData<InventoryTrendsDto> result = await service.GetInventoryTrendsAsync(From, To);
 
         result.IsSuccess.Should().BeTrue();
-        var points = result.Data!.AdjustmentsOverTime;
+        List<SalesPointDto> points = result.Data!.AdjustmentsOverTime;
         // OrderCount = number of adjustments in the day; Revenue = sum of |Delta|
         points.Should().HaveCount(2);
-        points[0].PeriodStart.Should().Be(new DateTime(2026, 1, 7));
+        points[0].PeriodStart.Should().Be(new DateTime(2026, 1, 7, 0, 0, 0, DateTimeKind.Utc));
         points[0].OrderCount.Should().Be(2);
         points[0].Revenue.Should().Be(5m);    // |-2| + |-3|
-        points[1].PeriodStart.Should().Be(new DateTime(2026, 2, 3));
+        points[1].PeriodStart.Should().Be(new DateTime(2026, 2, 3, 0, 0, 0, DateTimeKind.Utc));
         points[1].OrderCount.Should().Be(1);
         points[1].Revenue.Should().Be(5m);    // |+5|
     }
@@ -367,23 +368,23 @@ public class ReportServiceTests
     [Fact]
     public async Task CategorySales_RollsUpDirectProducts()
     {
-        var (service, ctx, _) = await SetupAsync();
-        await using var _ctx = ctx;
+        (ReportService? service, ApplicationDbContext? ctx, var _) = await SetupAsync();
+        await using ApplicationDbContext _ctx = ctx;
 
-        var result = await service.GetCategorySalesAsync(From, To, null);
+        ResponseData<List<CategorySalesDto>> result = await service.GetCategorySalesAsync(From, To, null);
 
         result.IsSuccess.Should().BeTrue();
-        var rows = result.Data!;
+        List<CategorySalesDto> rows = result.Data!;
         // Top-level categories only; each counts DIRECT products only.
         rows.Should().HaveCount(2);
         rows.Should().NotContain(r => r.CategoryId == _catDenim);
 
-        var bottoms = rows.Single(r => r.CategoryId == _catBottoms);
+        CategorySalesDto bottoms = rows.Single(r => r.CategoryId == _catBottoms);
         bottoms.CategoryName.Should().Be("Bottoms");
         bottoms.Revenue.Should().Be(240m);    // P2 only — P3 (child Denim) NOT rolled up
         bottoms.Units.Should().Be(9);
 
-        var tops = rows.Single(r => r.CategoryId == _catTops);
+        CategorySalesDto tops = rows.Single(r => r.CategoryId == _catTops);
         tops.Revenue.Should().Be(210m);
         tops.Units.Should().Be(14);
     }
@@ -391,13 +392,13 @@ public class ReportServiceTests
     [Fact]
     public async Task CategorySales_DrillDown_ReturnsChildren()
     {
-        var (service, ctx, _) = await SetupAsync();
-        await using var _ctx = ctx;
+        (ReportService? service, ApplicationDbContext? ctx, var _) = await SetupAsync();
+        await using ApplicationDbContext _ctx = ctx;
 
-        var result = await service.GetCategorySalesAsync(From, To, _catBottoms);
+        ResponseData<List<CategorySalesDto>> result = await service.GetCategorySalesAsync(From, To, _catBottoms);
 
         result.IsSuccess.Should().BeTrue();
-        var rows = result.Data!;
+        List<CategorySalesDto> rows = result.Data!;
         rows.Should().HaveCount(1);
         rows[0].CategoryId.Should().Be(_catDenim);
         rows[0].CategoryName.Should().Be("Denim");
@@ -410,11 +411,11 @@ public class ReportServiceTests
     [Fact]
     public async Task TenantIsolation_OtherTenantExcluded()
     {
-        var (serviceA, ctx, dbName) = await SetupAsync();
-        await using var _ctx = ctx;
+        (ReportService? serviceA, ApplicationDbContext? ctx, var dbName) = await SetupAsync();
+        await using ApplicationDbContext _ctx = ctx;
 
         // Tenant A must not see tenant B's 1000 order / customer / review / variant.
-        var summaryA = await serviceA.GetSummaryAsync(From, To);
+        ResponseData<SummaryReportDto> summaryA = await serviceA.GetSummaryAsync(From, To);
         summaryA.Data!.Revenue.Should().Be(500m);
         summaryA.Data.OrderCount.Should().Be(4);
         summaryA.Data.NewCustomers.Should().Be(2);
@@ -422,9 +423,9 @@ public class ReportServiceTests
         summaryA.Data.LowStockCount.Should().Be(1);
 
         // A tenant-B scoped context/service sees ONLY tenant B's data.
-        await using var ctxB = CreateContext(_tenantB, dbName);
-        var serviceB = CreateService(ctxB, _tenantB);
-        var summaryB = await serviceB.GetSummaryAsync(From, To);
+        await using ApplicationDbContext ctxB = CreateContext(_tenantB, dbName);
+        ReportService serviceB = CreateService(ctxB, _tenantB);
+        ResponseData<SummaryReportDto> summaryB = await serviceB.GetSummaryAsync(From, To);
         summaryB.Data!.Revenue.Should().Be(1000m);
         summaryB.Data.OrderCount.Should().Be(1);
         summaryB.Data.NewCustomers.Should().Be(1);
@@ -432,16 +433,19 @@ public class ReportServiceTests
         summaryB.Data.LowStockCount.Should().Be(1);
     }
 
+    // S125 false positive: prose section header, not commented-out code.
+#pragma warning disable S125
     // ---------------------------------------------------------------- Range validation (guard shared by all 7 methods;
     // exercised via two representative methods)
+#pragma warning restore S125
 
     [Fact]
     public async Task Range_FromAfterTo_Returns400()
     {
-        var (service, ctx, _) = await SetupAsync();
-        await using var _ctx = ctx;
+        (ReportService? service, ApplicationDbContext? ctx, var _) = await SetupAsync();
+        await using ApplicationDbContext _ctx = ctx;
 
-        var result = await service.GetSummaryAsync(To, From);
+        ResponseData<SummaryReportDto> result = await service.GetSummaryAsync(To, From);
 
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Should().Be(400);
@@ -450,10 +454,10 @@ public class ReportServiceTests
     [Fact]
     public async Task Range_Over366Days_Returns400()
     {
-        var (service, ctx, _) = await SetupAsync();
-        await using var _ctx = ctx;
+        (ReportService? service, ApplicationDbContext? ctx, var _) = await SetupAsync();
+        await using ApplicationDbContext _ctx = ctx;
 
-        var result = await service.GetSalesOverTimeAsync(
+        ResponseData<List<SalesPointDto>> result = await service.GetSalesOverTimeAsync(
             new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc),
             new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc),
             ReportInterval.Day);
@@ -465,11 +469,11 @@ public class ReportServiceTests
     [Fact]
     public async Task UnresolvedTenant_Returns400()
     {
-        var (_, ctx, _) = await SetupAsync();
-        await using var _ctx = ctx;
-        var service = CreateService(ctx, tenantId: null);
+        (ReportService _, ApplicationDbContext? ctx, var _) = await SetupAsync();
+        await using ApplicationDbContext _ctx = ctx;
+        ReportService service = CreateService(ctx, tenantId: null);
 
-        var result = await service.GetSummaryAsync(From, To);
+        ResponseData<SummaryReportDto> result = await service.GetSummaryAsync(From, To);
 
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Should().Be(400);

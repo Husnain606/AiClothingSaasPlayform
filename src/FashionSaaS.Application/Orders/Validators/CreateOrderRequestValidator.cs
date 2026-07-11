@@ -46,9 +46,14 @@ public partial class CreateOrderRequestValidator : AbstractValidator<CreateOrder
     private static bool BeMaskedOrLastFour(string cardNumber) =>
         MaskedCardPattern().IsMatch(cardNumber ?? string.Empty);
 
+    // MA0009 false positive: [GeneratedRegex] is source-generated at compile time and has no
+    // constructor overload to attach a timeout to. Neither pattern has a nested/unbounded
+    // quantifier that could backtrack catastrophically. — 2026-07-11
+#pragma warning disable MA0009
     [GeneratedRegex(@"\d{13,}")]
     private static partial Regex ThirteenOrMoreConsecutiveDigits();
 
     [GeneratedRegex(@"^([*]+\d{4}|\d{4})$")]
     private static partial Regex MaskedCardPattern();
+#pragma warning restore MA0009
 }

@@ -30,7 +30,7 @@ public class CategoryService(
 
         if (request.ParentCategoryId is { } parentId)
         {
-            var parent = await categoryRepository.GetByIdAsync(parentId);
+            Category? parent = await categoryRepository.GetByIdAsync(parentId);
             if (parent is null || parent.TenantId != tenantId)
                 return ResponseData<CategoryResponse>.Failure("Parent category not found.", 404);
         }
@@ -62,7 +62,7 @@ public class CategoryService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<CategoryResponse>.Failure("Tenant could not be resolved.", 400);
 
-        var category = await categoryRepository.GetByIdAsync(id);
+        Category? category = await categoryRepository.GetByIdAsync(id);
         if (category is null || category.TenantId != tenantId)
             return ResponseData<CategoryResponse>.Failure("Category not found.", 404);
 
@@ -93,7 +93,7 @@ public class CategoryService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<CategoryResponse>.Failure("Tenant could not be resolved.", 400);
 
-        var category = await categoryRepository.GetByIdAsync(request.Id);
+        Category? category = await categoryRepository.GetByIdAsync(request.Id);
         if (category is null || category.TenantId != tenantId)
             return ResponseData<CategoryResponse>.Failure("Category not found.", 404);
 
@@ -102,18 +102,20 @@ public class CategoryService(
             if (newParentId == category.Id)
                 return ResponseData<CategoryResponse>.Failure("A category cannot be moved under itself.", 400);
 
-            var newParent = await categoryRepository.GetByIdAsync(newParentId);
+            Category? newParent = await categoryRepository.GetByIdAsync(newParentId);
             if (newParent is null || newParent.TenantId != tenantId)
                 return ResponseData<CategoryResponse>.Failure("New parent category not found.", 404);
 
             // Cycle prevention: the new parent must not be a descendant of the moved node.
-            var tree = await categoryRepository.GetTreeAsync(tenantId, ct);
+            IReadOnlyList<Category> tree = await categoryRepository.GetTreeAsync(tenantId, ct);
             if (IsDescendant(tree, category.Id, newParentId))
+            {
                 return ResponseData<CategoryResponse>.Failure(
                     "Cannot move a category under one of its own descendants (would create a cycle).", 400);
+            }
         }
 
-        var oldParentId = category.ParentCategoryId;
+        Guid? oldParentId = category.ParentCategoryId;
         category.ParentCategoryId = request.NewParentId;
 
         await categoryRepository.UpdateAsync(category);
@@ -133,9 +135,9 @@ public class CategoryService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<bool>.Failure("Tenant could not be resolved.", 400);
 
-        foreach (var item in request.Items)
+        foreach (CategoryOrderItem item in request.Items)
         {
-            var category = await categoryRepository.GetByIdAsync(item.Id);
+            Category? category = await categoryRepository.GetByIdAsync(item.Id);
             if (category is null || category.TenantId != tenantId)
                 return ResponseData<bool>.Failure($"Category '{item.Id}' not found.", 404);
 
@@ -158,18 +160,22 @@ public class CategoryService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<bool>.Failure("Tenant could not be resolved.", 400);
 
-        var category = await categoryRepository.GetByIdAsync(id);
+        Category? category = await categoryRepository.GetByIdAsync(id);
         if (category is null || category.TenantId != tenantId)
             return ResponseData<bool>.Failure("Category not found.", 404);
 
         // Block delete when the node has children or assigned products (no silent reparenting — spec §8).
         if (await categoryRepository.HasChildrenAsync(tenantId, id, ct))
+        {
             return ResponseData<bool>.Failure(
                 "Cannot delete a category that has child categories. Move or delete the children first.", 409);
+        }
 
         if (await categoryRepository.HasProductsAsync(tenantId, id, ct))
+        {
             return ResponseData<bool>.Failure(
                 "Cannot delete a category that has assigned products. Reassign the products first.", 409);
+        }
 
         await categoryRepository.DeleteAsync(category);
         await unitOfWork.SaveChangesAsync(ct);
@@ -186,7 +192,7 @@ public class CategoryService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<CategoryResponse>.Failure("Tenant could not be resolved.", 400);
 
-        var category = await categoryRepository.GetByIdAsync(id);
+        Category? category = await categoryRepository.GetByIdAsync(id);
         if (category is null || category.TenantId != tenantId)
             return ResponseData<CategoryResponse>.Failure("Category not found.", 404);
 
@@ -198,7 +204,7 @@ public class CategoryService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<IReadOnlyList<CategoryResponse>>.Failure("Tenant could not be resolved.", 400);
 
-        var categories = await categoryRepository.GetTreeAsync(tenantId, ct);
+        IReadOnlyList<Category> categories = await categoryRepository.GetTreeAsync(tenantId, ct);
         IReadOnlyList<CategoryResponse> list = categories
             .OrderBy(c => c.SortOrder)
             .Select(MapToResponse)
@@ -212,8 +218,8 @@ public class CategoryService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<IReadOnlyList<CategoryTreeNode>>.Failure("Tenant could not be resolved.", 400);
 
-        var categories = await categoryRepository.GetTreeAsync(tenantId, ct);
-        var tree = BuildTree(categories);
+        IReadOnlyList<Category> categories = await categoryRepository.GetTreeAsync(tenantId, ct);
+        IReadOnlyList<CategoryTreeNode> tree = BuildTree(categories);
         return ResponseData<IReadOnlyList<CategoryTreeNode>>.Success(tree);
     }
 
@@ -238,7 +244,7 @@ public class CategoryService(
                 Name = c.Name,
                 Slug = c.Slug,
                 SortOrder = c.SortOrder,
-                Children = childrenByParent.TryGetValue(c.Id, out var kids)
+                Children = childrenByParent.TryGetValue(c.Id, out List<Category>? kids)
                     ? BuildChildren(kids)
                     : []
             }).ToList();
@@ -258,12 +264,14 @@ public class CategoryService(
         stack.Push(rootId);
         while (stack.Count > 0)
         {
-            var current = stack.Pop();
+            Guid current = stack.Pop();
             if (current == candidateId)
                 return true;
-            if (childrenByParent.TryGetValue(current, out var childIds))
-                foreach (var childId in childIds)
+            if (childrenByParent.TryGetValue(current, out List<Guid>? childIds))
+            {
+                foreach (Guid childId in childIds)
                     stack.Push(childId);
+            }
         }
         return false;
     }

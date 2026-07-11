@@ -1,3 +1,4 @@
+using FashionSaaS.Application.Common;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Application.Users;
 using FashionSaaS.Application.Users.DTOs;
@@ -39,7 +40,7 @@ public class UserServiceTests
         _hasher.Setup(h => h.Hash(It.IsAny<string>())).Returns("hashed");
         _roleRepo.Setup(r => r.GetByRoleTypeAsync(RoleType.StoreManager, default)).ReturnsAsync(seededRole);
 
-        var result = await CreateService().CreateAsync(
+        ResponseData<UserResponse> result = await CreateService().CreateAsync(
             new CreateUserRequest { Email = "new@brand.com", FirstName = "Ali", LastName = "Khan", Role = RoleType.StoreManager },
             Guid.NewGuid(), "127.0.0.1", "Mozilla");
 
@@ -78,7 +79,7 @@ public class UserServiceTests
         _userRepo.Setup(r => r.EmailExistsAsync(It.IsAny<string>())).ReturnsAsync(false);
         _roleRepo.Setup(r => r.GetByRoleTypeAsync(It.IsAny<RoleType>(), default)).ReturnsAsync((Role?)null);
 
-        var result = await CreateService().CreateAsync(
+        ResponseData<UserResponse> result = await CreateService().CreateAsync(
             new CreateUserRequest { Email = "x@brand.com", FirstName = "A", LastName = "B", Role = RoleType.StoreManager },
             Guid.NewGuid(), "127.0.0.1", "Mozilla");
 
@@ -91,7 +92,7 @@ public class UserServiceTests
     {
         _userRepo.Setup(r => r.EmailExistsAsync("dup@brand.com")).ReturnsAsync(true);
 
-        var result = await CreateService().CreateAsync(
+        ResponseData<UserResponse> result = await CreateService().CreateAsync(
             new CreateUserRequest { Email = "dup@brand.com", FirstName = "A", LastName = "B", Role = RoleType.StoreManager },
             Guid.NewGuid(), "127.0.0.1", "Mozilla");
 
@@ -107,13 +108,13 @@ public class UserServiceTests
         _hasher.Setup(h => h.Hash(It.IsAny<string>())).Returns("secret-hash");
         _roleRepo.Setup(r => r.GetByRoleTypeAsync(RoleType.StoreManager, default)).ReturnsAsync(seededRole);
 
-        var result = await CreateService().CreateAsync(
+        ResponseData<UserResponse> result = await CreateService().CreateAsync(
             new CreateUserRequest { Email = "safe@brand.com", FirstName = "Test", LastName = "User", Role = RoleType.StoreManager },
             Guid.NewGuid(), "127.0.0.1", "Mozilla");
 
         result.IsSuccess.Should().BeTrue();
         result.Data.Should().NotBeNull();
-        var props = result.Data!.GetType().GetProperties().Select(p => p.Name);
+        IEnumerable<string> props = result.Data!.GetType().GetProperties().Select(p => p.Name);
         props.Should().NotContain("PasswordHash");
     }
 
@@ -132,7 +133,7 @@ public class UserServiceTests
         _userRepo.Setup(r => r.GetByIdWithRolesAsync(userId)).ReturnsAsync(user);
         _roleRepo.Setup(r => r.GetByRoleTypeAsync(RoleType.StoreManager, default)).ReturnsAsync(seededRole);
 
-        var result = await CreateService().AssignRoleAsync(userId, RoleType.StoreManager,
+        ResponseData<bool> result = await CreateService().AssignRoleAsync(userId, RoleType.StoreManager,
             Guid.NewGuid(), "127.0.0.1", "Mozilla");
 
         result.IsSuccess.Should().BeTrue();
@@ -151,7 +152,7 @@ public class UserServiceTests
         _userRepo.Setup(r => r.GetByIdWithRolesAsync(userId)).ReturnsAsync(user);
         _roleRepo.Setup(r => r.GetByRoleTypeAsync(It.IsAny<RoleType>(), default)).ReturnsAsync((Role?)null);
 
-        var result = await CreateService().AssignRoleAsync(userId, RoleType.StoreManager,
+        ResponseData<bool> result = await CreateService().AssignRoleAsync(userId, RoleType.StoreManager,
             Guid.NewGuid(), "127.0.0.1", "Mozilla");
 
         result.IsSuccess.Should().BeFalse();
@@ -163,7 +164,7 @@ public class UserServiceTests
     {
         _userRepo.Setup(r => r.GetByIdWithRolesAsync(It.IsAny<Guid>())).ReturnsAsync((User?)null);
 
-        var result = await CreateService().AssignRoleAsync(Guid.NewGuid(), RoleType.StoreManager,
+        ResponseData<bool> result = await CreateService().AssignRoleAsync(Guid.NewGuid(), RoleType.StoreManager,
             Guid.NewGuid(), "127.0.0.1", "Mozilla");
 
         result.IsSuccess.Should().BeFalse();
@@ -180,7 +181,7 @@ public class UserServiceTests
         var user = new User { Id = Guid.NewGuid(), IsActive = true, Email = "user@brand.com" };
         _userRepo.Setup(r => r.GetByIdAsync(user.Id)).ReturnsAsync(user);
 
-        var result = await CreateService().DeactivateAsync(user.Id, Guid.NewGuid(), "127.0.0.1", "Mozilla");
+        ResponseData<bool> result = await CreateService().DeactivateAsync(user.Id, Guid.NewGuid(), "127.0.0.1", "Mozilla");
 
         result.IsSuccess.Should().BeTrue();
         user.IsActive.Should().BeFalse();
@@ -216,7 +217,7 @@ public class UserServiceTests
     {
         _userRepo.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync((User?)null);
 
-        var result = await CreateService().DeactivateAsync(Guid.NewGuid(), Guid.NewGuid(), "127.0.0.1", "Mozilla");
+        ResponseData<bool> result = await CreateService().DeactivateAsync(Guid.NewGuid(), Guid.NewGuid(), "127.0.0.1", "Mozilla");
 
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Should().Be(404);
@@ -232,7 +233,7 @@ public class UserServiceTests
         var user = new User { Id = Guid.NewGuid(), IsActive = false, Email = "locked@brand.com" };
         _userRepo.Setup(r => r.GetByIdAsync(user.Id)).ReturnsAsync(user);
 
-        var result = await CreateService().UnlockAsync(user.Id, Guid.NewGuid(), "127.0.0.1", "Mozilla");
+        ResponseData<bool> result = await CreateService().UnlockAsync(user.Id, Guid.NewGuid(), "127.0.0.1", "Mozilla");
 
         result.IsSuccess.Should().BeTrue();
         user.IsActive.Should().BeTrue();
@@ -246,7 +247,7 @@ public class UserServiceTests
         var user = new User { Id = Guid.NewGuid(), IsActive = false, Email = "locked@brand.com" };
         _userRepo.Setup(r => r.GetByIdAsync(user.Id)).ReturnsAsync(user);
 
-        var result = await CreateService().UnlockAsync(user.Id, Guid.NewGuid(), "127.0.0.1", "Mozilla");
+        ResponseData<bool> result = await CreateService().UnlockAsync(user.Id, Guid.NewGuid(), "127.0.0.1", "Mozilla");
 
         result.IsSuccess.Should().BeTrue();
         _loginAttemptRepo.Verify(
@@ -259,7 +260,7 @@ public class UserServiceTests
     {
         _userRepo.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync((User?)null);
 
-        var result = await CreateService().UnlockAsync(Guid.NewGuid(), Guid.NewGuid(), "127.0.0.1", "Mozilla");
+        ResponseData<bool> result = await CreateService().UnlockAsync(Guid.NewGuid(), Guid.NewGuid(), "127.0.0.1", "Mozilla");
 
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Should().Be(404);
@@ -274,8 +275,11 @@ public class UserServiceTests
     {
         var user = new User
         {
-            Id = Guid.NewGuid(), FirstName = "Ali", LastName = "Khan",
-            Email = "ali@brand.com", IsActive = true,
+            Id = Guid.NewGuid(),
+            FirstName = "Ali",
+            LastName = "Khan",
+            Email = "ali@brand.com",
+            IsActive = true,
             UserRoles = new List<UserRole>
             {
                 new() { Role = new Role { Name = RoleType.StoreManager, Scope = RoleScope.Tenant } }
@@ -283,7 +287,7 @@ public class UserServiceTests
         };
         _userRepo.Setup(r => r.GetByIdWithRolesAsync(user.Id)).ReturnsAsync(user);
 
-        var result = await CreateService().GetByIdAsync(user.Id);
+        ResponseData<UserResponse> result = await CreateService().GetByIdAsync(user.Id);
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.Email.Should().Be("ali@brand.com");
@@ -295,7 +299,7 @@ public class UserServiceTests
     {
         _userRepo.Setup(r => r.GetByIdWithRolesAsync(It.IsAny<Guid>())).ReturnsAsync((User?)null);
 
-        var result = await CreateService().GetByIdAsync(Guid.NewGuid());
+        ResponseData<UserResponse> result = await CreateService().GetByIdAsync(Guid.NewGuid());
 
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Should().Be(404);
@@ -311,7 +315,7 @@ public class UserServiceTests
         var user = new User { Id = Guid.NewGuid(), Email = "del@brand.com" };
         _userRepo.Setup(r => r.GetByIdAsync(user.Id)).ReturnsAsync(user);
 
-        var result = await CreateService().DeleteAsync(user.Id, Guid.NewGuid(), "127.0.0.1", "Mozilla");
+        ResponseData<bool> result = await CreateService().DeleteAsync(user.Id, Guid.NewGuid(), "127.0.0.1", "Mozilla");
 
         result.IsSuccess.Should().BeTrue();
         _userRepo.Verify(r => r.DeleteAsync(user), Times.Once);
@@ -328,7 +332,7 @@ public class UserServiceTests
         var user = new User { Id = Guid.NewGuid(), FirstName = "Old", LastName = "Name", Email = "u@brand.com" };
         _userRepo.Setup(r => r.GetByIdAsync(user.Id)).ReturnsAsync(user);
 
-        var result = await CreateService().UpdateAsync(user.Id,
+        ResponseData<UserResponse> result = await CreateService().UpdateAsync(user.Id,
             new UpdateUserRequest { FirstName = "New", LastName = "Name2" },
             Guid.NewGuid(), "127.0.0.1", "Mozilla");
 
@@ -357,7 +361,7 @@ public class UserServiceTests
 
         _userRepo.Setup(r => r.GetByTenantAsync(tenantId)).ReturnsAsync(users);
 
-        var result = await CreateService().GetByTenantAsync(tenantId,
+        ResponseData<PagedResult<UserResponse>> result = await CreateService().GetByTenantAsync(tenantId,
             new UserFilterRequest { IsActive = true, Page = 1, PageSize = 5 });
 
         result.IsSuccess.Should().BeTrue();

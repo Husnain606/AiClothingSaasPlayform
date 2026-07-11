@@ -50,7 +50,7 @@ public class SubscriptionPlanService(
     public async Task<ResponseData<SubscriptionPlanResponse>> UpdateAsync(Guid id,
         UpdateSubscriptionPlanRequest request, Guid adminId, string ip, string ua)
     {
-        var plan = await planRepository.GetByIdAsync(id);
+        SubscriptionPlan? plan = await planRepository.GetByIdAsync(id);
         if (plan is null)
             return ResponseData<SubscriptionPlanResponse>.Failure("Plan not found.", 404);
 
@@ -82,21 +82,21 @@ public class SubscriptionPlanService(
 
     public async Task<ResponseData<IReadOnlyList<SubscriptionPlanResponse>>> GetAllAsync()
     {
-        var plans = await planRepository.GetAllAsync();
+        IReadOnlyList<SubscriptionPlan> plans = await planRepository.GetAllAsync();
         return ResponseData<IReadOnlyList<SubscriptionPlanResponse>>.Success(
             plans.Select(Map).ToList());
     }
 
     public async Task<ResponseData<IReadOnlyList<SubscriptionPlanResponse>>> GetActiveAsync()
     {
-        var plans = await planRepository.GetActiveAsync();
+        IReadOnlyList<SubscriptionPlan> plans = await planRepository.GetActiveAsync();
         return ResponseData<IReadOnlyList<SubscriptionPlanResponse>>.Success(
             plans.Select(Map).ToList());
     }
 
     public async Task<ResponseData<SubscriptionPlanResponse>> GetByIdAsync(Guid id)
     {
-        var plan = await planRepository.GetByIdAsync(id);
+        SubscriptionPlan? plan = await planRepository.GetByIdAsync(id);
         if (plan is null)
             return ResponseData<SubscriptionPlanResponse>.Failure("Plan not found.", 404);
 
@@ -105,7 +105,7 @@ public class SubscriptionPlanService(
 
     public async Task<ResponseData<bool>> DeleteAsync(Guid id, Guid adminId, string ip, string ua)
     {
-        var plan = await planRepository.GetByIdAsync(id);
+        SubscriptionPlan? plan = await planRepository.GetByIdAsync(id);
         if (plan is null)
             return ResponseData<bool>.Failure("Plan not found.", 404);
 

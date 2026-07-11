@@ -12,7 +12,7 @@ namespace FashionSaaS.API.Controllers.Tenant;
 [ApiController]
 [Authorize(Roles = "AdminOwner,StoreManager,ContentManager")]
 [EnableRateLimiting("AuthenticatedPolicy")]
-public class CategoriesController(CategoryService categoryService) : ControllerBase
+internal class CategoriesController(CategoryService categoryService) : ControllerBase
 {
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     private string Ip => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
@@ -24,7 +24,7 @@ public class CategoriesController(CategoryService categoryService) : ControllerB
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetAll()
     {
-        var response = await categoryService.GetAllAsync();
+        ResponseData<IReadOnlyList<CategoryResponse>> response = await categoryService.GetAllAsync();
         return StatusCode(response.StatusCode, response);
     }
 
@@ -34,7 +34,7 @@ public class CategoriesController(CategoryService categoryService) : ControllerB
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetTree()
     {
-        var response = await categoryService.GetTreeAsync();
+        ResponseData<IReadOnlyList<CategoryTreeNode>> response = await categoryService.GetTreeAsync();
         return StatusCode(response.StatusCode, response);
     }
 
@@ -44,7 +44,7 @@ public class CategoriesController(CategoryService categoryService) : ControllerB
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetById(Guid id)
     {
-        var response = await categoryService.GetByIdAsync(id);
+        ResponseData<CategoryResponse> response = await categoryService.GetByIdAsync(id);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -54,7 +54,7 @@ public class CategoriesController(CategoryService categoryService) : ControllerB
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Create([FromBody] CreateCategoryRequest request)
     {
-        var response = await categoryService.CreateAsync(request, UserId, Ip, Ua);
+        ResponseData<CategoryResponse> response = await categoryService.CreateAsync(request, UserId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -64,7 +64,7 @@ public class CategoriesController(CategoryService categoryService) : ControllerB
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateCategoryRequest request)
     {
-        var response = await categoryService.UpdateAsync(id, request, UserId, Ip, Ua);
+        ResponseData<CategoryResponse> response = await categoryService.UpdateAsync(id, request, UserId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -76,7 +76,7 @@ public class CategoriesController(CategoryService categoryService) : ControllerB
     {
         // Bind the route id into the request so route and body cannot disagree.
         request.Id = id;
-        var response = await categoryService.MoveAsync(request, UserId, Ip, Ua);
+        ResponseData<CategoryResponse> response = await categoryService.MoveAsync(request, UserId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -86,7 +86,7 @@ public class CategoriesController(CategoryService categoryService) : ControllerB
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Reorder([FromBody] ReorderCategoryRequest request)
     {
-        var response = await categoryService.ReorderAsync(request, UserId, Ip, Ua);
+        ResponseData<bool> response = await categoryService.ReorderAsync(request, UserId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -96,7 +96,7 @@ public class CategoriesController(CategoryService categoryService) : ControllerB
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Delete(Guid id)
     {
-        var response = await categoryService.DeleteAsync(id, UserId, Ip, Ua);
+        ResponseData<bool> response = await categoryService.DeleteAsync(id, UserId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 }

@@ -10,15 +10,15 @@ namespace FashionSaaS.Infrastructure.Tests.Repositories;
 
 public class ProductImageRepositoryTests
 {
-    private Guid _tenantId = Guid.NewGuid();
-    private Guid _productId = Guid.NewGuid();
+    private readonly Guid _tenantId = Guid.NewGuid();
+    private readonly Guid _productId = Guid.NewGuid();
 
     private ApplicationDbContext CreateContext()
     {
         var currentTenant = new Mock<ICurrentTenantService>();
         currentTenant.Setup(c => c.TenantId).Returns(_tenantId);
 
-        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+        DbContextOptions<ApplicationDbContext> options = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
         return new ApplicationDbContext(options, currentTenant.Object);
@@ -27,7 +27,7 @@ public class ProductImageRepositoryTests
     [Fact]
     public async Task GetByProductAsync_ProductWithImages_ReturnsAllImagesOrderedBySortOrder()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         var image1 = new ProductImage
         {
             TenantId = _tenantId,
@@ -50,7 +50,7 @@ public class ProductImageRepositoryTests
         await ctx.SaveChangesAsync();
 
         var repo = new ProductImageRepository(ctx);
-        var result = await repo.GetByProductAsync(_productId);
+        IReadOnlyList<ProductImage> result = await repo.GetByProductAsync(_productId);
 
         result.Should().HaveCount(2);
         result.Should().BeInAscendingOrder(x => x.SortOrder);
@@ -59,10 +59,10 @@ public class ProductImageRepositoryTests
     [Fact]
     public async Task GetByProductAsync_NoImages_ReturnsEmptyList()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
 
         var repo = new ProductImageRepository(ctx);
-        var result = await repo.GetByProductAsync(_productId);
+        IReadOnlyList<ProductImage> result = await repo.GetByProductAsync(_productId);
 
         result.Should().BeEmpty();
     }
@@ -70,7 +70,7 @@ public class ProductImageRepositoryTests
     [Fact]
     public async Task GetPrimaryAsync_ProductWithPrimaryImage_ReturnsPrimaryImage()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         var primary = new ProductImage
         {
             TenantId = _tenantId,
@@ -93,7 +93,7 @@ public class ProductImageRepositoryTests
         await ctx.SaveChangesAsync();
 
         var repo = new ProductImageRepository(ctx);
-        var result = await repo.GetPrimaryAsync(_productId);
+        ProductImage? result = await repo.GetPrimaryAsync(_productId);
 
         result.Should().NotBeNull();
         result!.IsPrimary.Should().BeTrue();
@@ -103,7 +103,7 @@ public class ProductImageRepositoryTests
     [Fact]
     public async Task GetPrimaryAsync_NoPrimaryImage_ReturnsNull()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         var image = new ProductImage
         {
             TenantId = _tenantId,
@@ -117,7 +117,7 @@ public class ProductImageRepositoryTests
         await ctx.SaveChangesAsync();
 
         var repo = new ProductImageRepository(ctx);
-        var result = await repo.GetPrimaryAsync(_productId);
+        ProductImage? result = await repo.GetPrimaryAsync(_productId);
 
         result.Should().BeNull();
     }

@@ -1,5 +1,6 @@
 using FashionSaaS.Application.AuditLogs;
 using FashionSaaS.Application.AuditLogs.DTOs;
+using FashionSaaS.Application.Common;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Domain.Entities;
 using FluentAssertions;
@@ -15,25 +16,25 @@ public class AuditLogQueryServiceTests
 
     private static AuditLog MakeLog(Guid? userId = null, string action = "Update",
         string entity = "User") => new()
-    {
-        Id = Guid.NewGuid(),
-        UserId = userId,
-        TenantId = null,
-        Action = action,
-        EntityName = entity,
-        EntityId = Guid.NewGuid(),
-        OldValues = "{\"name\":\"old\"}",
-        NewValues = "{\"name\":\"new\"}",
-        IpAddress = "127.0.0.1"
-    };
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            TenantId = null,
+            Action = action,
+            EntityName = entity,
+            EntityId = Guid.NewGuid(),
+            OldValues = "{\"name\":\"old\"}",
+            NewValues = "{\"name\":\"new\"}",
+            IpAddress = "127.0.0.1"
+        };
 
     // ── GetPagedAsync ────────────────────────────────────────────────────────
 
     [Fact]
     public async Task GetPagedAsync_ReturnsMappedPagedResult()
     {
-        var log1 = MakeLog(action: "Create");
-        var log2 = MakeLog(action: "Update");
+        AuditLog log1 = MakeLog(action: "Create");
+        AuditLog log2 = MakeLog(action: "Update");
         var logs = new List<AuditLog> { log1, log2 };
 
         _repo.Setup(r => r.GetPagedAsync(null, null, null, null, null, 1, 50))
@@ -42,7 +43,7 @@ public class AuditLogQueryServiceTests
             .ReturnsAsync(2);
 
         var filter = new AuditLogFilterRequest { Page = 1, PageSize = 50 };
-        var result = await CreateService().GetPagedAsync(filter);
+        ResponseData<PagedResult<AuditLogResponse>> result = await CreateService().GetPagedAsync(filter);
 
         result.IsSuccess.Should().BeTrue();
         result.StatusCode.Should().Be(200);
@@ -56,7 +57,7 @@ public class AuditLogQueryServiceTests
     public async Task GetPagedAsync_MapsAllFields()
     {
         var userId = Guid.NewGuid();
-        var log = MakeLog(userId: userId);
+        AuditLog log = MakeLog(userId: userId);
         _repo.Setup(r => r.GetPagedAsync(It.IsAny<string?>(), It.IsAny<string?>(),
                 It.IsAny<Guid?>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>(),
                 It.IsAny<int>(), It.IsAny<int>()))
@@ -65,9 +66,9 @@ public class AuditLogQueryServiceTests
                 It.IsAny<Guid?>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>()))
             .ReturnsAsync(1);
 
-        var result = await CreateService().GetPagedAsync(new AuditLogFilterRequest());
+        ResponseData<PagedResult<AuditLogResponse>> result = await CreateService().GetPagedAsync(new AuditLogFilterRequest());
 
-        var item = result.Data!.Items.Single();
+        AuditLogResponse item = result.Data!.Items.Single();
         item.Id.Should().Be(log.Id);
         item.UserId.Should().Be(userId);
         item.Action.Should().Be(log.Action);
@@ -83,8 +84,8 @@ public class AuditLogQueryServiceTests
     public async Task GetPagedAsync_PassesFilterToRepository()
     {
         var userId = Guid.NewGuid();
-        var from = DateTime.UtcNow.AddDays(-7);
-        var to = DateTime.UtcNow;
+        DateTime from = DateTime.UtcNow.AddDays(-7);
+        DateTime to = DateTime.UtcNow;
 
         _repo.Setup(r => r.GetPagedAsync("Create", "User", userId, from, to, 2, 10))
             .ReturnsAsync(new List<AuditLog>());
@@ -93,11 +94,16 @@ public class AuditLogQueryServiceTests
 
         var filter = new AuditLogFilterRequest
         {
-            Action = "Create", EntityName = "User", UserId = userId,
-            From = from, To = to, Page = 2, PageSize = 10
+            Action = "Create",
+            EntityName = "User",
+            UserId = userId,
+            From = from,
+            To = to,
+            Page = 2,
+            PageSize = 10
         };
 
-        var result = await CreateService().GetPagedAsync(filter);
+        ResponseData<PagedResult<AuditLogResponse>> result = await CreateService().GetPagedAsync(filter);
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.TotalCount.Should().Be(0);
@@ -118,7 +124,7 @@ public class AuditLogQueryServiceTests
                 It.IsAny<Guid?>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>()))
             .ReturnsAsync(0);
 
-        var result = await CreateService().GetPagedAsync(new AuditLogFilterRequest());
+        ResponseData<PagedResult<AuditLogResponse>> result = await CreateService().GetPagedAsync(new AuditLogFilterRequest());
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.Items.Should().BeEmpty();
@@ -130,10 +136,10 @@ public class AuditLogQueryServiceTests
     [Fact]
     public async Task GetByIdAsync_ExistingLog_ReturnsMapped()
     {
-        var log = MakeLog();
+        AuditLog log = MakeLog();
         _repo.Setup(r => r.GetByIdAsync(log.Id)).ReturnsAsync(log);
 
-        var result = await CreateService().GetByIdAsync(log.Id);
+        ResponseData<AuditLogResponse> result = await CreateService().GetByIdAsync(log.Id);
 
         result.IsSuccess.Should().BeTrue();
         result.StatusCode.Should().Be(200);
@@ -147,7 +153,7 @@ public class AuditLogQueryServiceTests
         var id = Guid.NewGuid();
         _repo.Setup(r => r.GetByIdAsync(id)).ReturnsAsync((AuditLog?)null);
 
-        var result = await CreateService().GetByIdAsync(id);
+        ResponseData<AuditLogResponse> result = await CreateService().GetByIdAsync(id);
 
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Should().Be(404);

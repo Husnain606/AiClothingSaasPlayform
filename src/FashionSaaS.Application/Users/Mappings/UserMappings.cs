@@ -1,5 +1,5 @@
-using FashionSaaS.Domain.Entities;
 using FashionSaaS.Application.Users.DTOs;
+using FashionSaaS.Domain.Entities;
 using Mapster;
 
 namespace FashionSaaS.Application.Users.Mappings;

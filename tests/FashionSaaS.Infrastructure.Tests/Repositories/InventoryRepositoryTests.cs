@@ -11,15 +11,15 @@ namespace FashionSaaS.Infrastructure.Tests.Repositories;
 
 public class InventoryRepositoryTests
 {
-    private Guid _tenantId = Guid.NewGuid();
-    private Guid _variantId = Guid.NewGuid();
+    private readonly Guid _tenantId = Guid.NewGuid();
+    private readonly Guid _variantId = Guid.NewGuid();
 
     private ApplicationDbContext CreateContext()
     {
         var currentTenant = new Mock<ICurrentTenantService>();
         currentTenant.Setup(c => c.TenantId).Returns(_tenantId);
 
-        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+        DbContextOptions<ApplicationDbContext> options = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
         return new ApplicationDbContext(options, currentTenant.Object);
@@ -28,7 +28,7 @@ public class InventoryRepositoryTests
     [Fact]
     public async Task GetByVariantAsync_VariantWithStockAdjustments_ReturnsAllAdjustments()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         var adjustment1 = new StockAdjustment
         {
             TenantId = _tenantId,
@@ -51,7 +51,7 @@ public class InventoryRepositoryTests
         await ctx.SaveChangesAsync();
 
         var repo = new StockAdjustmentRepository(ctx);
-        var result = await repo.GetByVariantAsync(_variantId);
+        IReadOnlyList<StockAdjustment> result = await repo.GetByVariantAsync(_variantId);
 
         result.Should().HaveCount(2);
     }
@@ -59,10 +59,10 @@ public class InventoryRepositoryTests
     [Fact]
     public async Task GetByVariantAsync_VariantWithNoAdjustments_ReturnsEmptyList()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
 
         var repo = new StockAdjustmentRepository(ctx);
-        var result = await repo.GetByVariantAsync(_variantId);
+        IReadOnlyList<StockAdjustment> result = await repo.GetByVariantAsync(_variantId);
 
         result.Should().BeEmpty();
     }
@@ -70,7 +70,7 @@ public class InventoryRepositoryTests
     [Fact]
     public async Task GetByVariantAsync_FiltersToSpecificVariant_ExcludesOtherVariants()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         var otherVariantId = Guid.NewGuid();
         var adjustment1 = new StockAdjustment
         {
@@ -94,16 +94,16 @@ public class InventoryRepositoryTests
         await ctx.SaveChangesAsync();
 
         var repo = new StockAdjustmentRepository(ctx);
-        var result = await repo.GetByVariantAsync(_variantId);
+        IReadOnlyList<StockAdjustment> result = await repo.GetByVariantAsync(_variantId);
 
         result.Should().HaveCount(1);
-        result.First().Delta.Should().Be(50);
+        result[0].Delta.Should().Be(50);
     }
 
     [Fact]
     public async Task GetByVariantAsync_MultipleAdjustments_ReturnsOrderedByDateDescending()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         var adjustment1 = new StockAdjustment
         {
             TenantId = _tenantId,
@@ -129,7 +129,7 @@ public class InventoryRepositoryTests
         await ctx.SaveChangesAsync();
 
         var repo = new StockAdjustmentRepository(ctx);
-        var result = await repo.GetByVariantAsync(_variantId);
+        IReadOnlyList<StockAdjustment> result = await repo.GetByVariantAsync(_variantId);
 
         result.Should().HaveCount(2);
         result.Should().BeInDescendingOrder(x => x.CreatedAt);

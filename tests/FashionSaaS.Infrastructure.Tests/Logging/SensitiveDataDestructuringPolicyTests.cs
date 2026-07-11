@@ -16,7 +16,7 @@ public class SensitiveDataDestructuringPolicyTests
     private static StructureValue Destructure(SensitiveDataDestructuringPolicy policy, object value)
     {
         var factory = new StubPropertyValueFactory();
-        var result = policy.TryDestructure(value, factory, out var logValue);
+        var result = policy.TryDestructure(value, factory, out LogEventPropertyValue? logValue);
         result.Should().BeTrue("policy must intercept objects with sensitive properties");
         return (StructureValue)logValue;
     }
@@ -28,13 +28,13 @@ public class SensitiveDataDestructuringPolicyTests
     {
         var dto = new { SecretBase32 = "JBSWY3DPEHPK3PXP", OtherField = "visible" };
 
-        var structure = Destructure(_policy, dto);
+        StructureValue structure = Destructure(_policy, dto);
 
-        var secretProp = structure.Properties.Single(p => p.Name == "SecretBase32");
+        LogEventProperty secretProp = structure.Properties.Single(p => string.Equals(p.Name, "SecretBase32", StringComparison.Ordinal));
         secretProp.Value.Should().BeOfType<ScalarValue>()
             .Which.Value.Should().Be("***MASKED***");
 
-        var otherProp = structure.Properties.Single(p => p.Name == "OtherField");
+        LogEventProperty otherProp = structure.Properties.Single(p => string.Equals(p.Name, "OtherField", StringComparison.Ordinal));
         otherProp.Value.Should().BeOfType<ScalarValue>()
             .Which.Value.Should().Be("visible");
     }
@@ -46,9 +46,9 @@ public class SensitiveDataDestructuringPolicyTests
     {
         var dto = new { Password = "super-secret", Username = "admin" };
 
-        var structure = Destructure(_policy, dto);
+        StructureValue structure = Destructure(_policy, dto);
 
-        structure.Properties.Single(p => p.Name == "Password")
+        structure.Properties.Single(p => string.Equals(p.Name, "Password", StringComparison.Ordinal))
             .Value.Should().BeOfType<ScalarValue>()
             .Which.Value.Should().Be("***MASKED***");
     }
@@ -58,13 +58,13 @@ public class SensitiveDataDestructuringPolicyTests
     {
         var dto = new { Iban = "PK36SCBL0000001123456702", BankName = "HBL" };
 
-        var structure = Destructure(_policy, dto);
+        StructureValue structure = Destructure(_policy, dto);
 
-        structure.Properties.Single(p => p.Name == "Iban")
+        structure.Properties.Single(p => string.Equals(p.Name, "Iban", StringComparison.Ordinal))
             .Value.Should().BeOfType<ScalarValue>()
             .Which.Value.Should().Be("***MASKED***");
 
-        structure.Properties.Single(p => p.Name == "BankName")
+        structure.Properties.Single(p => string.Equals(p.Name, "BankName", StringComparison.Ordinal))
             .Value.Should().BeOfType<ScalarValue>()
             .Which.Value.Should().Be("HBL");
     }
@@ -74,9 +74,9 @@ public class SensitiveDataDestructuringPolicyTests
     {
         var dto = new { AccountNumber = "12345678" };
 
-        var structure = Destructure(_policy, dto);
+        StructureValue structure = Destructure(_policy, dto);
 
-        structure.Properties.Single(p => p.Name == "AccountNumber")
+        structure.Properties.Single(p => string.Equals(p.Name, "AccountNumber", StringComparison.Ordinal))
             .Value.Should().BeOfType<ScalarValue>()
             .Which.Value.Should().Be("***MASKED***");
     }

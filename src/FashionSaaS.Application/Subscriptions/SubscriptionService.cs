@@ -23,14 +23,16 @@ public class SubscriptionService(
     public async Task<ResponseData<SubscriptionResponse>> AssignAsync(AssignSubscriptionRequest request,
         Guid adminId, string ip, string ua)
     {
-        var tenant = await tenantRepository.GetByIdAsync(request.TenantId);
-        if (tenant is null) return ResponseData<SubscriptionResponse>.Failure("Tenant not found.", 404);
+        Tenant? tenant = await tenantRepository.GetByIdAsync(request.TenantId);
+        if (tenant is null)
+            return ResponseData<SubscriptionResponse>.Failure("Tenant not found.", 404);
 
-        var plan = await planRepository.GetByIdAsync(request.PlanId);
-        if (plan is null) return ResponseData<SubscriptionResponse>.Failure("Plan not found.", 404);
+        SubscriptionPlan? plan = await planRepository.GetByIdAsync(request.PlanId);
+        if (plan is null)
+            return ResponseData<SubscriptionResponse>.Failure("Plan not found.", 404);
 
         var durationDays = plan.PlanType == SubscriptionPlanType.FreeTrial ? plan.TrialDays : plan.DurationDays;
-        var endDate = request.StartDate.AddDays(durationDays);
+        DateTime endDate = request.StartDate.AddDays(durationDays);
 
         var subscription = new TenantSubscription
         {
@@ -57,7 +59,7 @@ public class SubscriptionService(
             };
             await paymentRepository.AddAsync(payment);
 
-            var platformAccount = await bankAccountRepository.GetPlatformAccountAsync();
+            BankAccount? platformAccount = await bankAccountRepository.GetPlatformAccountAsync();
             var bankDetails = platformAccount is not null
                 ? $"Bank: {fieldEncryption.Decrypt(platformAccount.BankNameEncrypted)}, " +
                   $"Account: {fieldEncryption.MaskAccountNumber(fieldEncryption.Decrypt(platformAccount.AccountNumberEncrypted))}"
@@ -78,11 +80,13 @@ public class SubscriptionService(
     public async Task<ResponseData<SubscriptionResponse>> ChangePlanAsync(Guid subscriptionId, Guid newPlanId,
         Guid adminId, string ip, string ua)
     {
-        var subscription = await subscriptionRepository.GetByIdAsync(subscriptionId);
-        if (subscription is null) return ResponseData<SubscriptionResponse>.Failure("Subscription not found.", 404);
+        TenantSubscription? subscription = await subscriptionRepository.GetByIdAsync(subscriptionId);
+        if (subscription is null)
+            return ResponseData<SubscriptionResponse>.Failure("Subscription not found.", 404);
 
-        var newPlan = await planRepository.GetByIdAsync(newPlanId);
-        if (newPlan is null) return ResponseData<SubscriptionResponse>.Failure("Plan not found.", 404);
+        SubscriptionPlan? newPlan = await planRepository.GetByIdAsync(newPlanId);
+        if (newPlan is null)
+            return ResponseData<SubscriptionResponse>.Failure("Plan not found.", 404);
 
         var old = new { subscription.PlanId, subscription.EndDate };
 
@@ -120,8 +124,9 @@ public class SubscriptionService(
     public async Task<ResponseData<SubscriptionResponse>> SuspendAsync(Guid subscriptionId,
         Guid adminId, string ip, string ua)
     {
-        var subscription = await subscriptionRepository.GetByIdAsync(subscriptionId);
-        if (subscription is null) return ResponseData<SubscriptionResponse>.Failure("Subscription not found.", 404);
+        TenantSubscription? subscription = await subscriptionRepository.GetByIdAsync(subscriptionId);
+        if (subscription is null)
+            return ResponseData<SubscriptionResponse>.Failure("Subscription not found.", 404);
         if (subscription.Status == SubscriptionStatus.Suspended)
             return ResponseData<SubscriptionResponse>.Failure("Subscription is already suspended.", 400);
 
@@ -133,7 +138,7 @@ public class SubscriptionService(
         await auditLogService.LogAsync(adminId, subscription.TenantId, "SubscriptionSuspended",
             "TenantSubscription", subscription.Id, old, new { subscription.Status }, ip, ua);
 
-        var plan = await planRepository.GetByIdAsync(subscription.PlanId);
+        SubscriptionPlan? plan = await planRepository.GetByIdAsync(subscription.PlanId);
         return ResponseData<SubscriptionResponse>.Success(Map(subscription, plan));
     }
 
@@ -142,8 +147,9 @@ public class SubscriptionService(
     public async Task<ResponseData<SubscriptionResponse>> ReactivateAsync(Guid subscriptionId,
         Guid adminId, string ip, string ua)
     {
-        var subscription = await subscriptionRepository.GetByIdAsync(subscriptionId);
-        if (subscription is null) return ResponseData<SubscriptionResponse>.Failure("Subscription not found.", 404);
+        TenantSubscription? subscription = await subscriptionRepository.GetByIdAsync(subscriptionId);
+        if (subscription is null)
+            return ResponseData<SubscriptionResponse>.Failure("Subscription not found.", 404);
         if (subscription.Status == SubscriptionStatus.Active)
             return ResponseData<SubscriptionResponse>.Failure("Subscription is already active.", 400);
 
@@ -155,7 +161,7 @@ public class SubscriptionService(
         await auditLogService.LogAsync(adminId, subscription.TenantId, "SubscriptionReactivated",
             "TenantSubscription", subscription.Id, old, new { subscription.Status }, ip, ua);
 
-        var plan = await planRepository.GetByIdAsync(subscription.PlanId);
+        SubscriptionPlan? plan = await planRepository.GetByIdAsync(subscription.PlanId);
         return ResponseData<SubscriptionResponse>.Success(Map(subscription, plan));
     }
 
@@ -164,8 +170,9 @@ public class SubscriptionService(
     public async Task<ResponseData<PaymentResponse>> ConfirmPaymentAsync(Guid paymentId,
         Guid adminId, string ip, string ua)
     {
-        var payment = await paymentRepository.GetByIdAsync(paymentId);
-        if (payment is null) return ResponseData<PaymentResponse>.Failure("Payment not found.", 404);
+        SubscriptionPayment? payment = await paymentRepository.GetByIdAsync(paymentId);
+        if (payment is null)
+            return ResponseData<PaymentResponse>.Failure("Payment not found.", 404);
         if (payment.Status == PaymentStatus.Confirmed)
             return ResponseData<PaymentResponse>.Failure("Payment already confirmed.", 400);
 
@@ -174,7 +181,7 @@ public class SubscriptionService(
         payment.PaidAt = DateTime.UtcNow;
         payment.ConfirmedByAdminId = adminId;
 
-        var tenant = await tenantRepository.GetByIdAsync(payment.TenantId);
+        Tenant? tenant = await tenantRepository.GetByIdAsync(payment.TenantId);
         if (tenant is not null)
         {
             payment.AddDomainEvent(new PaymentConfirmedEvent(tenant.Id, tenant.Email, payment.Amount));
@@ -198,34 +205,36 @@ public class SubscriptionService(
 
     public async Task<ResponseData<SubscriptionResponse>> GetByTenantAsync(Guid tenantId)
     {
-        var sub = await subscriptionRepository.GetActiveByTenantIdAsync(tenantId);
-        if (sub is null) return ResponseData<SubscriptionResponse>.Failure("No active subscription.", 404);
+        TenantSubscription? sub = await subscriptionRepository.GetActiveByTenantIdAsync(tenantId);
+        if (sub is null)
+            return ResponseData<SubscriptionResponse>.Failure("No active subscription.", 404);
         return ResponseData<SubscriptionResponse>.Success(Map(sub, sub.Plan));
     }
 
     public async Task<ResponseData<IReadOnlyList<SubscriptionResponse>>> GetAllAsync()
     {
-        var subs = await subscriptionRepository.GetAllAsync();
+        IReadOnlyList<TenantSubscription> subs = await subscriptionRepository.GetAllAsync();
         return ResponseData<IReadOnlyList<SubscriptionResponse>>.Success(
             subs.Select(s => Map(s, s.Plan)).ToList());
     }
 
     public async Task<ResponseData<PaymentResponse>> GetPaymentByIdAsync(Guid paymentId)
     {
-        var payment = await paymentRepository.GetByIdAsync(paymentId);
-        if (payment is null) return ResponseData<PaymentResponse>.Failure("Payment not found.", 404);
+        SubscriptionPayment? payment = await paymentRepository.GetByIdAsync(paymentId);
+        if (payment is null)
+            return ResponseData<PaymentResponse>.Failure("Payment not found.", 404);
         return ResponseData<PaymentResponse>.Success(MapPayment(payment));
     }
 
     public async Task<ResponseData<IReadOnlyList<PaymentResponse>>> GetPaymentsBySubscriptionAsync(Guid subscriptionId)
     {
-        var payments = await paymentRepository.GetBySubscriptionAsync(subscriptionId);
+        IReadOnlyList<SubscriptionPayment> payments = await paymentRepository.GetBySubscriptionAsync(subscriptionId);
         return ResponseData<IReadOnlyList<PaymentResponse>>.Success(payments.Select(MapPayment).ToList());
     }
 
     public async Task<ResponseData<IReadOnlyList<PaymentResponse>>> GetAllPaymentsAsync()
     {
-        var payments = await paymentRepository.GetAllAsync();
+        IReadOnlyList<SubscriptionPayment> payments = await paymentRepository.GetAllAsync();
         return ResponseData<IReadOnlyList<PaymentResponse>>.Success(payments.Select(MapPayment).ToList());
     }
 

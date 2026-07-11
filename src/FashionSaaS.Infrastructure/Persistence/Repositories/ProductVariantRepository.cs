@@ -12,6 +12,11 @@ public class ProductVariantRepository(ApplicationDbContext context)
             v => v.TenantId == tenantId && v.Sku == sku && (excludeId == null || v.Id != excludeId),
             ct);
 
+    // CA1311/CA1304/MA0011/CA1862 suppressed: this lambda is an EF Core LINQ expression tree
+    // translated to SQL, not executed as C# — only the parameterless ToLower()/ToUpper() are
+    // in EF Core's supported translatable-method set. Adding a CultureInfo/StringComparison
+    // argument (the rules' suggested fix) would break SQL translation at runtime.
+#pragma warning disable CA1311, CA1304, MA0011, CA1862
     public async Task<bool> SizeColorExistsAsync(Guid productId, string size, string color, Guid? excludeId = null, CancellationToken ct = default)
         => await DbSet.AnyAsync(
             v => v.ProductId == productId
@@ -19,6 +24,7 @@ public class ProductVariantRepository(ApplicationDbContext context)
                  && v.Color.ToLower() == color.ToLower()
                  && (excludeId == null || v.Id != excludeId),
             ct);
+#pragma warning restore CA1311, CA1304, MA0011, CA1862
 
     public async Task<IReadOnlyList<ProductVariant>> GetByProductAsync(Guid productId, CancellationToken ct = default)
         => await DbSet

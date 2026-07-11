@@ -1,8 +1,8 @@
 namespace FashionSaaS.API.Constants;
 
-public static class ApiUrl
+internal static class ApiUrl
 {
-    public static class Auth
+    internal static class Auth
     {
         public const string Login = "api/auth/login";
         public const string LoginMfa = "api/auth/login/mfa";
@@ -13,7 +13,7 @@ public static class ApiUrl
         public const string ChangePassword = "api/auth/change-password";
     }
 
-    public static class AdminMfa
+    internal static class AdminMfa
     {
         public const string Setup = "api/admin/mfa/setup";
         public const string VerifySetup = "api/admin/mfa/verify-setup";
@@ -21,7 +21,7 @@ public static class ApiUrl
         public const string RegenerateBackupCodes = "api/admin/mfa/regenerate-backup-codes";
     }
 
-    public static class AdminTenants
+    internal static class AdminTenants
     {
         public const string GetAll = "api/admin/tenants";
         public const string GetById = "api/admin/tenants/{id}";
@@ -32,7 +32,7 @@ public static class ApiUrl
         public const string Delete = "api/admin/tenants/{id}";
     }
 
-    public static class AdminUsers
+    internal static class AdminUsers
     {
         public const string GetAll = "api/admin/users";
         public const string GetById = "api/admin/users/{id}";
@@ -42,7 +42,7 @@ public static class ApiUrl
         public const string Unlock = "api/admin/users/{id}/unlock";
     }
 
-    public static class AdminSubscriptionPlans
+    internal static class AdminSubscriptionPlans
     {
         public const string GetAll = "api/admin/subscription-plans";
         public const string GetById = "api/admin/subscription-plans/{id}";
@@ -51,7 +51,7 @@ public static class ApiUrl
         public const string Delete = "api/admin/subscription-plans/{id}";
     }
 
-    public static class AdminSubscriptions
+    internal static class AdminSubscriptions
     {
         public const string GetAll = "api/admin/subscriptions";
         public const string GetById = "api/admin/subscriptions/{id}";
@@ -61,14 +61,14 @@ public static class ApiUrl
         public const string Reactivate = "api/admin/subscriptions/{id}/reactivate";
     }
 
-    public static class AdminPayments
+    internal static class AdminPayments
     {
         public const string GetAll = "api/admin/payments";
         public const string GetById = "api/admin/payments/{id}";
         public const string Confirm = "api/admin/payments/{id}/confirm";
     }
 
-    public static class AdminBankAccount
+    internal static class AdminBankAccount
     {
         public const string Get = "api/admin/bank-account";
         public const string GetFull = "api/admin/bank-account/full";
@@ -76,24 +76,24 @@ public static class ApiUrl
         public const string Update = "api/admin/bank-account";
     }
 
-    public static class AdminAuditLogs
+    internal static class AdminAuditLogs
     {
         public const string GetAll = "api/admin/audit-logs";
         public const string GetById = "api/admin/audit-logs/{id}";
     }
 
-    public static class AdminLoginAttempts
+    internal static class AdminLoginAttempts
     {
         public const string GetAll = "api/admin/login-attempts";
     }
 
-    public static class TenantProfile
+    internal static class TenantProfile
     {
         public const string Get = "api/tenant/profile";
         public const string Update = "api/tenant/profile";
     }
 
-    public static class TenantUsers
+    internal static class TenantUsers
     {
         public const string GetAll = "api/tenant/users";
         public const string GetById = "api/tenant/users/{id}";
@@ -103,13 +103,13 @@ public static class ApiUrl
         public const string Delete = "api/tenant/users/{id}";
     }
 
-    public static class TenantSubscription
+    internal static class TenantSubscription
     {
         public const string Get = "api/tenant/subscription";
         public const string GetPayments = "api/tenant/subscription/payments";
     }
 
-    public static class TenantBankAccount
+    internal static class TenantBankAccount
     {
         public const string Get = "api/tenant/bank-account";
         public const string GetFull = "api/tenant/bank-account/full";
@@ -117,7 +117,7 @@ public static class ApiUrl
         public const string Update = "api/tenant/bank-account";
     }
 
-    public static class TenantCategories
+    internal static class TenantCategories
     {
         public const string GetAll = "api/tenant/categories";
         public const string GetTree = "api/tenant/categories/tree";
@@ -129,7 +129,7 @@ public static class ApiUrl
         public const string Delete = "api/tenant/categories/{id}";
     }
 
-    public static class TenantProducts
+    internal static class TenantProducts
     {
         public const string GetAll = "api/tenant/products";
         public const string GetById = "api/tenant/products/{id}";
@@ -141,7 +141,7 @@ public static class ApiUrl
         public const string Delete = "api/tenant/products/{id}";
     }
 
-    public static class TenantProductVariants
+    internal static class TenantProductVariants
     {
         public const string GetByProduct = "api/tenant/products/{productId}/variants";
         public const string Add = "api/tenant/variants";
@@ -150,7 +150,7 @@ public static class ApiUrl
         public const string Delete = "api/tenant/variants/{id}";
     }
 
-    public static class TenantProductImages
+    internal static class TenantProductImages
     {
         public const string GetByProduct = "api/tenant/products/{productId}/images";
         public const string Upload = "api/tenant/products/images";
@@ -159,14 +159,14 @@ public static class ApiUrl
         public const string Delete = "api/tenant/products/images/{id}";
     }
 
-    public static class TenantInventory
+    internal static class TenantInventory
     {
         public const string AdjustStock = "api/tenant/inventory/adjust";
         public const string GetLowStock = "api/tenant/inventory/low-stock";
         public const string GetStockHistory = "api/tenant/inventory/variants/{variantId}/history";
     }
 
-    public static class TenantCustomers
+    internal static class TenantCustomers
     {
         public const string GetAll = "api/tenant/customers";
         public const string GetById = "api/tenant/customers/{id}";
@@ -175,7 +175,7 @@ public static class ApiUrl
         public const string Deactivate = "api/tenant/customers/{id}/deactivate";
     }
 
-    public static class TenantDiscounts
+    internal static class TenantDiscounts
     {
         public const string GetAll = "api/tenant/discounts";
         public const string GetById = "api/tenant/discounts/{id}";
@@ -186,7 +186,7 @@ public static class ApiUrl
         public const string Delete = "api/tenant/discounts/{id}";
     }
 
-    public static class TenantReviews
+    internal static class TenantReviews
     {
         public const string GetAll = "api/tenant/reviews";
         public const string GetById = "api/tenant/reviews/{id}";
@@ -195,13 +195,13 @@ public static class ApiUrl
         public const string Delete = "api/tenant/reviews/{id}";
     }
 
-    public static class TenantWishlists
+    internal static class TenantWishlists
     {
         public const string GetByCustomer = "api/tenant/customers/{customerId}/wishlist";
         public const string RemoveItem = "api/tenant/wishlist/items/{itemId}";
     }
 
-    public static class StoreOrders
+    internal static class StoreOrders
     {
         public const string Create = "api/store/orders";
         public const string GetMine = "api/store/orders";
@@ -209,7 +209,7 @@ public static class ApiUrl
         public const string Cancel = "api/store/orders/{id}/cancel";
     }
 
-    public static class TenantOrders
+    internal static class TenantOrders
     {
         public const string GetAll = "api/tenant/orders";
         public const string GetById = "api/tenant/orders/{id}";
@@ -219,7 +219,7 @@ public static class ApiUrl
         public const string Cancel = "api/tenant/orders/{id}/cancel";
     }
 
-    public static class TenantReports
+    internal static class TenantReports
     {
         public const string Summary = "api/tenant/reports/summary";
         public const string SalesOverTime = "api/tenant/reports/sales-over-time";

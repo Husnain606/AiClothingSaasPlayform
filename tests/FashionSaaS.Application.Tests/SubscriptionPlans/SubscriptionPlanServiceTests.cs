@@ -1,3 +1,4 @@
+using FashionSaaS.Application.Common;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Application.SubscriptionPlans;
 using FashionSaaS.Application.SubscriptionPlans.DTOs;
@@ -50,7 +51,7 @@ public class SubscriptionPlanServiceTests
         };
 
         // Act
-        var result = await CreateService().CreateAsync(request, AdminId, Ip, Ua);
+        ResponseData<SubscriptionPlanResponse> result = await CreateService().CreateAsync(request, AdminId, Ip, Ua);
 
         // Assert
         result.IsSuccess.Should().BeTrue();
@@ -69,7 +70,7 @@ public class SubscriptionPlanServiceTests
     {
         var request = new CreateSubscriptionPlanRequest { Name = "  ", Price = 10m, DurationDays = 30 };
 
-        var result = await CreateService().CreateAsync(request, AdminId, Ip, Ua);
+        ResponseData<SubscriptionPlanResponse> result = await CreateService().CreateAsync(request, AdminId, Ip, Ua);
 
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Should().Be(400);
@@ -81,7 +82,7 @@ public class SubscriptionPlanServiceTests
     {
         var request = new CreateSubscriptionPlanRequest { Name = "Bad Plan", Price = -1m, DurationDays = 30 };
 
-        var result = await CreateService().CreateAsync(request, AdminId, Ip, Ua);
+        ResponseData<SubscriptionPlanResponse> result = await CreateService().CreateAsync(request, AdminId, Ip, Ua);
 
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Should().Be(400);
@@ -92,7 +93,7 @@ public class SubscriptionPlanServiceTests
     {
         var request = new CreateSubscriptionPlanRequest { Name = "Bad Plan", Price = 10m, DurationDays = 0 };
 
-        var result = await CreateService().CreateAsync(request, AdminId, Ip, Ua);
+        ResponseData<SubscriptionPlanResponse> result = await CreateService().CreateAsync(request, AdminId, Ip, Ua);
 
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Should().Be(400);
@@ -105,7 +106,7 @@ public class SubscriptionPlanServiceTests
     {
         _planRepo.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync((SubscriptionPlan?)null);
 
-        var result = await CreateService().UpdateAsync(Guid.NewGuid(),
+        ResponseData<SubscriptionPlanResponse> result = await CreateService().UpdateAsync(Guid.NewGuid(),
             new UpdateSubscriptionPlanRequest { Name = "X", Price = 0m }, AdminId, Ip, Ua);
 
         result.IsSuccess.Should().BeFalse();
@@ -117,8 +118,11 @@ public class SubscriptionPlanServiceTests
     {
         var plan = new SubscriptionPlan
         {
-            Id = Guid.NewGuid(), Name = "Old", Price = 10m,
-            DurationDays = 30, PlanType = SubscriptionPlanType.Monthly
+            Id = Guid.NewGuid(),
+            Name = "Old",
+            Price = 10m,
+            DurationDays = 30,
+            PlanType = SubscriptionPlanType.Monthly
         };
         _planRepo.Setup(r => r.GetByIdAsync(plan.Id)).ReturnsAsync(plan);
         _planRepo.Setup(r => r.UpdateAsync(plan)).Returns(Task.CompletedTask);
@@ -129,11 +133,14 @@ public class SubscriptionPlanServiceTests
 
         var request = new UpdateSubscriptionPlanRequest
         {
-            Name = "New Name", Price = 99.99m, DurationDays = 365,
-            IsActive = true, UserLimit = 50
+            Name = "New Name",
+            Price = 99.99m,
+            DurationDays = 365,
+            IsActive = true,
+            UserLimit = 50
         };
 
-        var result = await CreateService().UpdateAsync(plan.Id, request, AdminId, Ip, Ua);
+        ResponseData<SubscriptionPlanResponse> result = await CreateService().UpdateAsync(plan.Id, request, AdminId, Ip, Ua);
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.Name.Should().Be("New Name");
@@ -148,7 +155,7 @@ public class SubscriptionPlanServiceTests
         var plan = new SubscriptionPlan { Id = Guid.NewGuid(), Name = "Old", Price = 10m };
         _planRepo.Setup(r => r.GetByIdAsync(plan.Id)).ReturnsAsync(plan);
 
-        var result = await CreateService().UpdateAsync(plan.Id,
+        ResponseData<SubscriptionPlanResponse> result = await CreateService().UpdateAsync(plan.Id,
             new UpdateSubscriptionPlanRequest { Name = "", Price = 10m }, AdminId, Ip, Ua);
 
         result.IsSuccess.Should().BeFalse();
@@ -162,7 +169,7 @@ public class SubscriptionPlanServiceTests
     {
         _planRepo.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync((SubscriptionPlan?)null);
 
-        var result = await CreateService().DeleteAsync(Guid.NewGuid(), AdminId, Ip, Ua);
+        ResponseData<bool> result = await CreateService().DeleteAsync(Guid.NewGuid(), AdminId, Ip, Ua);
 
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Should().Be(404);
@@ -179,7 +186,7 @@ public class SubscriptionPlanServiceTests
             "SubscriptionPlan", plan.Id, It.IsAny<object>(), null, Ip, Ua))
             .Returns(Task.CompletedTask);
 
-        var result = await CreateService().DeleteAsync(plan.Id, AdminId, Ip, Ua);
+        ResponseData<bool> result = await CreateService().DeleteAsync(plan.Id, AdminId, Ip, Ua);
 
         result.IsSuccess.Should().BeTrue();
         result.Data.Should().BeTrue();
@@ -201,7 +208,7 @@ public class SubscriptionPlanServiceTests
         };
         _planRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(plans);
 
-        var result = await CreateService().GetAllAsync();
+        ResponseData<IReadOnlyList<SubscriptionPlanResponse>> result = await CreateService().GetAllAsync();
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.Count.Should().Be(2);
@@ -220,7 +227,7 @@ public class SubscriptionPlanServiceTests
         };
         _planRepo.Setup(r => r.GetActiveAsync()).ReturnsAsync(active);
 
-        var result = await CreateService().GetActiveAsync();
+        ResponseData<IReadOnlyList<SubscriptionPlanResponse>> result = await CreateService().GetActiveAsync();
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.Count.Should().Be(1);
@@ -234,12 +241,16 @@ public class SubscriptionPlanServiceTests
     {
         var plan = new SubscriptionPlan
         {
-            Id = Guid.NewGuid(), Name = "Yearly", Price = 299m,
-            PlanType = SubscriptionPlanType.Yearly, IsActive = true, DurationDays = 365
+            Id = Guid.NewGuid(),
+            Name = "Yearly",
+            Price = 299m,
+            PlanType = SubscriptionPlanType.Yearly,
+            IsActive = true,
+            DurationDays = 365
         };
         _planRepo.Setup(r => r.GetByIdAsync(plan.Id)).ReturnsAsync(plan);
 
-        var result = await CreateService().GetByIdAsync(plan.Id);
+        ResponseData<SubscriptionPlanResponse> result = await CreateService().GetByIdAsync(plan.Id);
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.Id.Should().Be(plan.Id);
@@ -251,7 +262,7 @@ public class SubscriptionPlanServiceTests
     {
         _planRepo.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync((SubscriptionPlan?)null);
 
-        var result = await CreateService().GetByIdAsync(Guid.NewGuid());
+        ResponseData<SubscriptionPlanResponse> result = await CreateService().GetByIdAsync(Guid.NewGuid());
 
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Should().Be(404);

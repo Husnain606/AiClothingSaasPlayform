@@ -1,3 +1,4 @@
+using FashionSaaS.Application.Common;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Application.Subscriptions;
 using FashionSaaS.Application.Subscriptions.DTOs;
@@ -75,7 +76,7 @@ public class SubscriptionServiceTests
     {
         _tenantRepo.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync((Tenant?)null);
 
-        var result = await CreateService().AssignAsync(
+        ResponseData<SubscriptionResponse> result = await CreateService().AssignAsync(
             new AssignSubscriptionRequest { TenantId = Guid.NewGuid(), PlanId = Guid.NewGuid(), StartDate = DateTime.UtcNow },
             AdminId, Ip, Ua);
 
@@ -87,11 +88,11 @@ public class SubscriptionServiceTests
     [Fact]
     public async Task AssignAsync_PlanNotFound_Returns404()
     {
-        var tenant = MakeTenant();
+        Tenant tenant = MakeTenant();
         _tenantRepo.Setup(r => r.GetByIdAsync(tenant.Id)).ReturnsAsync(tenant);
         _planRepo.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync((SubscriptionPlan?)null);
 
-        var result = await CreateService().AssignAsync(
+        ResponseData<SubscriptionResponse> result = await CreateService().AssignAsync(
             new AssignSubscriptionRequest { TenantId = tenant.Id, PlanId = Guid.NewGuid(), StartDate = DateTime.UtcNow },
             AdminId, Ip, Ua);
 
@@ -102,8 +103,8 @@ public class SubscriptionServiceTests
     [Fact]
     public async Task AssignAsync_PaidPlan_CreatesSubscriptionAndPayment_Returns201()
     {
-        var tenant = MakeTenant();
-        var plan = MakePaidPlan();
+        Tenant tenant = MakeTenant();
+        SubscriptionPlan plan = MakePaidPlan();
         var startDate = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
         _tenantRepo.Setup(r => r.GetByIdAsync(tenant.Id)).ReturnsAsync(tenant);
@@ -121,7 +122,7 @@ public class SubscriptionServiceTests
             .Callback<TenantSubscription>(s => capturedSub = s)
             .Returns(Task.CompletedTask);
 
-        var result = await CreateService().AssignAsync(
+        ResponseData<SubscriptionResponse> result = await CreateService().AssignAsync(
             new AssignSubscriptionRequest { TenantId = tenant.Id, PlanId = plan.Id, StartDate = startDate },
             AdminId, Ip, Ua);
 
@@ -145,8 +146,8 @@ public class SubscriptionServiceTests
     [Fact]
     public async Task AssignAsync_FreeTrial_UsesTrialDays_NoPaymentCreated()
     {
-        var tenant = MakeTenant();
-        var plan = MakeTrialPlan();
+        Tenant tenant = MakeTenant();
+        SubscriptionPlan plan = MakeTrialPlan();
         var startDate = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
         _tenantRepo.Setup(r => r.GetByIdAsync(tenant.Id)).ReturnsAsync(tenant);
@@ -155,7 +156,7 @@ public class SubscriptionServiceTests
         SetupUow();
         SetupAudit();
 
-        var result = await CreateService().AssignAsync(
+        ResponseData<SubscriptionResponse> result = await CreateService().AssignAsync(
             new AssignSubscriptionRequest { TenantId = tenant.Id, PlanId = plan.Id, StartDate = startDate },
             AdminId, Ip, Ua);
 
@@ -173,7 +174,7 @@ public class SubscriptionServiceTests
     {
         _payRepo.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync((SubscriptionPayment?)null);
 
-        var result = await CreateService().ConfirmPaymentAsync(Guid.NewGuid(), AdminId, Ip, Ua);
+        ResponseData<PaymentResponse> result = await CreateService().ConfirmPaymentAsync(Guid.NewGuid(), AdminId, Ip, Ua);
 
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Should().Be(404);
@@ -184,13 +185,18 @@ public class SubscriptionServiceTests
     {
         var payment = new SubscriptionPayment
         {
-            Id = Guid.NewGuid(), TenantId = Guid.NewGuid(), SubscriptionId = Guid.NewGuid(),
-            Amount = 99m, DueDate = DateTime.UtcNow, Status = PaymentStatus.Confirmed,
-            PaidAt = DateTime.UtcNow.AddDays(-1), ConfirmedByAdminId = AdminId
+            Id = Guid.NewGuid(),
+            TenantId = Guid.NewGuid(),
+            SubscriptionId = Guid.NewGuid(),
+            Amount = 99m,
+            DueDate = DateTime.UtcNow,
+            Status = PaymentStatus.Confirmed,
+            PaidAt = DateTime.UtcNow.AddDays(-1),
+            ConfirmedByAdminId = AdminId
         };
         _payRepo.Setup(r => r.GetByIdAsync(payment.Id)).ReturnsAsync(payment);
 
-        var result = await CreateService().ConfirmPaymentAsync(payment.Id, AdminId, Ip, Ua);
+        ResponseData<PaymentResponse> result = await CreateService().ConfirmPaymentAsync(payment.Id, AdminId, Ip, Ua);
 
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Should().Be(400);
@@ -201,11 +207,15 @@ public class SubscriptionServiceTests
     public async Task ConfirmPaymentAsync_PendingPayment_ConfirmsAndSendsEmail()
     {
         var tenantId = Guid.NewGuid();
-        var tenant = MakeTenant(tenantId);
+        Tenant tenant = MakeTenant(tenantId);
         var payment = new SubscriptionPayment
         {
-            Id = Guid.NewGuid(), TenantId = tenantId, SubscriptionId = Guid.NewGuid(),
-            Amount = 99m, DueDate = DateTime.UtcNow.AddDays(3), Status = PaymentStatus.Pending
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            SubscriptionId = Guid.NewGuid(),
+            Amount = 99m,
+            DueDate = DateTime.UtcNow.AddDays(3),
+            Status = PaymentStatus.Pending
         };
 
         _payRepo.Setup(r => r.GetByIdAsync(payment.Id)).ReturnsAsync(payment);
@@ -215,7 +225,7 @@ public class SubscriptionServiceTests
         SetupUow();
         SetupAudit();
 
-        var result = await CreateService().ConfirmPaymentAsync(payment.Id, AdminId, Ip, Ua);
+        ResponseData<PaymentResponse> result = await CreateService().ConfirmPaymentAsync(payment.Id, AdminId, Ip, Ua);
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.Status.Should().Be(PaymentStatus.Confirmed);
@@ -239,7 +249,7 @@ public class SubscriptionServiceTests
     {
         _subRepo.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync((TenantSubscription?)null);
 
-        var result = await CreateService().SuspendAsync(Guid.NewGuid(), AdminId, Ip, Ua);
+        ResponseData<SubscriptionResponse> result = await CreateService().SuspendAsync(Guid.NewGuid(), AdminId, Ip, Ua);
 
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Should().Be(404);
@@ -250,13 +260,16 @@ public class SubscriptionServiceTests
     {
         var sub = new TenantSubscription
         {
-            Id = Guid.NewGuid(), TenantId = Guid.NewGuid(), PlanId = Guid.NewGuid(),
-            StartDate = DateTime.UtcNow, EndDate = DateTime.UtcNow.AddDays(30),
+            Id = Guid.NewGuid(),
+            TenantId = Guid.NewGuid(),
+            PlanId = Guid.NewGuid(),
+            StartDate = DateTime.UtcNow,
+            EndDate = DateTime.UtcNow.AddDays(30),
             Status = SubscriptionStatus.Suspended
         };
         _subRepo.Setup(r => r.GetByIdAsync(sub.Id)).ReturnsAsync(sub);
 
-        var result = await CreateService().SuspendAsync(sub.Id, AdminId, Ip, Ua);
+        ResponseData<SubscriptionResponse> result = await CreateService().SuspendAsync(sub.Id, AdminId, Ip, Ua);
 
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Should().Be(400);
@@ -266,12 +279,16 @@ public class SubscriptionServiceTests
     [Fact]
     public async Task SuspendAsync_ActiveSubscription_SuspendsAndAudits()
     {
-        var plan = MakePaidPlan();
+        SubscriptionPlan plan = MakePaidPlan();
         var sub = new TenantSubscription
         {
-            Id = Guid.NewGuid(), TenantId = Guid.NewGuid(), PlanId = plan.Id,
-            StartDate = DateTime.UtcNow, EndDate = DateTime.UtcNow.AddDays(30),
-            Status = SubscriptionStatus.Active, Plan = plan
+            Id = Guid.NewGuid(),
+            TenantId = Guid.NewGuid(),
+            PlanId = plan.Id,
+            StartDate = DateTime.UtcNow,
+            EndDate = DateTime.UtcNow.AddDays(30),
+            Status = SubscriptionStatus.Active,
+            Plan = plan
         };
         _subRepo.Setup(r => r.GetByIdAsync(sub.Id)).ReturnsAsync(sub);
         _subRepo.Setup(r => r.UpdateAsync(sub)).Returns(Task.CompletedTask);
@@ -279,7 +296,7 @@ public class SubscriptionServiceTests
         SetupUow();
         SetupAudit();
 
-        var result = await CreateService().SuspendAsync(sub.Id, AdminId, Ip, Ua);
+        ResponseData<SubscriptionResponse> result = await CreateService().SuspendAsync(sub.Id, AdminId, Ip, Ua);
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.Status.Should().Be(SubscriptionStatus.Suspended);
@@ -295,13 +312,16 @@ public class SubscriptionServiceTests
     {
         var sub = new TenantSubscription
         {
-            Id = Guid.NewGuid(), TenantId = Guid.NewGuid(), PlanId = Guid.NewGuid(),
-            StartDate = DateTime.UtcNow, EndDate = DateTime.UtcNow.AddDays(30),
+            Id = Guid.NewGuid(),
+            TenantId = Guid.NewGuid(),
+            PlanId = Guid.NewGuid(),
+            StartDate = DateTime.UtcNow,
+            EndDate = DateTime.UtcNow.AddDays(30),
             Status = SubscriptionStatus.Active
         };
         _subRepo.Setup(r => r.GetByIdAsync(sub.Id)).ReturnsAsync(sub);
 
-        var result = await CreateService().ReactivateAsync(sub.Id, AdminId, Ip, Ua);
+        ResponseData<SubscriptionResponse> result = await CreateService().ReactivateAsync(sub.Id, AdminId, Ip, Ua);
 
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Should().Be(400);
@@ -310,12 +330,16 @@ public class SubscriptionServiceTests
     [Fact]
     public async Task ReactivateAsync_SuspendedSubscription_ReactivatesAndAudits()
     {
-        var plan = MakePaidPlan();
+        SubscriptionPlan plan = MakePaidPlan();
         var sub = new TenantSubscription
         {
-            Id = Guid.NewGuid(), TenantId = Guid.NewGuid(), PlanId = plan.Id,
-            StartDate = DateTime.UtcNow, EndDate = DateTime.UtcNow.AddDays(30),
-            Status = SubscriptionStatus.Suspended, Plan = plan
+            Id = Guid.NewGuid(),
+            TenantId = Guid.NewGuid(),
+            PlanId = plan.Id,
+            StartDate = DateTime.UtcNow,
+            EndDate = DateTime.UtcNow.AddDays(30),
+            Status = SubscriptionStatus.Suspended,
+            Plan = plan
         };
         _subRepo.Setup(r => r.GetByIdAsync(sub.Id)).ReturnsAsync(sub);
         _subRepo.Setup(r => r.UpdateAsync(sub)).Returns(Task.CompletedTask);
@@ -323,7 +347,7 @@ public class SubscriptionServiceTests
         SetupUow();
         SetupAudit();
 
-        var result = await CreateService().ReactivateAsync(sub.Id, AdminId, Ip, Ua);
+        ResponseData<SubscriptionResponse> result = await CreateService().ReactivateAsync(sub.Id, AdminId, Ip, Ua);
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.Status.Should().Be(SubscriptionStatus.Active);
@@ -339,7 +363,7 @@ public class SubscriptionServiceTests
     {
         _subRepo.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync((TenantSubscription?)null);
 
-        var result = await CreateService().ChangePlanAsync(Guid.NewGuid(), Guid.NewGuid(), AdminId, Ip, Ua);
+        ResponseData<SubscriptionResponse> result = await CreateService().ChangePlanAsync(Guid.NewGuid(), Guid.NewGuid(), AdminId, Ip, Ua);
 
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Should().Be(404);
@@ -350,14 +374,17 @@ public class SubscriptionServiceTests
     {
         var sub = new TenantSubscription
         {
-            Id = Guid.NewGuid(), TenantId = Guid.NewGuid(), PlanId = Guid.NewGuid(),
-            StartDate = DateTime.UtcNow, EndDate = DateTime.UtcNow.AddDays(30),
+            Id = Guid.NewGuid(),
+            TenantId = Guid.NewGuid(),
+            PlanId = Guid.NewGuid(),
+            StartDate = DateTime.UtcNow,
+            EndDate = DateTime.UtcNow.AddDays(30),
             Status = SubscriptionStatus.Active
         };
         _subRepo.Setup(r => r.GetByIdAsync(sub.Id)).ReturnsAsync(sub);
         _planRepo.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync((SubscriptionPlan?)null);
 
-        var result = await CreateService().ChangePlanAsync(sub.Id, Guid.NewGuid(), AdminId, Ip, Ua);
+        ResponseData<SubscriptionResponse> result = await CreateService().ChangePlanAsync(sub.Id, Guid.NewGuid(), AdminId, Ip, Ua);
 
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Should().Be(404);
@@ -367,12 +394,15 @@ public class SubscriptionServiceTests
     public async Task ChangePlanAsync_ValidNewPlan_UpdatesDatesAndCreatesPayment()
     {
         var startDate = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        var newPlan = MakePaidPlan();
+        SubscriptionPlan newPlan = MakePaidPlan();
         newPlan.DurationDays = 365; // Yearly
         var sub = new TenantSubscription
         {
-            Id = Guid.NewGuid(), TenantId = Guid.NewGuid(), PlanId = Guid.NewGuid(),
-            StartDate = startDate, EndDate = startDate.AddDays(30),
+            Id = Guid.NewGuid(),
+            TenantId = Guid.NewGuid(),
+            PlanId = Guid.NewGuid(),
+            StartDate = startDate,
+            EndDate = startDate.AddDays(30),
             Status = SubscriptionStatus.Active
         };
         _subRepo.Setup(r => r.GetByIdAsync(sub.Id)).ReturnsAsync(sub);
@@ -382,7 +412,7 @@ public class SubscriptionServiceTests
         SetupUow();
         SetupAudit();
 
-        var result = await CreateService().ChangePlanAsync(sub.Id, newPlan.Id, AdminId, Ip, Ua);
+        ResponseData<SubscriptionResponse> result = await CreateService().ChangePlanAsync(sub.Id, newPlan.Id, AdminId, Ip, Ua);
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.EndDate.Should().Be(startDate.AddDays(365));
@@ -401,7 +431,7 @@ public class SubscriptionServiceTests
         _subRepo.Setup(r => r.GetActiveByTenantIdAsync(It.IsAny<Guid>()))
             .ReturnsAsync((TenantSubscription?)null);
 
-        var result = await CreateService().GetByTenantAsync(Guid.NewGuid());
+        ResponseData<SubscriptionResponse> result = await CreateService().GetByTenantAsync(Guid.NewGuid());
 
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Should().Be(404);
@@ -410,16 +440,20 @@ public class SubscriptionServiceTests
     [Fact]
     public async Task GetByTenantAsync_ExistingSub_ReturnsMapped()
     {
-        var plan = MakePaidPlan();
+        SubscriptionPlan plan = MakePaidPlan();
         var sub = new TenantSubscription
         {
-            Id = Guid.NewGuid(), TenantId = Guid.NewGuid(), PlanId = plan.Id,
-            StartDate = DateTime.UtcNow, EndDate = DateTime.UtcNow.AddDays(30),
-            Status = SubscriptionStatus.Active, Plan = plan
+            Id = Guid.NewGuid(),
+            TenantId = Guid.NewGuid(),
+            PlanId = plan.Id,
+            StartDate = DateTime.UtcNow,
+            EndDate = DateTime.UtcNow.AddDays(30),
+            Status = SubscriptionStatus.Active,
+            Plan = plan
         };
         _subRepo.Setup(r => r.GetActiveByTenantIdAsync(sub.TenantId)).ReturnsAsync(sub);
 
-        var result = await CreateService().GetByTenantAsync(sub.TenantId);
+        ResponseData<SubscriptionResponse> result = await CreateService().GetByTenantAsync(sub.TenantId);
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.Id.Should().Be(sub.Id);
@@ -432,7 +466,7 @@ public class SubscriptionServiceTests
     [Fact]
     public async Task GetAllAsync_ReturnsMappedSubscriptions()
     {
-        var plan = MakePaidPlan();
+        SubscriptionPlan plan = MakePaidPlan();
         var subs = new List<TenantSubscription>
         {
             new() { Id = Guid.NewGuid(), TenantId = Guid.NewGuid(), PlanId = plan.Id,
@@ -444,7 +478,7 @@ public class SubscriptionServiceTests
         };
         _subRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(subs);
 
-        var result = await CreateService().GetAllAsync();
+        ResponseData<IReadOnlyList<SubscriptionResponse>> result = await CreateService().GetAllAsync();
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.Count.Should().Be(2);
@@ -466,7 +500,7 @@ public class SubscriptionServiceTests
         };
         _payRepo.Setup(r => r.GetBySubscriptionAsync(subId)).ReturnsAsync(payments);
 
-        var result = await CreateService().GetPaymentsBySubscriptionAsync(subId);
+        ResponseData<IReadOnlyList<PaymentResponse>> result = await CreateService().GetPaymentsBySubscriptionAsync(subId);
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.Count.Should().Be(2);
@@ -485,7 +519,7 @@ public class SubscriptionServiceTests
         };
         _payRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(payments);
 
-        var result = await CreateService().GetAllPaymentsAsync();
+        ResponseData<IReadOnlyList<PaymentResponse>> result = await CreateService().GetAllPaymentsAsync();
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.Count.Should().Be(1);

@@ -37,11 +37,11 @@ public class OrderService(
 
         var orderItems = new List<OrderItem>();
         var stockDecrements = new List<(ProductVariant Variant, int Quantity)>();
-        decimal subtotal = 0m;
+        var subtotal = 0m;
 
-        foreach (var line in request.Items)
+        foreach (CreateOrderItemRequest line in request.Items)
         {
-            var product = await productRepository.GetByIdAsync(line.ProductId);
+            Product? product = await productRepository.GetByIdAsync(line.ProductId);
             if (product is null || product.TenantId != tenantId || product.Status != ProductStatus.Active)
                 return ResponseData<OrderDto>.Failure($"Product '{line.ProductId}' is not available.", 400);
 
@@ -49,18 +49,22 @@ public class OrderService(
             var wantsVariant = !string.IsNullOrWhiteSpace(line.Variant?.Size) || !string.IsNullOrWhiteSpace(line.Variant?.Color);
             if (wantsVariant)
             {
-                var variants = await variantRepository.GetByProductAsync(product.Id, ct);
+                IReadOnlyList<ProductVariant> variants = await variantRepository.GetByProductAsync(product.Id, ct);
                 variant = variants.FirstOrDefault(v =>
                     string.Equals(v.Size, line.Variant!.Size, StringComparison.OrdinalIgnoreCase) &&
                     string.Equals(v.Color, line.Variant!.Color, StringComparison.OrdinalIgnoreCase));
 
                 if (variant is null)
+                {
                     return ResponseData<OrderDto>.Failure(
                         $"Requested variant (Size='{line.Variant!.Size}', Color='{line.Variant!.Color}') was not found for product '{product.Name}'.", 400);
+                }
 
                 if (variant.StockQuantity < line.Quantity)
+                {
                     return ResponseData<OrderDto>.Failure(
                         $"Insufficient stock for product '{product.Name}' (Size='{variant.Size}', Color='{variant.Color}'): requested {line.Quantity}, available {variant.StockQuantity}.", 400);
+                }
             }
 
             var unitPrice = variant?.PriceOverride ?? product.BasePrice;
@@ -81,7 +85,7 @@ public class OrderService(
                 stockDecrements.Add((variant, line.Quantity));
         }
 
-        var customer = await customerRepository.GetOrCreateByEmailAsync(
+        Customer customer = await customerRepository.GetOrCreateByEmailAsync(
             tenantId, customerEmail, customerFirstName, customerLastName, customerPhone, ct);
 
         var tax = Math.Round(subtotal * TaxRate, 2, MidpointRounding.AwayFromZero);
@@ -118,7 +122,7 @@ public class OrderService(
 
         // Decrement stock and record the adjustment ledger only after every line has
         // validated successfully — no partial mutation on a rejected order.
-        foreach (var (variant, quantity) in stockDecrements)
+        foreach ((ProductVariant? variant, var quantity) in stockDecrements)
         {
             variant.StockQuantity -= quantity;
 
@@ -156,7 +160,7 @@ public class OrderService(
 
         filter.TenantId = tenantId;
 
-        var (items, total) = await orderRepository.GetPagedAsync(filter, ct);
+        (IReadOnlyList<Order>? items, var total) = await orderRepository.GetPagedAsync(filter, ct);
 
         var page = new PagedResult<OrderDto>
         {
@@ -171,7 +175,7 @@ public class OrderService(
 
     public async Task<ResponseData<OrderDto>> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
-        var order = await orderRepository.GetByIdWithItemsAsync(id, ct);
+        Order? order = await orderRepository.GetByIdWithItemsAsync(id, ct);
         if (order is null)
             return ResponseData<OrderDto>.Failure("Order not found.", 404);
 
@@ -185,7 +189,7 @@ public class OrderService(
             return ResponseData<PagedResult<OrderDto>>.Failure("Tenant could not be resolved.", 400);
 
         var filter = new OrderFilter { TenantId = tenantId, CustomerEmail = customerEmail, Page = page, PageSize = pageSize };
-        var (items, total) = await orderRepository.GetPagedAsync(filter, ct);
+        (IReadOnlyList<Order>? items, var total) = await orderRepository.GetPagedAsync(filter, ct);
 
         var result = new PagedResult<OrderDto>
         {
@@ -200,7 +204,7 @@ public class OrderService(
 
     public async Task<ResponseData<OrderDto>> GetByIdForCustomerAsync(Guid id, string customerEmail, CancellationToken ct = default)
     {
-        var order = await orderRepository.GetByIdWithItemsAsync(id, ct);
+        Order? order = await orderRepository.GetByIdWithItemsAsync(id, ct);
         if (order is null || !string.Equals(order.ShippingEmail, customerEmail, StringComparison.OrdinalIgnoreCase))
             return ResponseData<OrderDto>.Failure("Order not found.", 404);
 
@@ -224,14 +228,14 @@ public class OrderService(
         string auditAction, Guid actingUserId, string ipAddress, string userAgent, CancellationToken ct,
         Action<Order>? beforeSave = null)
     {
-        var order = await orderRepository.GetByIdWithItemsAsync(id, ct);
+        Order? order = await orderRepository.GetByIdWithItemsAsync(id, ct);
         if (order is null)
             return ResponseData<OrderDto>.Failure("Order not found.", 404);
 
         if (!order.CanTransitionTo(target))
             return ResponseData<OrderDto>.Failure($"Cannot {actionVerb} an order in status {order.Status}", 400);
 
-        var previousStatus = order.Status;
+        OrderStatus previousStatus = order.Status;
         order.Status = target;
         beforeSave?.Invoke(order);
 
@@ -248,7 +252,7 @@ public class OrderService(
     public async Task<ResponseData<OrderDto>> CancelAsync(Guid id, string reason, bool asCustomer, string? customerEmail,
         Guid actingUserId, string ipAddress, string userAgent, CancellationToken ct = default)
     {
-        var order = await orderRepository.GetByIdWithItemsAsync(id, ct);
+        Order? order = await orderRepository.GetByIdWithItemsAsync(id, ct);
         if (order is null)
             return ResponseData<OrderDto>.Failure("Order not found.", 404);
 
@@ -258,16 +262,16 @@ public class OrderService(
         if (!order.CanTransitionTo(OrderStatus.Cancelled))
             return ResponseData<OrderDto>.Failure($"Cannot cancel an order in status {order.Status}", 400);
 
-        var previousStatus = order.Status;
+        OrderStatus previousStatus = order.Status;
         order.Status = OrderStatus.Cancelled;
         order.CancelReason = reason;
 
-        foreach (var item in order.Items)
+        foreach (OrderItem item in order.Items)
         {
             if (item.ProductVariantId is not { } variantId)
                 continue;
 
-            var variant = await variantRepository.GetByIdAsync(variantId);
+            ProductVariant? variant = await variantRepository.GetByIdAsync(variantId);
             if (variant is null)
             {
                 logger.LogWarning("Variant {VariantId} missing during stock restore for order {OrderId}", variantId, order.Id);

@@ -10,14 +10,14 @@ namespace FashionSaaS.Infrastructure.Tests.Repositories;
 
 public class CategoryRepositoryTests
 {
-    private Guid _tenantId = Guid.NewGuid();
+    private readonly Guid _tenantId = Guid.NewGuid();
 
     private ApplicationDbContext CreateContext()
     {
         var currentTenant = new Mock<ICurrentTenantService>();
         currentTenant.Setup(c => c.TenantId).Returns(_tenantId);
 
-        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+        DbContextOptions<ApplicationDbContext> options = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
         return new ApplicationDbContext(options, currentTenant.Object);
@@ -26,7 +26,7 @@ public class CategoryRepositoryTests
     [Fact]
     public async Task SlugExistsAsync_ExistingSlug_ReturnsTrue()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         var category = new Category
         {
             TenantId = _tenantId,
@@ -47,7 +47,7 @@ public class CategoryRepositoryTests
     [Fact]
     public async Task SlugExistsAsync_ExcludeId_IgnoresSpecificId()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         var cat1 = new Category
         {
             TenantId = _tenantId,
@@ -68,7 +68,7 @@ public class CategoryRepositoryTests
     [Fact]
     public async Task SlugExistsAsync_DifferentTenant_ReturnsFalse()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         var otherTenantId = Guid.NewGuid();
         var category = new Category
         {
@@ -90,7 +90,7 @@ public class CategoryRepositoryTests
     [Fact]
     public async Task GetTreeAsync_CategoriesWithParents_ReturnsSortedByParentThenOrder()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         var parentCat = new Category
         {
             TenantId = _tenantId,
@@ -121,7 +121,7 @@ public class CategoryRepositoryTests
         await ctx.SaveChangesAsync();
 
         var repo = new CategoryRepository(ctx);
-        var result = await repo.GetTreeAsync(_tenantId);
+        IReadOnlyList<Category> result = await repo.GetTreeAsync(_tenantId);
 
         result.Should().HaveCount(3);
         result.Should().SatisfyRespectively(
@@ -134,7 +134,7 @@ public class CategoryRepositoryTests
     [Fact]
     public async Task HasChildrenAsync_CategoryWithChildren_ReturnsTrue()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         var parent = new Category
         {
             TenantId = _tenantId,
@@ -164,7 +164,7 @@ public class CategoryRepositoryTests
     [Fact]
     public async Task HasChildrenAsync_CategoryWithoutChildren_ReturnsFalse()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         var category = new Category
         {
             TenantId = _tenantId,
@@ -185,7 +185,7 @@ public class CategoryRepositoryTests
     [Fact]
     public async Task HasProductsAsync_CategoryWithProducts_ReturnsTrue()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         var category = new Category
         {
             TenantId = _tenantId,

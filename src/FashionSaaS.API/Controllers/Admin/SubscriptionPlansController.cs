@@ -13,7 +13,7 @@ namespace FashionSaaS.API.Controllers.Admin;
 [Authorize(Roles = "SuperAdmin")]
 [Authorize(Policy = "MfaVerified")]
 [EnableRateLimiting("SuperAdminPolicy")]
-public class SubscriptionPlansController(SubscriptionPlanService planService) : ControllerBase
+internal class SubscriptionPlansController(SubscriptionPlanService planService) : ControllerBase
 {
     private Guid AdminId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     private string Ip => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
@@ -25,7 +25,7 @@ public class SubscriptionPlansController(SubscriptionPlanService planService) : 
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetAll()
     {
-        var response = await planService.GetAllAsync();
+        ResponseData<IReadOnlyList<SubscriptionPlanResponse>> response = await planService.GetAllAsync();
         return StatusCode(response.StatusCode, response);
     }
 
@@ -35,7 +35,7 @@ public class SubscriptionPlansController(SubscriptionPlanService planService) : 
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetById(Guid id)
     {
-        var response = await planService.GetByIdAsync(id);
+        ResponseData<SubscriptionPlanResponse> response = await planService.GetByIdAsync(id);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -45,7 +45,7 @@ public class SubscriptionPlansController(SubscriptionPlanService planService) : 
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Create([FromBody] CreateSubscriptionPlanRequest request)
     {
-        var response = await planService.CreateAsync(request, AdminId, Ip, Ua);
+        ResponseData<SubscriptionPlanResponse> response = await planService.CreateAsync(request, AdminId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -55,7 +55,7 @@ public class SubscriptionPlansController(SubscriptionPlanService planService) : 
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateSubscriptionPlanRequest request)
     {
-        var response = await planService.UpdateAsync(id, request, AdminId, Ip, Ua);
+        ResponseData<SubscriptionPlanResponse> response = await planService.UpdateAsync(id, request, AdminId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -65,7 +65,7 @@ public class SubscriptionPlansController(SubscriptionPlanService planService) : 
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Delete(Guid id)
     {
-        var response = await planService.DeleteAsync(id, AdminId, Ip, Ua);
+        ResponseData<bool> response = await planService.DeleteAsync(id, AdminId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 }

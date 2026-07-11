@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using FashionSaaS.Application.Configuration;
 using FashionSaaS.Infrastructure.Services;
 using FluentAssertions;
@@ -30,7 +31,7 @@ public class JwtServiceTests
     public void GenerateRefreshToken_IsBase64()
     {
         var token = _service.GenerateRefreshToken();
-        var action = () => Convert.FromBase64String(token);
+        Func<byte[]> action = () => Convert.FromBase64String(token);
         action.Should().NotThrow();
     }
 
@@ -45,7 +46,7 @@ public class JwtServiceTests
         var token = _service.GenerateMfaChallengeToken(userId);
 
         token.Should().NotBeNullOrEmpty();
-        var result = _service.ValidateMfaChallengeToken(token);
+        Guid? result = _service.ValidateMfaChallengeToken(token);
 
         result.Should().Be(userId);
     }
@@ -53,7 +54,7 @@ public class JwtServiceTests
     [Fact]
     public void ValidateMfaChallengeToken_InvalidToken_ReturnsNull()
     {
-        var result = _service.ValidateMfaChallengeToken("not.a.valid.token");
+        Guid? result = _service.ValidateMfaChallengeToken("not.a.valid.token");
         result.Should().BeNull();
     }
 
@@ -64,12 +65,14 @@ public class JwtServiceTests
         // (it lacks purpose=mfa_challenge)
         var user = new FashionSaaS.Domain.Entities.User
         {
-            Id = Guid.NewGuid(), Email = "test@test.com",
-            PasswordHash = "hash", IsActive = true
+            Id = Guid.NewGuid(),
+            Email = "test@test.com",
+            PasswordHash = "hash",
+            IsActive = true
         };
         var accessToken = _service.GenerateAccessToken(user, new List<string> { "AdminOwner" });
 
-        var result = _service.ValidateMfaChallengeToken(accessToken);
+        Guid? result = _service.ValidateMfaChallengeToken(accessToken);
         result.Should().BeNull();
     }
 
@@ -89,12 +92,14 @@ public class JwtServiceTests
         }));
         var user = new FashionSaaS.Domain.Entities.User
         {
-            Id = Guid.NewGuid(), Email = "test@test.com",
-            PasswordHash = "hash", IsActive = true
+            Id = Guid.NewGuid(),
+            Email = "test@test.com",
+            PasswordHash = "hash",
+            IsActive = true
         };
         var token = otherService.GenerateAccessToken(user, new List<string>());
 
-        var result = _service.GetPrincipalFromExpiredToken(token);
+        ClaimsPrincipal? result = _service.GetPrincipalFromExpiredToken(token);
         result.Should().BeNull();
     }
 
@@ -103,12 +108,14 @@ public class JwtServiceTests
     {
         var user = new FashionSaaS.Domain.Entities.User
         {
-            Id = Guid.NewGuid(), Email = "test@test.com",
-            PasswordHash = "hash", IsActive = true
+            Id = Guid.NewGuid(),
+            Email = "test@test.com",
+            PasswordHash = "hash",
+            IsActive = true
         };
         var token = _service.GenerateAccessToken(user, new List<string>());
 
-        var principal = _service.GetPrincipalFromExpiredToken(token);
+        ClaimsPrincipal? principal = _service.GetPrincipalFromExpiredToken(token);
         principal.Should().NotBeNull();
     }
 }

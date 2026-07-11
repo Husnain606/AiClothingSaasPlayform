@@ -24,7 +24,7 @@ public class UserService(
             return ResponseData<UserResponse>.Failure("Email already registered.", 409);
 
         // Fix 1 (CreateAsync): resolve the seeded role by RoleType, not construct a new Role.
-        var roleEntity = await roleRepository.GetByRoleTypeAsync(request.Role);
+        Role? roleEntity = await roleRepository.GetByRoleTypeAsync(request.Role);
         if (roleEntity is null)
             return ResponseData<UserResponse>.Failure("Role not found.", 404);
 
@@ -61,7 +61,7 @@ public class UserService(
     public async Task<ResponseData<UserResponse>> UpdateAsync(Guid userId, UpdateUserRequest request,
         Guid updatedByUserId, string ipAddress, string userAgent)
     {
-        var user = await userRepository.GetByIdAsync(userId);
+        User? user = await userRepository.GetByIdAsync(userId);
         if (user is null)
             return ResponseData<UserResponse>.Failure("User not found.", 404);
 
@@ -80,7 +80,7 @@ public class UserService(
 
     public async Task<ResponseData<UserResponse>> GetByIdAsync(Guid id)
     {
-        var user = await userRepository.GetByIdWithRolesAsync(id);
+        User? user = await userRepository.GetByIdWithRolesAsync(id);
         if (user is null)
             return ResponseData<UserResponse>.Failure("User not found.", 404);
         var roles = user.UserRoles.Select(ur => ur.Role.Name.ToString()).ToList();
@@ -89,12 +89,15 @@ public class UserService(
 
     public async Task<ResponseData<PagedResult<UserResponse>>> GetByTenantAsync(Guid tenantId, UserFilterRequest filter)
     {
-        var users = await userRepository.GetByTenantAsync(tenantId);
-        var filtered = users.AsEnumerable();
+        IReadOnlyList<User> users = await userRepository.GetByTenantAsync(tenantId);
+        IEnumerable<User> filtered = users.AsEnumerable();
         if (!string.IsNullOrEmpty(filter.Search))
+        {
             filtered = filtered.Where(u =>
                 u.Email.Contains(filter.Search, StringComparison.OrdinalIgnoreCase) ||
                 u.FirstName.Contains(filter.Search, StringComparison.OrdinalIgnoreCase));
+        }
+
         if (filter.IsActive.HasValue)
             filtered = filtered.Where(u => u.IsActive == filter.IsActive.Value);
 
@@ -113,12 +116,12 @@ public class UserService(
     public async Task<ResponseData<bool>> AssignRoleAsync(Guid userId, RoleType role,
         Guid adminId, string ipAddress, string userAgent)
     {
-        var user = await userRepository.GetByIdWithRolesAsync(userId);
+        User? user = await userRepository.GetByIdWithRolesAsync(userId);
         if (user is null)
             return ResponseData<bool>.Failure("User not found.", 404);
 
         // Fix 1 (AssignRole): look up the existing seeded Role row by RoleType.
-        var roleEntity = await roleRepository.GetByRoleTypeAsync(role);
+        Role? roleEntity = await roleRepository.GetByRoleTypeAsync(role);
         if (roleEntity is null)
             return ResponseData<bool>.Failure("Role not found.", 404);
 
@@ -142,12 +145,12 @@ public class UserService(
     public async Task<ResponseData<bool>> DeactivateAsync(Guid userId, Guid adminId,
         string ipAddress, string userAgent)
     {
-        var user = await userRepository.GetByIdAsync(userId);
+        User? user = await userRepository.GetByIdAsync(userId);
         if (user is null)
             return ResponseData<bool>.Failure("User not found.", 404);
 
         // Fix 4: capture actual state before mutation.
-        bool wasActive = user.IsActive;
+        var wasActive = user.IsActive;
         user.IsActive = false;
         await userRepository.UpdateAsync(user);
         await unitOfWork.SaveChangesAsync();
@@ -161,7 +164,7 @@ public class UserService(
     public async Task<ResponseData<bool>> UnlockAsync(Guid userId, Guid adminId,
         string ipAddress, string userAgent)
     {
-        var user = await userRepository.GetByIdAsync(userId);
+        User? user = await userRepository.GetByIdAsync(userId);
         if (user is null)
             return ResponseData<bool>.Failure("User not found.", 404);
 
@@ -182,7 +185,7 @@ public class UserService(
     public async Task<ResponseData<bool>> DeleteAsync(Guid userId, Guid adminId,
         string ipAddress, string userAgent)
     {
-        var user = await userRepository.GetByIdAsync(userId);
+        User? user = await userRepository.GetByIdAsync(userId);
         if (user is null)
             return ResponseData<bool>.Failure("User not found.", 404);
 
@@ -204,8 +207,13 @@ public class UserService(
 
     private static UserResponse MapToResponse(User u, IReadOnlyList<string> roles) => new()
     {
-        Id = u.Id, FirstName = u.FirstName, LastName = u.LastName,
-        Email = u.Email, TenantId = u.TenantId, IsActive = u.IsActive,
-        Roles = roles, CreatedAt = u.CreatedAt
+        Id = u.Id,
+        FirstName = u.FirstName,
+        LastName = u.LastName,
+        Email = u.Email,
+        TenantId = u.TenantId,
+        IsActive = u.IsActive,
+        Roles = roles,
+        CreatedAt = u.CreatedAt
     };
 }

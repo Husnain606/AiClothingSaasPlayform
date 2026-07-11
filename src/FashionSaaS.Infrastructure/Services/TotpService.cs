@@ -24,14 +24,19 @@ public class TotpService : ITotpService
         return totp.VerifyTotp(code, out _, new VerificationWindow(1, 1));
     }
 
+    // CA1308 suppressed: backup codes are deliberately displayed to the user in lowercase hex
+    // — a display-format choice, not a security comparison key normalized against attack risk.
+#pragma warning disable CA1308
     public IReadOnlyList<string> GenerateBackupCodes()
         => Enumerable.Range(0, 8)
-            .Select(_ => Convert.ToHexString(RandomNumberGenerator.GetBytes(5)).ToLower())
+            .Select(_ => Convert.ToHexString(RandomNumberGenerator.GetBytes(5)).ToLowerInvariant())
             .ToList();
+#pragma warning restore CA1308
 
     private static string Base32Encode(byte[] data)
     {
-        if (data.Length == 0) return string.Empty;
+        if (data.Length == 0)
+            return string.Empty;
 
         var bits = 0;
         var value = 0;
@@ -56,7 +61,8 @@ public class TotpService : ITotpService
 
     private static byte[] Base32Decode(string input)
     {
-        if (string.IsNullOrEmpty(input)) return [];
+        if (string.IsNullOrEmpty(input))
+            return [];
 
         var bits = 0;
         var value = 0;
@@ -64,8 +70,9 @@ public class TotpService : ITotpService
 
         foreach (var c in input.ToUpperInvariant())
         {
-            var idx = Base32Alphabet.IndexOf(c);
-            if (idx < 0) throw new ArgumentException($"Invalid Base32 character: {c}");
+            var idx = Base32Alphabet.IndexOf(c, StringComparison.Ordinal);
+            if (idx < 0)
+                throw new ArgumentException($"Invalid Base32 character: {c}", nameof(input));
 
             value = (value << 5) | idx;
             bits += 5;

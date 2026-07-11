@@ -13,7 +13,7 @@ namespace FashionSaaS.API.Controllers.Tenant;
 [ApiController]
 [Authorize(Roles = "AdminOwner")]
 [EnableRateLimiting("AuthenticatedPolicy")]
-public class TenantProfileController(TenantService tenantService, ICurrentTenantService currentTenant) : ControllerBase
+internal class TenantProfileController(TenantService tenantService, ICurrentTenantService currentTenant) : ControllerBase
 {
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     private string Ip => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
@@ -28,7 +28,7 @@ public class TenantProfileController(TenantService tenantService, ICurrentTenant
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Get()
     {
-        var response = await tenantService.GetByIdAsync(currentTenant.TenantId!.Value);
+        ResponseData<TenantResponse> response = await tenantService.GetByIdAsync(currentTenant.TenantId!.Value);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -41,7 +41,7 @@ public class TenantProfileController(TenantService tenantService, ICurrentTenant
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Update([FromBody] UpdateTenantRequest request)
     {
-        var response = await tenantService.UpdateAsync(currentTenant.TenantId!.Value, request, UserId, Ip, Ua);
+        ResponseData<TenantResponse> response = await tenantService.UpdateAsync(currentTenant.TenantId!.Value, request, UserId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 }

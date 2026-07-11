@@ -11,7 +11,9 @@ public class InventoryValidatorTests
 
     private static AdjustStockRequest Valid() => new()
     {
-        VariantId = Guid.NewGuid(), Delta = 5, Reason = StockAdjustmentReason.Restock
+        VariantId = Guid.NewGuid(),
+        Delta = 5,
+        Reason = StockAdjustmentReason.Restock
     };
 
     [Fact]
@@ -20,7 +22,7 @@ public class InventoryValidatorTests
     [Fact]
     public void EmptyVariantId_Fails()
     {
-        var req = Valid();
+        AdjustStockRequest req = Valid();
         req.VariantId = Guid.Empty;
         _validator.Validate(req).Errors.Should().Contain(e => e.PropertyName == nameof(AdjustStockRequest.VariantId));
     }
@@ -28,7 +30,7 @@ public class InventoryValidatorTests
     [Fact]
     public void ZeroDelta_Fails()
     {
-        var req = Valid();
+        AdjustStockRequest req = Valid();
         req.Delta = 0;
         _validator.Validate(req).Errors.Should().Contain(e => e.PropertyName == nameof(AdjustStockRequest.Delta));
     }
@@ -36,7 +38,7 @@ public class InventoryValidatorTests
     [Fact]
     public void UndefinedReason_Fails()
     {
-        var req = Valid();
+        AdjustStockRequest req = Valid();
         req.Reason = (StockAdjustmentReason)999;
         _validator.Validate(req).Errors.Should().Contain(e => e.PropertyName == nameof(AdjustStockRequest.Reason));
     }
@@ -44,7 +46,7 @@ public class InventoryValidatorTests
     [Fact]
     public void NegativeDelta_IsAllowed()
     {
-        var req = Valid();
+        AdjustStockRequest req = Valid();
         req.Delta = -3;
         _validator.Validate(req).IsValid.Should().BeTrue();
     }

@@ -18,7 +18,7 @@ public class BankAccountService(
 {
     public async Task<ResponseData<BankAccountResponse>> GetAsync(Guid? tenantId)
     {
-        var account = tenantId.HasValue
+        BankAccount? account = tenantId.HasValue
             ? await bankAccountRepository.GetByTenantIdAsync(tenantId.Value)
             : await bankAccountRepository.GetPlatformAccountAsync();
 
@@ -39,7 +39,7 @@ public class BankAccountService(
         Guid? tenantId, Guid requestingUserId, string totpCode)
     {
         // Step-up: load the requesting user's MFA settings (navigation included by GetByIdWithRolesAsync)
-        var user = await userRepository.GetByIdWithRolesAsync(requestingUserId);
+        User? user = await userRepository.GetByIdWithRolesAsync(requestingUserId);
         if (user?.MfaSettings is null || !user.MfaSettings.IsEnrolled)
             return ResponseData<BankAccountFullResponse>.Failure("MFA required.", 403);
 
@@ -47,7 +47,7 @@ public class BankAccountService(
         if (!totpService.Verify(secret, totpCode))
             return ResponseData<BankAccountFullResponse>.Failure("Invalid verification code.", 403);
 
-        var account = tenantId.HasValue
+        BankAccount? account = tenantId.HasValue
             ? await bankAccountRepository.GetByTenantIdAsync(tenantId.Value)
             : await bankAccountRepository.GetPlatformAccountAsync();
 
@@ -60,11 +60,11 @@ public class BankAccountService(
     public async Task<ResponseData<BankAccountResponse>> CreateAsync(CreateBankAccountRequest request,
         Guid userId, Guid? tenantId, string ip, string ua)
     {
-        var user = await userRepository.GetByIdAsync(userId);
+        User? user = await userRepository.GetByIdAsync(userId);
         if (user is null || !passwordHasher.Verify(request.CurrentPassword, user.PasswordHash))
             return ResponseData<BankAccountResponse>.Failure("Password verification failed.", 401);
 
-        var existing = tenantId.HasValue
+        BankAccount? existing = tenantId.HasValue
             ? await bankAccountRepository.GetByTenantIdAsync(tenantId.Value)
             : await bankAccountRepository.GetPlatformAccountAsync();
         if (existing is not null)
@@ -95,19 +95,22 @@ public class BankAccountService(
     public async Task<ResponseData<BankAccountResponse>> UpdateAsync(UpdateBankAccountRequest request,
         Guid userId, Guid? tenantId, string ip, string ua)
     {
-        var user = await userRepository.GetByIdAsync(userId);
+        User? user = await userRepository.GetByIdAsync(userId);
         if (user is null || !passwordHasher.Verify(request.CurrentPassword, user.PasswordHash))
             return ResponseData<BankAccountResponse>.Failure("Password verification failed.", 401);
 
-        var account = tenantId.HasValue
+        BankAccount? account = tenantId.HasValue
             ? await bankAccountRepository.GetByTenantIdAsync(tenantId.Value)
             : await bankAccountRepository.GetPlatformAccountAsync();
 
         if (account is null)
             return ResponseData<BankAccountResponse>.Failure("Bank account not found.", 404);
 
-        var oldMasked = new { AccountNumber = fieldEncryption.MaskAccountNumber(
-            fieldEncryption.Decrypt(account.AccountNumberEncrypted)) };
+        var oldMasked = new
+        {
+            AccountNumber = fieldEncryption.MaskAccountNumber(
+            fieldEncryption.Decrypt(account.AccountNumberEncrypted))
+        };
 
         account.AccountTitleEncrypted = fieldEncryption.Encrypt(request.AccountTitle);
         account.AccountNumberEncrypted = fieldEncryption.Encrypt(request.AccountNumber);
@@ -135,7 +138,9 @@ public class BankAccountService(
 
         return new()
         {
-            Id = a.Id, TenantId = a.TenantId, IsActive = a.IsActive,
+            Id = a.Id,
+            TenantId = a.TenantId,
+            IsActive = a.IsActive,
             AccountTitle = fieldEncryption.Decrypt(a.AccountTitleEncrypted),
             AccountNumber = fieldEncryption.MaskAccountNumber(fieldEncryption.Decrypt(a.AccountNumberEncrypted)),
             BankName = fieldEncryption.Decrypt(a.BankNameEncrypted),
@@ -147,7 +152,9 @@ public class BankAccountService(
     // NOTE: Do NOT log the return value of this mapper — AccountNumber is plaintext.
     private BankAccountFullResponse MapFull(BankAccount a) => new()
     {
-        Id = a.Id, TenantId = a.TenantId, IsActive = a.IsActive,
+        Id = a.Id,
+        TenantId = a.TenantId,
+        IsActive = a.IsActive,
         AccountTitle = fieldEncryption.Decrypt(a.AccountTitleEncrypted),
         AccountNumber = fieldEncryption.Decrypt(a.AccountNumberEncrypted),
         BankName = fieldEncryption.Decrypt(a.BankNameEncrypted),

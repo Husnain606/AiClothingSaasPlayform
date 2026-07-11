@@ -1,3 +1,4 @@
+using FashionSaaS.Domain.Entities;
 using FashionSaaS.Infrastructure.Persistence;
 using FashionSaaS.Infrastructure.Services;
 using FluentAssertions;
@@ -14,7 +15,7 @@ public class AuditLogServiceTests
 {
     private static ApplicationDbContext CreateContext()
     {
-        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+        DbContextOptions<ApplicationDbContext> options = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
         // ApplicationDbContext requires ICurrentTenantService; use a minimal stub.
@@ -26,7 +27,7 @@ public class AuditLogServiceTests
     [Fact]
     public async Task LogAsync_IbanProperty_IsMaskedInPersistedNewValues()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         var svc = new AuditLogService(ctx);
 
         // "Iban" is the PascalCase JSON key produced by System.Text.Json
@@ -35,7 +36,7 @@ public class AuditLogServiceTests
         await svc.LogAsync(null, null, "BankAccountCreated", "BankAccount",
             Guid.NewGuid(), null, newValues, "127.0.0.1", "xunit");
 
-        var log = ctx.AuditLogs.Single();
+        AuditLog log = await ctx.AuditLogs.SingleAsync();
         log.NewValues.Should().Contain("***MASKED***");
         log.NewValues.Should().NotContain("PK36SCBL0000001123456702");
     }
@@ -43,16 +44,16 @@ public class AuditLogServiceTests
     [Fact]
     public async Task LogAsync_IbanUppercaseProperty_IsMaskedInPersistedNewValues()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         var svc = new AuditLogService(ctx);
 
         // "IBAN" uppercase variant must also be masked (case-insensitive match)
-        var dict = new Dictionary<string, object> { ["IBAN"] = "PK36SCBL9999" };
+        var dict = new Dictionary<string, object>(StringComparer.Ordinal) { ["IBAN"] = "PK36SCBL9999" };
 
         await svc.LogAsync(null, null, "Test", "BankAccount",
             Guid.NewGuid(), null, dict, "127.0.0.1", "xunit");
 
-        var log = ctx.AuditLogs.Single();
+        AuditLog log = await ctx.AuditLogs.SingleAsync();
         log.NewValues.Should().Contain("***MASKED***");
         log.NewValues.Should().NotContain("PK36SCBL9999");
     }
@@ -60,7 +61,7 @@ public class AuditLogServiceTests
     [Fact]
     public async Task LogAsync_AccountNumberProperty_IsMaskedInPersistedOldAndNewValues()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         var svc = new AuditLogService(ctx);
 
         var oldValues = new { AccountNumber = "12345678" };
@@ -69,7 +70,7 @@ public class AuditLogServiceTests
         await svc.LogAsync(null, null, "BankAccountUpdated", "BankAccount",
             Guid.NewGuid(), oldValues, newValues, "127.0.0.1", "xunit");
 
-        var log = ctx.AuditLogs.Single();
+        AuditLog log = await ctx.AuditLogs.SingleAsync();
         log.OldValues.Should().Contain("***MASKED***");
         log.OldValues.Should().NotContain("12345678");
         log.NewValues.Should().Contain("***MASKED***");
@@ -79,7 +80,7 @@ public class AuditLogServiceTests
     [Fact]
     public async Task LogAsync_NonSensitiveProperty_IsNotMasked()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         var svc = new AuditLogService(ctx);
 
         var newValues = new { BankName = "HBL" };
@@ -87,7 +88,7 @@ public class AuditLogServiceTests
         await svc.LogAsync(null, null, "BankAccountUpdated", "BankAccount",
             Guid.NewGuid(), null, newValues, "127.0.0.1", "xunit");
 
-        var log = ctx.AuditLogs.Single();
+        AuditLog log = await ctx.AuditLogs.SingleAsync();
         log.NewValues.Should().Contain("HBL");
         log.NewValues.Should().NotContain("***MASKED***");
     }
@@ -95,13 +96,13 @@ public class AuditLogServiceTests
     [Fact]
     public async Task LogAsync_NullOldValues_PersistedAsNull()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         var svc = new AuditLogService(ctx);
 
         await svc.LogAsync(null, null, "BankAccountCreated", "BankAccount",
             Guid.NewGuid(), null, new { AccountNumber = "1234" }, "127.0.0.1", "xunit");
 
-        var log = ctx.AuditLogs.Single();
+        AuditLog log = await ctx.AuditLogs.SingleAsync();
         log.OldValues.Should().BeNull();
         log.NewValues.Should().Contain("***MASKED***");
     }

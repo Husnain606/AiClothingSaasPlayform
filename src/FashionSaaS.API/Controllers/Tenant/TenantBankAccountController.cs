@@ -13,7 +13,7 @@ namespace FashionSaaS.API.Controllers.Tenant;
 [ApiController]
 [Authorize(Roles = "AdminOwner")]
 [EnableRateLimiting("AuthenticatedPolicy")]
-public class TenantBankAccountController(BankAccountService bankAccountService, ICurrentTenantService currentTenant) : ControllerBase
+internal class TenantBankAccountController(BankAccountService bankAccountService, ICurrentTenantService currentTenant) : ControllerBase
 {
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     private string Ip => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
@@ -29,7 +29,7 @@ public class TenantBankAccountController(BankAccountService bankAccountService, 
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Get()
     {
-        var response = await bankAccountService.GetAsync(currentTenant.TenantId);
+        ResponseData<BankAccountResponse> response = await bankAccountService.GetAsync(currentTenant.TenantId);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -45,7 +45,7 @@ public class TenantBankAccountController(BankAccountService bankAccountService, 
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetFull([FromBody] VerifyTotpRequest request)
     {
-        var response = await bankAccountService.GetFullAsync(currentTenant.TenantId, UserId, request.TotpCode);
+        ResponseData<BankAccountFullResponse> response = await bankAccountService.GetFullAsync(currentTenant.TenantId, UserId, request.TotpCode);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -55,7 +55,7 @@ public class TenantBankAccountController(BankAccountService bankAccountService, 
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Create([FromBody] CreateBankAccountRequest request)
     {
-        var response = await bankAccountService.CreateAsync(request, UserId, currentTenant.TenantId, Ip, Ua);
+        ResponseData<BankAccountResponse> response = await bankAccountService.CreateAsync(request, UserId, currentTenant.TenantId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -65,7 +65,7 @@ public class TenantBankAccountController(BankAccountService bankAccountService, 
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Update([FromBody] UpdateBankAccountRequest request)
     {
-        var response = await bankAccountService.UpdateAsync(request, UserId, currentTenant.TenantId, Ip, Ua);
+        ResponseData<BankAccountResponse> response = await bankAccountService.UpdateAsync(request, UserId, currentTenant.TenantId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 }

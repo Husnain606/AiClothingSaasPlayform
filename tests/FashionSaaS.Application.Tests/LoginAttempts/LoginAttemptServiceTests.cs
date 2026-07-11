@@ -1,3 +1,4 @@
+using FashionSaaS.Application.Common;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Application.LoginAttempts;
 using FashionSaaS.Application.LoginAttempts.DTOs;
@@ -15,14 +16,14 @@ public class LoginAttemptServiceTests
 
     private static UserLoginAttempt MakeAttempt(string email = "user@test.com",
         string ip = "127.0.0.1", bool success = true, string? reason = null) => new()
-    {
-        Id = Guid.NewGuid(),
-        Email = email,
-        IpAddress = ip,
-        UserAgent = "xunit",
-        IsSuccess = success,
-        FailureReason = reason
-    };
+        {
+            Id = Guid.NewGuid(),
+            Email = email,
+            IpAddress = ip,
+            UserAgent = "xunit",
+            IsSuccess = success,
+            FailureReason = reason
+        };
 
     // ── Validation ────────────────────────────────────────────────────────────
 
@@ -30,7 +31,7 @@ public class LoginAttemptServiceTests
     public async Task GetByEmailAsync_NullEmail_Returns400()
     {
         var filter = new LoginAttemptFilterRequest { Email = null };
-        var result = await CreateService().GetByEmailAsync(filter);
+        ResponseData<PagedResult<LoginAttemptResponse>> result = await CreateService().GetByEmailAsync(filter);
 
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Should().Be(400);
@@ -41,7 +42,7 @@ public class LoginAttemptServiceTests
     public async Task GetByEmailAsync_EmptyEmail_Returns400()
     {
         var filter = new LoginAttemptFilterRequest { Email = string.Empty };
-        var result = await CreateService().GetByEmailAsync(filter);
+        ResponseData<PagedResult<LoginAttemptResponse>> result = await CreateService().GetByEmailAsync(filter);
 
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Should().Be(400);
@@ -60,7 +61,7 @@ public class LoginAttemptServiceTests
         _repo.Setup(r => r.GetByEmailAsync("user@test.com", 200)).ReturnsAsync(attempts);
 
         var filter = new LoginAttemptFilterRequest { Email = "user@test.com", Page = 1, PageSize = 50 };
-        var result = await CreateService().GetByEmailAsync(filter);
+        ResponseData<PagedResult<LoginAttemptResponse>> result = await CreateService().GetByEmailAsync(filter);
 
         result.IsSuccess.Should().BeTrue();
         result.StatusCode.Should().Be(200);
@@ -71,13 +72,13 @@ public class LoginAttemptServiceTests
     [Fact]
     public async Task GetByEmailAsync_MapsAllFields()
     {
-        var attempt = MakeAttempt(email: "x@y.com", ip: "10.0.0.1", success: false, reason: "Locked");
+        UserLoginAttempt attempt = MakeAttempt(email: "x@y.com", ip: "10.0.0.1", success: false, reason: "Locked");
         _repo.Setup(r => r.GetByEmailAsync("x@y.com", 200)).ReturnsAsync(new List<UserLoginAttempt> { attempt });
 
-        var result = await CreateService().GetByEmailAsync(
+        ResponseData<PagedResult<LoginAttemptResponse>> result = await CreateService().GetByEmailAsync(
             new LoginAttemptFilterRequest { Email = "x@y.com" });
 
-        var item = result.Data!.Items.Single();
+        LoginAttemptResponse item = result.Data!.Items.Single();
         item.Id.Should().Be(attempt.Id);
         item.Email.Should().Be("x@y.com");
         item.IpAddress.Should().Be("10.0.0.1");
@@ -101,9 +102,12 @@ public class LoginAttemptServiceTests
 
         var filter = new LoginAttemptFilterRequest
         {
-            Email = "user@test.com", IsSuccess = false, Page = 1, PageSize = 50
+            Email = "user@test.com",
+            IsSuccess = false,
+            Page = 1,
+            PageSize = 50
         };
-        var result = await CreateService().GetByEmailAsync(filter);
+        ResponseData<PagedResult<LoginAttemptResponse>> result = await CreateService().GetByEmailAsync(filter);
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.TotalCount.Should().Be(2);
@@ -123,9 +127,12 @@ public class LoginAttemptServiceTests
 
         var filter = new LoginAttemptFilterRequest
         {
-            Email = "user@test.com", IpAddress = "1.2.3.4", Page = 1, PageSize = 50
+            Email = "user@test.com",
+            IpAddress = "1.2.3.4",
+            Page = 1,
+            PageSize = 50
         };
-        var result = await CreateService().GetByEmailAsync(filter);
+        ResponseData<PagedResult<LoginAttemptResponse>> result = await CreateService().GetByEmailAsync(filter);
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.TotalCount.Should().Be(2);
@@ -145,10 +152,13 @@ public class LoginAttemptServiceTests
 
         var filter = new LoginAttemptFilterRequest
         {
-            Email = "user@test.com", IpAddress = "1.2.3.4", IsSuccess = false,
-            Page = 1, PageSize = 50
+            Email = "user@test.com",
+            IpAddress = "1.2.3.4",
+            IsSuccess = false,
+            Page = 1,
+            PageSize = 50
         };
-        var result = await CreateService().GetByEmailAsync(filter);
+        ResponseData<PagedResult<LoginAttemptResponse>> result = await CreateService().GetByEmailAsync(filter);
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.TotalCount.Should().Be(1);
@@ -168,9 +178,11 @@ public class LoginAttemptServiceTests
 
         var filter = new LoginAttemptFilterRequest
         {
-            Email = "user@test.com", Page = 2, PageSize = 3
+            Email = "user@test.com",
+            Page = 2,
+            PageSize = 3
         };
-        var result = await CreateService().GetByEmailAsync(filter);
+        ResponseData<PagedResult<LoginAttemptResponse>> result = await CreateService().GetByEmailAsync(filter);
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.TotalCount.Should().Be(10);
@@ -185,7 +197,7 @@ public class LoginAttemptServiceTests
         _repo.Setup(r => r.GetByEmailAsync("user@test.com", 200))
             .ReturnsAsync(new List<UserLoginAttempt>());
 
-        var result = await CreateService().GetByEmailAsync(
+        ResponseData<PagedResult<LoginAttemptResponse>> result = await CreateService().GetByEmailAsync(
             new LoginAttemptFilterRequest { Email = "user@test.com" });
 
         result.IsSuccess.Should().BeTrue();

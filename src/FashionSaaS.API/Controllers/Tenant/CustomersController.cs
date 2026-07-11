@@ -12,7 +12,7 @@ namespace FashionSaaS.API.Controllers.Tenant;
 [ApiController]
 [Authorize(Roles = "AdminOwner,StoreManager")]
 [EnableRateLimiting("AuthenticatedPolicy")]
-public class CustomersController(CustomerService customerService) : ControllerBase
+internal class CustomersController(CustomerService customerService) : ControllerBase
 {
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     private string Ip => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
@@ -24,7 +24,7 @@ public class CustomersController(CustomerService customerService) : ControllerBa
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetAll([FromQuery] CustomerFilter filter)
     {
-        var response = await customerService.GetAllAsync(filter);
+        ResponseData<PagedResult<CustomerResponse>> response = await customerService.GetAllAsync(filter);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -34,7 +34,7 @@ public class CustomersController(CustomerService customerService) : ControllerBa
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetById(Guid id)
     {
-        var response = await customerService.GetByIdAsync(id);
+        ResponseData<CustomerResponse> response = await customerService.GetByIdAsync(id);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -44,7 +44,7 @@ public class CustomersController(CustomerService customerService) : ControllerBa
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Create([FromBody] CreateCustomerRequest request)
     {
-        var response = await customerService.CreateAsync(request, UserId, Ip, Ua);
+        ResponseData<CustomerResponse> response = await customerService.CreateAsync(request, UserId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -54,7 +54,7 @@ public class CustomersController(CustomerService customerService) : ControllerBa
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateCustomerRequest request)
     {
-        var response = await customerService.UpdateAsync(id, request, UserId, Ip, Ua);
+        ResponseData<CustomerResponse> response = await customerService.UpdateAsync(id, request, UserId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -64,7 +64,7 @@ public class CustomersController(CustomerService customerService) : ControllerBa
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Deactivate(Guid id)
     {
-        var response = await customerService.DeactivateAsync(id, UserId, Ip, Ua);
+        ResponseData<bool> response = await customerService.DeactivateAsync(id, UserId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 }

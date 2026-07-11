@@ -34,14 +34,16 @@ public class InventoryService(
             return ResponseData<StockAdjustmentResponse>.Failure("Tenant could not be resolved.", 400);
 
         // Tracked load so the StockQuantity mutation and any domain event flow through SaveChanges.
-        var variant = await variantRepository.GetByIdAsync(request.VariantId);
+        ProductVariant? variant = await variantRepository.GetByIdAsync(request.VariantId);
         if (variant is null || variant.TenantId != tenantId)
             return ResponseData<StockAdjustmentResponse>.Failure("Variant not found.", 404);
 
         var newQty = variant.StockQuantity + request.Delta;
         if (newQty < 0)
+        {
             return ResponseData<StockAdjustmentResponse>.Failure(
                 $"Adjustment would drive stock negative (current {variant.StockQuantity}, delta {request.Delta}).", 400);
+        }
 
         var previousQty = variant.StockQuantity;
         variant.StockQuantity = newQty;
@@ -82,7 +84,7 @@ public class InventoryService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<IReadOnlyList<LowStockItemResponse>>.Failure("Tenant could not be resolved.", 400);
 
-        var variants = await variantRepository.GetLowStockAsync(tenantId, threshold, ct);
+        IReadOnlyList<ProductVariant> variants = await variantRepository.GetLowStockAsync(tenantId, threshold, ct);
         var responses = variants.Select(v => new LowStockItemResponse
         {
             VariantId = v.Id,
@@ -102,11 +104,11 @@ public class InventoryService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<IReadOnlyList<StockAdjustmentResponse>>.Failure("Tenant could not be resolved.", 400);
 
-        var variant = await variantRepository.GetByIdAsync(variantId);
+        ProductVariant? variant = await variantRepository.GetByIdAsync(variantId);
         if (variant is null || variant.TenantId != tenantId)
             return ResponseData<IReadOnlyList<StockAdjustmentResponse>>.Failure("Variant not found.", 404);
 
-        var adjustments = await stockAdjustmentRepository.GetByVariantAsync(variantId, ct);
+        IReadOnlyList<StockAdjustment> adjustments = await stockAdjustmentRepository.GetByVariantAsync(variantId, ct);
         var responses = adjustments.Select(MapToResponse).ToList();
         return ResponseData<IReadOnlyList<StockAdjustmentResponse>>.Success(responses);
     }

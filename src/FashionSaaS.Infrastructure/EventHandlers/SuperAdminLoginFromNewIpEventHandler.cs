@@ -21,7 +21,7 @@ public class SuperAdminLoginFromNewIpEventHandler(
         DomainEventNotification<SuperAdminLoginFromNewIpEvent> notification,
         CancellationToken cancellationToken)
     {
-        var evt = notification.DomainEvent;
+        SuperAdminLoginFromNewIpEvent evt = notification.DomainEvent;
 
         logger.LogWarning(
             "Super Admin {UserId} logged in from new IP. Sending security alert.",

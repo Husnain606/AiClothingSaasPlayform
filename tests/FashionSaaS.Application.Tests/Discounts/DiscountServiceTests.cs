@@ -1,3 +1,4 @@
+using FashionSaaS.Application.Common;
 using FashionSaaS.Application.Discounts;
 using FashionSaaS.Application.Discounts.DTOs;
 using FashionSaaS.Application.Interfaces;
@@ -28,14 +29,23 @@ public class DiscountServiceTests
 
     private Discount Discount(string code = "SAVE10") => new()
     {
-        Id = Guid.NewGuid(), TenantId = _tenantId, Code = code, Type = DiscountType.Percentage,
-        Value = 10, StartsAt = DateTime.UtcNow, EndsAt = DateTime.UtcNow.AddDays(7), IsActive = true
+        Id = Guid.NewGuid(),
+        TenantId = _tenantId,
+        Code = code,
+        Type = DiscountType.Percentage,
+        Value = 10,
+        StartsAt = DateTime.UtcNow,
+        EndsAt = DateTime.UtcNow.AddDays(7),
+        IsActive = true
     };
 
     private static CreateDiscountRequest ValidCreate() => new()
     {
-        Code = "SAVE10", Type = DiscountType.Percentage, Value = 10,
-        StartsAt = DateTime.UtcNow, EndsAt = DateTime.UtcNow.AddDays(7)
+        Code = "SAVE10",
+        Type = DiscountType.Percentage,
+        Value = 10,
+        StartsAt = DateTime.UtcNow,
+        EndsAt = DateTime.UtcNow.AddDays(7)
     };
 
     // ── Create ────────────────────────────────────────────────────────────────────
@@ -46,7 +56,7 @@ public class DiscountServiceTests
         _discounts.Setup(r => r.CodeExistsAsync(_tenantId, "SAVE10", null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
 
-        var result = await CreateService().CreateAsync(ValidCreate(), Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<DiscountResponse> result = await CreateService().CreateAsync(ValidCreate(), Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.IsSuccess.Should().BeTrue();
         result.StatusCode.Should().Be(201);
@@ -59,7 +69,7 @@ public class DiscountServiceTests
         _discounts.Setup(r => r.CodeExistsAsync(_tenantId, "SAVE10", null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
-        var result = await CreateService().CreateAsync(ValidCreate(), Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<DiscountResponse> result = await CreateService().CreateAsync(ValidCreate(), Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.StatusCode.Should().Be(409);
         _discounts.Verify(r => r.AddAsync(It.IsAny<Discount>()), Times.Never);
@@ -70,14 +80,20 @@ public class DiscountServiceTests
     [Fact]
     public async Task UpdateAsync_DuplicateCodeExcludingSelf_Returns409()
     {
-        var discount = Discount();
+        Discount discount = Discount();
         _discounts.Setup(r => r.GetByIdAsync(discount.Id)).ReturnsAsync(discount);
         _discounts.Setup(r => r.CodeExistsAsync(_tenantId, "TAKEN", discount.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
-        var result = await CreateService().UpdateAsync(discount.Id,
-            new UpdateDiscountRequest { Code = "TAKEN", Type = DiscountType.FixedAmount, Value = 5,
-                StartsAt = DateTime.UtcNow, EndsAt = DateTime.UtcNow.AddDays(1) },
+        ResponseData<DiscountResponse> result = await CreateService().UpdateAsync(discount.Id,
+            new UpdateDiscountRequest
+            {
+                Code = "TAKEN",
+                Type = DiscountType.FixedAmount,
+                Value = 5,
+                StartsAt = DateTime.UtcNow,
+                EndsAt = DateTime.UtcNow.AddDays(1)
+            },
             Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.StatusCode.Should().Be(409);
@@ -88,10 +104,10 @@ public class DiscountServiceTests
     [Fact]
     public async Task DeactivateAsync_SetsInactive()
     {
-        var discount = Discount();
+        Discount discount = Discount();
         _discounts.Setup(r => r.GetByIdAsync(discount.Id)).ReturnsAsync(discount);
 
-        var result = await CreateService().DeactivateAsync(discount.Id, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<bool> result = await CreateService().DeactivateAsync(discount.Id, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.IsSuccess.Should().BeTrue();
         discount.IsActive.Should().BeFalse();
@@ -100,10 +116,10 @@ public class DiscountServiceTests
     [Fact]
     public async Task DeleteAsync_RemovesDiscount()
     {
-        var discount = Discount();
+        Discount discount = Discount();
         _discounts.Setup(r => r.GetByIdAsync(discount.Id)).ReturnsAsync(discount);
 
-        var result = await CreateService().DeleteAsync(discount.Id, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<bool> result = await CreateService().DeleteAsync(discount.Id, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.IsSuccess.Should().BeTrue();
         _discounts.Verify(r => r.DeleteAsync(discount), Times.Once);
@@ -114,11 +130,11 @@ public class DiscountServiceTests
     [Fact]
     public async Task GetByCodeAsync_Found_ReturnsDiscount()
     {
-        var discount = Discount("FOUND");
+        Discount discount = Discount("FOUND");
         _discounts.Setup(r => r.GetByCodeAsync(_tenantId, "FOUND", It.IsAny<CancellationToken>()))
             .ReturnsAsync(discount);
 
-        var result = await CreateService().GetByCodeAsync("FOUND");
+        ResponseData<DiscountResponse> result = await CreateService().GetByCodeAsync("FOUND");
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.Code.Should().Be("FOUND");
@@ -130,7 +146,7 @@ public class DiscountServiceTests
         _discounts.Setup(r => r.GetByCodeAsync(_tenantId, "MISSING", It.IsAny<CancellationToken>()))
             .ReturnsAsync((Discount?)null);
 
-        var result = await CreateService().GetByCodeAsync("MISSING");
+        ResponseData<DiscountResponse> result = await CreateService().GetByCodeAsync("MISSING");
 
         result.StatusCode.Should().Be(404);
     }
@@ -144,7 +160,7 @@ public class DiscountServiceTests
             .Setup(r => r.GetPagedAsync(It.Is<DiscountFilter>(f => f.TenantId == _tenantId), It.IsAny<CancellationToken>()))
             .ReturnsAsync((items.AsReadOnly() as IReadOnlyList<Discount>, 2));
 
-        var result = await CreateService().GetAllAsync(filter);
+        ResponseData<PagedResult<DiscountResponse>> result = await CreateService().GetAllAsync(filter);
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.Items.Should().HaveCount(2);
@@ -161,7 +177,7 @@ public class DiscountServiceTests
             .Setup(r => r.GetPagedAsync(It.Is<DiscountFilter>(f => f.TenantId == _tenantId && f.IsActive == true && f.Page == 2 && f.PageSize == 5), It.IsAny<CancellationToken>()))
             .ReturnsAsync((new List<Discount> { Discount() }.AsReadOnly() as IReadOnlyList<Discount>, 1));
 
-        var result = await CreateService().GetAllAsync(filter);
+        ResponseData<PagedResult<DiscountResponse>> result = await CreateService().GetAllAsync(filter);
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.TotalCount.Should().Be(1);

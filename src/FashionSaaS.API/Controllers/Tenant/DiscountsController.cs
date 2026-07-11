@@ -12,7 +12,7 @@ namespace FashionSaaS.API.Controllers.Tenant;
 [ApiController]
 [Authorize(Roles = "AdminOwner,StoreManager")]
 [EnableRateLimiting("AuthenticatedPolicy")]
-public class DiscountsController(DiscountService discountService) : ControllerBase
+internal class DiscountsController(DiscountService discountService) : ControllerBase
 {
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     private string Ip => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
@@ -24,7 +24,7 @@ public class DiscountsController(DiscountService discountService) : ControllerBa
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetAll([FromQuery] DiscountFilter filter)
     {
-        var response = await discountService.GetAllAsync(filter);
+        ResponseData<PagedResult<DiscountResponse>> response = await discountService.GetAllAsync(filter);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -34,7 +34,7 @@ public class DiscountsController(DiscountService discountService) : ControllerBa
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetById(Guid id)
     {
-        var response = await discountService.GetByIdAsync(id);
+        ResponseData<DiscountResponse> response = await discountService.GetByIdAsync(id);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -44,7 +44,7 @@ public class DiscountsController(DiscountService discountService) : ControllerBa
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetByCode(string code)
     {
-        var response = await discountService.GetByCodeAsync(code);
+        ResponseData<DiscountResponse> response = await discountService.GetByCodeAsync(code);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -54,7 +54,7 @@ public class DiscountsController(DiscountService discountService) : ControllerBa
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Create([FromBody] CreateDiscountRequest request)
     {
-        var response = await discountService.CreateAsync(request, UserId, Ip, Ua);
+        ResponseData<DiscountResponse> response = await discountService.CreateAsync(request, UserId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -64,7 +64,7 @@ public class DiscountsController(DiscountService discountService) : ControllerBa
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateDiscountRequest request)
     {
-        var response = await discountService.UpdateAsync(id, request, UserId, Ip, Ua);
+        ResponseData<DiscountResponse> response = await discountService.UpdateAsync(id, request, UserId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -74,7 +74,7 @@ public class DiscountsController(DiscountService discountService) : ControllerBa
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Deactivate(Guid id)
     {
-        var response = await discountService.DeactivateAsync(id, UserId, Ip, Ua);
+        ResponseData<bool> response = await discountService.DeactivateAsync(id, UserId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -84,7 +84,7 @@ public class DiscountsController(DiscountService discountService) : ControllerBa
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Delete(Guid id)
     {
-        var response = await discountService.DeleteAsync(id, UserId, Ip, Ua);
+        ResponseData<bool> response = await discountService.DeleteAsync(id, UserId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 }

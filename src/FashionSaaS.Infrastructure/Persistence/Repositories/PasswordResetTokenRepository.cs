@@ -13,7 +13,8 @@ public class PasswordResetTokenRepository(ApplicationDbContext context)
 
     public async Task InvalidateAllByUserIdAsync(Guid userId)
     {
-        var tokens = await DbSet.Where(t => t.UserId == userId && !t.IsUsed).ToListAsync();
-        foreach (var t in tokens) t.IsUsed = true;
+        List<PasswordResetToken> tokens = await DbSet.Where(t => t.UserId == userId && !t.IsUsed).ToListAsync();
+        foreach (PasswordResetToken? t in tokens)
+            t.IsUsed = true;
     }
 }

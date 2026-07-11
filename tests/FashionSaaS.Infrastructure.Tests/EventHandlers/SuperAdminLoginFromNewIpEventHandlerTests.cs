@@ -33,7 +33,7 @@ public class SuperAdminLoginFromNewIpEventHandlerTests
                 It.IsAny<string>(), It.IsAny<string>()))
             .Returns(Task.CompletedTask);
 
-        var handler = CreateHandler();
+        SuperAdminLoginFromNewIpEventHandler handler = CreateHandler();
 
         // Act
         await handler.Handle(notification, CancellationToken.None);
@@ -61,7 +61,7 @@ public class SuperAdminLoginFromNewIpEventHandlerTests
                 It.IsAny<string>(), It.IsAny<string>()))
             .Returns(Task.CompletedTask);
 
-        var handler = CreateHandler();
+        SuperAdminLoginFromNewIpEventHandler handler = CreateHandler();
 
         // Act
         await handler.Handle(notification, CancellationToken.None);

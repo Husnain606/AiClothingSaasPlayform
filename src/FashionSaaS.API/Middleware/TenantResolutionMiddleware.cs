@@ -2,10 +2,11 @@ using System.Security.Claims;
 using System.Text.Json;
 using FashionSaaS.Application.Common;
 using FashionSaaS.Application.Interfaces;
+using FashionSaaS.Domain.Entities;
 
 namespace FashionSaaS.API.Middleware;
 
-public class TenantResolutionMiddleware(RequestDelegate next)
+internal class TenantResolutionMiddleware(RequestDelegate next)
 {
     private static readonly JsonSerializerOptions JsonOptions =
         new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
@@ -18,7 +19,7 @@ public class TenantResolutionMiddleware(RequestDelegate next)
         if (!string.IsNullOrEmpty(slug))
         {
             // Route slug takes priority
-            var tenant = await tenantRepository.GetBySlugAsync(slug);
+            Tenant? tenant = await tenantRepository.GetBySlugAsync(slug);
             if (tenant is null)
             {
                 await WriteError(context, 404, $"Tenant '{slug}' not found.");
@@ -37,7 +38,7 @@ public class TenantResolutionMiddleware(RequestDelegate next)
         {
             // M1: JWT tenant_id claim fallback for authenticated requests without a slug segment
             var tenantIdClaim = context.User.FindFirstValue("tenant_id");
-            if (Guid.TryParse(tenantIdClaim, out var tenantId))
+            if (Guid.TryParse(tenantIdClaim, out Guid tenantId))
             {
                 var tenantSlugClaim = context.User.FindFirstValue("tenant_slug");
 
@@ -49,7 +50,7 @@ public class TenantResolutionMiddleware(RequestDelegate next)
                 else
                 {
                     // look up slug via repository
-                    var tenant = await tenantRepository.GetByIdAsync(tenantId);
+                    Tenant? tenant = await tenantRepository.GetByIdAsync(tenantId);
                     if (tenant is not null)
                         currentTenantService.SetTenant(tenant.Id, tenant.Slug);
                 }

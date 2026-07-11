@@ -20,7 +20,7 @@ public class DiscountRepository(ApplicationDbContext context)
 
     public async Task<(IReadOnlyList<Discount> Items, int Total)> GetPagedAsync(DiscountFilter filter, CancellationToken ct = default)
     {
-        var query = DbSet
+        IQueryable<Discount> query = DbSet
             .AsNoTracking()
             .AsQueryable()
             .Where(d => d.TenantId == filter.TenantId);
@@ -36,7 +36,7 @@ public class DiscountRepository(ApplicationDbContext context)
 
         var total = await query.CountAsync(ct);
 
-        var items = await query
+        List<Discount> items = await query
             .OrderByDescending(d => d.CreatedAt)
             .Skip((filter.Page - 1) * filter.PageSize)
             .Take(filter.PageSize)

@@ -21,7 +21,8 @@ public class FieldEncryptionService : IFieldEncryptionService
 
     public string Encrypt(string plaintext)
     {
-        if (string.IsNullOrEmpty(plaintext)) return plaintext;
+        if (string.IsNullOrEmpty(plaintext))
+            return plaintext;
 
         var plaintextBytes = Encoding.UTF8.GetBytes(plaintext);
         var nonce = new byte[12];
@@ -44,7 +45,8 @@ public class FieldEncryptionService : IFieldEncryptionService
 
     public string Decrypt(string ciphertext)
     {
-        if (string.IsNullOrEmpty(ciphertext)) return ciphertext;
+        if (string.IsNullOrEmpty(ciphertext))
+            return ciphertext;
 
         var packed = Convert.FromBase64String(ciphertext);
         var nonce = packed[..12];

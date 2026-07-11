@@ -1,5 +1,6 @@
 using FashionSaaS.Application.BankAccounts;
 using FashionSaaS.Application.BankAccounts.DTOs;
+using FashionSaaS.Application.Common;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Domain.Entities;
 using FluentAssertions;
@@ -65,7 +66,7 @@ public class BankAccountServiceTests
         _userRepo.Setup(r => r.GetByIdAsync(user.Id)).ReturnsAsync(user);
         _hasher.Setup(h => h.Verify("wrong", "hash")).Returns(false);
 
-        var result = await CreateService().CreateAsync(
+        ResponseData<BankAccountResponse> result = await CreateService().CreateAsync(
             new CreateBankAccountRequest { CurrentPassword = "wrong" },
             user.Id, null, Ip, Ua);
 
@@ -78,7 +79,7 @@ public class BankAccountServiceTests
     {
         _userRepo.Setup(r => r.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync((User?)null);
 
-        var result = await CreateService().CreateAsync(
+        ResponseData<BankAccountResponse> result = await CreateService().CreateAsync(
             new CreateBankAccountRequest { CurrentPassword = "pwd" },
             Guid.NewGuid(), null, Ip, Ua);
 
@@ -96,7 +97,7 @@ public class BankAccountServiceTests
         _hasher.Setup(h => h.Verify("good", "hash")).Returns(true);
         _bankRepo.Setup(r => r.GetPlatformAccountAsync()).ReturnsAsync(new BankAccount());
 
-        var result = await CreateService().CreateAsync(
+        ResponseData<BankAccountResponse> result = await CreateService().CreateAsync(
             new CreateBankAccountRequest { CurrentPassword = "good" },
             user.Id, null, Ip, Ua);
 
@@ -136,7 +137,7 @@ public class BankAccountServiceTests
             .Callback<BankAccount>(a => captured = a)
             .Returns(Task.CompletedTask);
 
-        var result = await CreateService().CreateAsync(request, user.Id, null, Ip, Ua);
+        ResponseData<BankAccountResponse> result = await CreateService().CreateAsync(request, user.Id, null, Ip, Ua);
 
         result.IsSuccess.Should().BeTrue();
         result.StatusCode.Should().Be(201);
@@ -165,18 +166,21 @@ public class BankAccountServiceTests
         _bankRepo.Setup(r => r.AddAsync(It.IsAny<BankAccount>())).Returns(Task.CompletedTask);
         _encryption.Setup(e => e.Encrypt(It.IsAny<string>())).Returns<string>(s => $"ENC({s})");
         _encryption.Setup(e => e.Decrypt(It.IsAny<string>())).Returns<string>(s =>
-            s.StartsWith("ENC(") ? s[4..^1] : s);
+            s.StartsWith("ENC(", StringComparison.Ordinal) ? s[4..^1] : s);
         _encryption.Setup(e => e.MaskAccountNumber("12345678")).Returns("****5678");
         _email.Setup(e => e.SendBankAccountChangedAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
         SetupUow();
         SetupAudit();
 
-        var result = await CreateService().CreateAsync(
+        ResponseData<BankAccountResponse> result = await CreateService().CreateAsync(
             new CreateBankAccountRequest
             {
-                AccountTitle = "ACME Corp", AccountNumber = "12345678",
-                BankName = "HBL", BranchCode = "0012",
-                Iban = "PK36SCBL0000001123456702", CurrentPassword = "pwd"
+                AccountTitle = "ACME Corp",
+                AccountNumber = "12345678",
+                BankName = "HBL",
+                BranchCode = "0012",
+                Iban = "PK36SCBL0000001123456702",
+                CurrentPassword = "pwd"
             },
             user.Id, null, Ip, Ua);
 
@@ -201,10 +205,10 @@ public class BankAccountServiceTests
         };
         _bankRepo.Setup(r => r.GetPlatformAccountAsync()).ReturnsAsync(account);
         _encryption.Setup(e => e.Decrypt(It.IsAny<string>())).Returns<string>(s =>
-            s.StartsWith("ENC(") ? s[4..^1] : s);
+            s.StartsWith("ENC(", StringComparison.Ordinal) ? s[4..^1] : s);
         _encryption.Setup(e => e.MaskAccountNumber("12345678")).Returns("****5678");
 
-        var result = await CreateService().GetAsync(null);
+        ResponseData<BankAccountResponse> result = await CreateService().GetAsync(null);
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.AccountNumber.Should().Be("****5678");
@@ -222,7 +226,7 @@ public class BankAccountServiceTests
     public async Task GetAsync_NoAccount_ReturnsNotFound()
     {
         _bankRepo.Setup(r => r.GetPlatformAccountAsync()).ReturnsAsync((BankAccount?)null);
-        var result = await CreateService().GetAsync(null);
+        ResponseData<BankAccountResponse> result = await CreateService().GetAsync(null);
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Should().Be(404);
     }
@@ -232,7 +236,7 @@ public class BankAccountServiceTests
     {
         var tenantId = Guid.NewGuid();
         _bankRepo.Setup(r => r.GetByTenantIdAsync(tenantId)).ReturnsAsync((BankAccount?)null);
-        var result = await CreateService().GetAsync(tenantId);
+        ResponseData<BankAccountResponse> result = await CreateService().GetAsync(tenantId);
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Should().Be(404);
     }
@@ -245,7 +249,8 @@ public class BankAccountServiceTests
         var user = new User { Id = Guid.NewGuid(), PasswordHash = "hash", Email = "admin@x.com" };
         var account = new BankAccount
         {
-            Id = Guid.NewGuid(), TenantId = null,
+            Id = Guid.NewGuid(),
+            TenantId = null,
             AccountTitleEncrypted = "ENC(OldTitle)",
             AccountNumberEncrypted = "ENC(11111111)",
             BankNameEncrypted = "ENC(OldBank)",
@@ -260,7 +265,7 @@ public class BankAccountServiceTests
         _bankRepo.Setup(r => r.UpdateAsync(account)).Returns(Task.CompletedTask);
         _encryption.Setup(e => e.Encrypt(It.IsAny<string>())).Returns<string>(s => $"ENC({s})");
         _encryption.Setup(e => e.Decrypt(It.IsAny<string>())).Returns<string>(s =>
-            s.StartsWith("ENC(") ? s[4..^1] : s);
+            s.StartsWith("ENC(", StringComparison.Ordinal) ? s[4..^1] : s);
         _encryption.Setup(e => e.MaskAccountNumber(It.IsAny<string>())).Returns<string>(s =>
             $"****{s[^4..]}");
         _email.Setup(e => e.SendBankAccountChangedAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
@@ -269,12 +274,15 @@ public class BankAccountServiceTests
 
         var request = new UpdateBankAccountRequest
         {
-            AccountTitle = "NewTitle", AccountNumber = "99998888",
-            BankName = "MCB", BranchCode = "0099",
-            Iban = "PK36SCBL0000009999888877", CurrentPassword = "pwd"
+            AccountTitle = "NewTitle",
+            AccountNumber = "99998888",
+            BankName = "MCB",
+            BranchCode = "0099",
+            Iban = "PK36SCBL0000009999888877",
+            CurrentPassword = "pwd"
         };
 
-        var result = await CreateService().UpdateAsync(request, user.Id, null, Ip, Ua);
+        ResponseData<BankAccountResponse> result = await CreateService().UpdateAsync(request, user.Id, null, Ip, Ua);
 
         result.IsSuccess.Should().BeTrue();
 
@@ -296,10 +304,14 @@ public class BankAccountServiceTests
         var user = new User { Id = Guid.NewGuid(), PasswordHash = "hash", Email = "admin@x.com" };
         var account = new BankAccount
         {
-            Id = Guid.NewGuid(), TenantId = null,
-            AccountTitleEncrypted = "ENC(T)", AccountNumberEncrypted = "ENC(12345678)",
-            BankNameEncrypted = "ENC(B)", BranchCodeEncrypted = "ENC(C)",
-            IbanEncrypted = "ENC(IBAN)", IsActive = true
+            Id = Guid.NewGuid(),
+            TenantId = null,
+            AccountTitleEncrypted = "ENC(T)",
+            AccountNumberEncrypted = "ENC(12345678)",
+            BankNameEncrypted = "ENC(B)",
+            BranchCodeEncrypted = "ENC(C)",
+            IbanEncrypted = "ENC(IBAN)",
+            IsActive = true
         };
 
         _userRepo.Setup(r => r.GetByIdAsync(user.Id)).ReturnsAsync(user);
@@ -325,8 +337,12 @@ public class BankAccountServiceTests
 
         var request = new UpdateBankAccountRequest
         {
-            AccountTitle = "T", AccountNumber = "87654321", BankName = "B",
-            BranchCode = "C", Iban = "IBAN", CurrentPassword = "pwd"
+            AccountTitle = "T",
+            AccountNumber = "87654321",
+            BankName = "B",
+            BranchCode = "C",
+            Iban = "IBAN",
+            CurrentPassword = "pwd"
         };
 
         await CreateService().UpdateAsync(request, user.Id, null, Ip, Ua);
@@ -362,10 +378,10 @@ public class BankAccountServiceTests
         };
         _bankRepo.Setup(r => r.GetPlatformAccountAsync()).ReturnsAsync(account);
         _encryption.Setup(e => e.Decrypt(It.IsAny<string>())).Returns<string>(s =>
-            s.StartsWith("ENC(") ? s[4..^1] : s);
+            s.StartsWith("ENC(", StringComparison.Ordinal) ? s[4..^1] : s);
         _encryption.Setup(e => e.MaskAccountNumber(It.IsAny<string>())).Returns("****5678");
 
-        var result = await CreateService().GetAsync(null);
+        ResponseData<BankAccountResponse> result = await CreateService().GetAsync(null);
 
         result.IsSuccess.Should().BeTrue();
         // IBAN must be masked to ****{last4} — NOT the full plaintext
@@ -377,7 +393,7 @@ public class BankAccountServiceTests
     [Fact]
     public async Task GetFullAsync_ReturnsFullDecryptedIban_NotMasked()
     {
-        var (_, userId, totpCode) = SetupMfaUser();
+        (User _, Guid userId, var totpCode) = SetupMfaUser();
         var account = new BankAccount
         {
             Id = Guid.NewGuid(),
@@ -391,9 +407,9 @@ public class BankAccountServiceTests
         };
         _bankRepo.Setup(r => r.GetPlatformAccountAsync()).ReturnsAsync(account);
         _encryption.Setup(e => e.Decrypt(It.Is<string>(s => s != "ENC(secret)"))).Returns<string>(s =>
-            s.StartsWith("ENC(") ? s[4..^1] : s);
+            s.StartsWith("ENC(", StringComparison.Ordinal) ? s[4..^1] : s);
 
-        var result = await CreateService().GetFullAsync(null, userId, totpCode);
+        ResponseData<BankAccountFullResponse> result = await CreateService().GetFullAsync(null, userId, totpCode);
 
         result.IsSuccess.Should().BeTrue();
         // GetFullAsync must return the COMPLETE unmasked IBAN
@@ -408,7 +424,7 @@ public class BankAccountServiceTests
     [Fact]
     public async Task GetFullAsync_ReturnsFullDecryptedAccountNumber_NotMasked()
     {
-        var (_, userId, totpCode) = SetupMfaUser();
+        (User _, Guid userId, var totpCode) = SetupMfaUser();
         var account = new BankAccount
         {
             Id = Guid.NewGuid(),
@@ -422,9 +438,9 @@ public class BankAccountServiceTests
         };
         _bankRepo.Setup(r => r.GetPlatformAccountAsync()).ReturnsAsync(account);
         _encryption.Setup(e => e.Decrypt(It.Is<string>(s => s != "ENC(secret)"))).Returns<string>(s =>
-            s.StartsWith("ENC(") ? s[4..^1] : s);
+            s.StartsWith("ENC(", StringComparison.Ordinal) ? s[4..^1] : s);
 
-        var result = await CreateService().GetFullAsync(null, userId, totpCode);
+        ResponseData<BankAccountFullResponse> result = await CreateService().GetFullAsync(null, userId, totpCode);
 
         result.IsSuccess.Should().BeTrue();
         // Must be full plaintext, not masked
@@ -438,9 +454,9 @@ public class BankAccountServiceTests
     [Fact]
     public async Task GetFullAsync_NoAccount_ReturnsNotFound()
     {
-        var (_, userId, totpCode) = SetupMfaUser();
+        (User _, Guid userId, var totpCode) = SetupMfaUser();
         _bankRepo.Setup(r => r.GetPlatformAccountAsync()).ReturnsAsync((BankAccount?)null);
-        var result = await CreateService().GetFullAsync(null, userId, totpCode);
+        ResponseData<BankAccountFullResponse> result = await CreateService().GetFullAsync(null, userId, totpCode);
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Should().Be(404);
     }
@@ -448,7 +464,7 @@ public class BankAccountServiceTests
     [Fact]
     public async Task GetFullAsync_TenantAccount_ReturnsFullDecryptedAccountNumber()
     {
-        var (_, userId, totpCode) = SetupMfaUser();
+        (User _, Guid userId, var totpCode) = SetupMfaUser();
         var tenantId = Guid.NewGuid();
         var account = new BankAccount
         {
@@ -463,9 +479,9 @@ public class BankAccountServiceTests
         };
         _bankRepo.Setup(r => r.GetByTenantIdAsync(tenantId)).ReturnsAsync(account);
         _encryption.Setup(e => e.Decrypt(It.Is<string>(s => s != "ENC(secret)"))).Returns<string>(s =>
-            s.StartsWith("ENC(") ? s[4..^1] : s);
+            s.StartsWith("ENC(", StringComparison.Ordinal) ? s[4..^1] : s);
 
-        var result = await CreateService().GetFullAsync(tenantId, userId, totpCode);
+        ResponseData<BankAccountFullResponse> result = await CreateService().GetFullAsync(tenantId, userId, totpCode);
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.AccountNumber.Should().Be("98765432");
@@ -481,10 +497,14 @@ public class BankAccountServiceTests
         var user = new User { Id = Guid.NewGuid(), PasswordHash = "hash", Email = "admin@x.com" };
         var account = new BankAccount
         {
-            Id = Guid.NewGuid(), TenantId = null,
-            AccountTitleEncrypted = "ENC(T)", AccountNumberEncrypted = "ENC(11111111)",
-            BankNameEncrypted = "ENC(B)", BranchCodeEncrypted = "ENC(C)",
-            IbanEncrypted = "ENC(I)", IsActive = true
+            Id = Guid.NewGuid(),
+            TenantId = null,
+            AccountTitleEncrypted = "ENC(T)",
+            AccountNumberEncrypted = "ENC(11111111)",
+            BankNameEncrypted = "ENC(B)",
+            BranchCodeEncrypted = "ENC(C)",
+            IbanEncrypted = "ENC(I)",
+            IsActive = true
         };
 
         _userRepo.Setup(r => r.GetByIdAsync(user.Id)).ReturnsAsync(user);
@@ -501,8 +521,12 @@ public class BankAccountServiceTests
         await CreateService().UpdateAsync(
             new UpdateBankAccountRequest
             {
-                AccountTitle = "T", AccountNumber = "1234", BankName = "B",
-                BranchCode = "C", Iban = "I", CurrentPassword = "pwd"
+                AccountTitle = "T",
+                AccountNumber = "1234",
+                BankName = "B",
+                BranchCode = "C",
+                Iban = "I",
+                CurrentPassword = "pwd"
             },
             user.Id, null, Ip, Ua);
 
@@ -533,8 +557,12 @@ public class BankAccountServiceTests
         await CreateService().CreateAsync(
             new CreateBankAccountRequest
             {
-                AccountTitle = "T", AccountNumber = "1234", BankName = "B",
-                BranchCode = "C", Iban = "I", CurrentPassword = "pwd"
+                AccountTitle = "T",
+                AccountNumber = "1234",
+                BankName = "B",
+                BranchCode = "C",
+                Iban = "I",
+                CurrentPassword = "pwd"
             },
             user.Id, null, Ip, Ua);
 
@@ -556,7 +584,7 @@ public class BankAccountServiceTests
         _encryption.Setup(e => e.Decrypt("ENC(secret)")).Returns("secret");
         _totp.Setup(t => t.Verify("secret", "wrong")).Returns(false);
 
-        var result = await CreateService().GetFullAsync(null, userId, "wrong");
+        ResponseData<BankAccountFullResponse> result = await CreateService().GetFullAsync(null, userId, "wrong");
 
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Should().Be(403);
@@ -572,7 +600,7 @@ public class BankAccountServiceTests
         // MfaSettings is null — not enrolled
         _userRepo.Setup(r => r.GetByIdWithRolesAsync(userId)).ReturnsAsync(user);
 
-        var result = await CreateService().GetFullAsync(null, userId, "123456");
+        ResponseData<BankAccountFullResponse> result = await CreateService().GetFullAsync(null, userId, "123456");
 
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Should().Be(403);
@@ -583,19 +611,23 @@ public class BankAccountServiceTests
     [Fact]
     public async Task GetFullAsync_CorrectTotpCode_ReturnsFullAccountNumber()
     {
-        var (_, userId, totpCode) = SetupMfaUser();
+        (User _, Guid userId, var totpCode) = SetupMfaUser();
         var account = new BankAccount
         {
-            Id = Guid.NewGuid(), TenantId = null,
-            AccountTitleEncrypted = "ENC(Corp)", AccountNumberEncrypted = "ENC(99998888)",
-            BankNameEncrypted = "ENC(HBL)", BranchCodeEncrypted = "ENC(0012)",
-            IbanEncrypted = "ENC(PK36HBL)", IsActive = true
+            Id = Guid.NewGuid(),
+            TenantId = null,
+            AccountTitleEncrypted = "ENC(Corp)",
+            AccountNumberEncrypted = "ENC(99998888)",
+            BankNameEncrypted = "ENC(HBL)",
+            BranchCodeEncrypted = "ENC(0012)",
+            IbanEncrypted = "ENC(PK36HBL)",
+            IsActive = true
         };
         _bankRepo.Setup(r => r.GetPlatformAccountAsync()).ReturnsAsync(account);
         _encryption.Setup(e => e.Decrypt(It.Is<string>(s => s != "ENC(secret)"))).Returns<string>(s =>
-            s.StartsWith("ENC(") ? s[4..^1] : s);
+            s.StartsWith("ENC(", StringComparison.Ordinal) ? s[4..^1] : s);
 
-        var result = await CreateService().GetFullAsync(null, userId, totpCode);
+        ResponseData<BankAccountFullResponse> result = await CreateService().GetFullAsync(null, userId, totpCode);
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.AccountNumber.Should().Be("99998888");

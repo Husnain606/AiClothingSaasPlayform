@@ -3,8 +3,8 @@ using System.Text;
 using System.Threading.RateLimiting;
 using FashionSaaS.Application.AuditLogs;
 using FashionSaaS.Application.Auth;
-using FashionSaaS.Application.Behaviors;
 using FashionSaaS.Application.BankAccounts;
+using FashionSaaS.Application.Behaviors;
 using FashionSaaS.Application.Categories;
 using FashionSaaS.Application.Configuration;
 using FashionSaaS.Application.Customers;
@@ -33,7 +33,7 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace FashionSaaS.API.Extensions;
 
-public static class ServiceCollectionExtensions
+internal static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddApplicationServices(this IServiceCollection services)
     {
@@ -69,7 +69,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddJwtAuthentication(this IServiceCollection services,
         IConfiguration configuration)
     {
-        var jwtSettings = configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>()
+        JwtSettings jwtSettings = configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>()
             ?? throw new InvalidOperationException("JwtSettings section is missing from configuration.");
         if (string.IsNullOrEmpty(jwtSettings.Secret))
             throw new InvalidOperationException("JwtSettings:Secret is not set.");

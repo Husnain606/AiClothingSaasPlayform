@@ -21,7 +21,7 @@ public class ReportRepository(ApplicationDbContext context) : IReportRepository
 
     public async Task<SummaryReportDto> GetSummaryAsync(Guid tenantId, DateTime from, DateTime to, CancellationToken ct = default)
     {
-        var totals = await NonCancelledOrders(tenantId, from, to)
+        List<decimal> totals = await NonCancelledOrders(tenantId, from, to)
             .Select(o => o.Total)
             .ToListAsync(ct);
 
@@ -62,7 +62,7 @@ public class ReportRepository(ApplicationDbContext context) : IReportRepository
     {
         // Grouped by the OrderItem snapshot (ProductId, ProductName) so aggregates
         // survive later product edits/deletes.
-        var rows = await NonCancelledOrders(tenantId, from, to)
+        List<TopProductDto> rows = await NonCancelledOrders(tenantId, from, to)
             .SelectMany(o => o.Items)
             .GroupBy(i => new { i.ProductId, i.ProductName })
             .Select(g => new TopProductDto
@@ -74,7 +74,7 @@ public class ReportRepository(ApplicationDbContext context) : IReportRepository
             })
             .ToListAsync(ct);
 
-        var ordered = string.Equals(by, "units", StringComparison.OrdinalIgnoreCase)
+        IOrderedEnumerable<TopProductDto> ordered = string.Equals(by, "units", StringComparison.OrdinalIgnoreCase)
             ? rows.OrderByDescending(r => r.Units).ThenByDescending(r => r.Revenue)
             : rows.OrderByDescending(r => r.Revenue).ThenByDescending(r => r.Units);
 
@@ -83,13 +83,16 @@ public class ReportRepository(ApplicationDbContext context) : IReportRepository
 
     public async Task<List<StatusBreakdownDto>> GetStatusBreakdownAsync(Guid tenantId, DateTime from, DateTime to, CancellationToken ct = default)
     {
-        // Breakdown intentionally includes Cancelled — it reports composition per status;
-        // the revenue *metric* elsewhere excludes cancelled orders.
+        // S125 false positive: prose, not commented-out code. Breakdown intentionally includes
+        // Cancelled — it reports composition per status; the revenue *metric* elsewhere
+        // excludes cancelled orders.
+#pragma warning disable S125
         var rows = await context.Orders.AsNoTracking()
             .Where(o => o.TenantId == tenantId && o.OrderDate >= from && o.OrderDate <= to)
             .GroupBy(o => o.Status)
             .Select(g => new { Status = g.Key, Count = g.Count(), Revenue = g.Sum(o => o.Total) })
             .ToListAsync(ct);
+#pragma warning restore S125
 
         return rows
             .OrderBy(r => r.Status)
@@ -99,7 +102,7 @@ public class ReportRepository(ApplicationDbContext context) : IReportRepository
 
     public async Task<CustomerAnalyticsDto> GetCustomerAnalyticsAsync(Guid tenantId, DateTime from, DateTime to, ReportInterval interval, CancellationToken ct = default)
     {
-        var createdDates = await context.Customers.AsNoTracking()
+        List<DateTime> createdDates = await context.Customers.AsNoTracking()
             .Where(c => c.TenantId == tenantId && c.CreatedAt >= from && c.CreatedAt <= to)
             .Select(c => c.CreatedAt)
             .ToListAsync(ct);
@@ -119,7 +122,7 @@ public class ReportRepository(ApplicationDbContext context) : IReportRepository
             .ToList();
 
         var topIds = top.Select(t => t.CustomerId).ToList();
-        var emails = await context.Customers.AsNoTracking()
+        Dictionary<Guid, string> emails = await context.Customers.AsNoTracking()
             .Where(c => c.TenantId == tenantId && topIds.Contains(c.Id))
             .Select(c => new { c.Id, c.Email })
             .ToDictionaryAsync(c => c.Id, c => c.Email, ct);
@@ -147,7 +150,7 @@ public class ReportRepository(ApplicationDbContext context) : IReportRepository
             .Select(a => new { a.CreatedAt, a.Delta })
             .ToListAsync(ct);
 
-        var lowStock = await context.ProductVariants.AsNoTracking()
+        List<LowStockItemDto> lowStock = await context.ProductVariants.AsNoTracking()
             .Where(v => v.TenantId == tenantId && v.IsActive && v.StockQuantity <= LowStockThreshold)
             .OrderBy(v => v.StockQuantity)
             .Select(v => new LowStockItemDto
@@ -220,7 +223,7 @@ public class ReportRepository(ApplicationDbContext context) : IReportRepository
     private static DateTime BucketStart(DateTime date, ReportInterval interval) => interval switch
     {
         ReportInterval.Week => date.AddDays(-(((int)date.DayOfWeek + 6) % 7)).Date,
-        ReportInterval.Month => new DateTime(date.Year, date.Month, 1),
+        ReportInterval.Month => new DateTime(date.Year, date.Month, 1, 0, 0, 0, DateTimeKind.Utc),
         _ => date.Date
     };
 

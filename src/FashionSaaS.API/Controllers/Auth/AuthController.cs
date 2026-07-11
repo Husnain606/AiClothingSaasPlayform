@@ -11,7 +11,7 @@ using Microsoft.AspNetCore.RateLimiting;
 namespace FashionSaaS.API.Controllers.Auth;
 
 [ApiController]
-public class AuthController(AuthService authService, IPasswordResetTokenRepository resetTokenRepo,
+internal class AuthController(AuthService authService, IPasswordResetTokenRepository resetTokenRepo,
     IPasswordHistoryRepository historyRepo, IJwtService jwtService) : ControllerBase
 {
     private string Ip => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
@@ -25,11 +25,10 @@ public class AuthController(AuthService authService, IPasswordResetTokenReposito
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
-        var response = await authService.LoginAsync(request, Ip, Ua);
+        ResponseData<LoginResponse> response = await authService.LoginAsync(request, Ip, Ua);
         if (response.IsSuccess && response.Data?.RefreshToken is not null)
             SetRefreshTokenCookie(response.Data.RefreshToken);
-        if (response.Data is not null)
-            response.Data.RefreshToken = null;
+        response.Data?.RefreshToken = null;
         return StatusCode(response.StatusCode, response);
     }
 
@@ -42,11 +41,10 @@ public class AuthController(AuthService authService, IPasswordResetTokenReposito
     public async Task<IActionResult> LoginMfa([FromBody] LoginMfaRequest request,
         [FromServices] ITotpService totpService)
     {
-        var response = await authService.LoginMfaAsync(request, totpService, Ip, Ua);
+        ResponseData<LoginResponse> response = await authService.LoginMfaAsync(request, totpService, Ip, Ua);
         if (response.IsSuccess && response.Data?.RefreshToken is not null)
             SetRefreshTokenCookie(response.Data.RefreshToken);
-        if (response.Data is not null)
-            response.Data.RefreshToken = null;
+        response.Data?.RefreshToken = null;
         return StatusCode(response.StatusCode, response);
     }
 
@@ -73,19 +71,18 @@ public class AuthController(AuthService authService, IPasswordResetTokenReposito
         if (string.IsNullOrEmpty(accessToken))
             return StatusCode(401, ResponseData<string>.Failure("Invalid session.", 401));
 
-        var principal = jwtService.GetPrincipalFromExpiredToken(accessToken);
+        ClaimsPrincipal? principal = jwtService.GetPrincipalFromExpiredToken(accessToken);
         if (principal is null)
             return StatusCode(401, ResponseData<string>.Failure("Invalid session.", 401));
 
         var userId = principal.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (!Guid.TryParse(userId, out var uid))
+        if (!Guid.TryParse(userId, out Guid uid))
             return StatusCode(401, ResponseData<string>.Failure("Invalid session.", 401));
 
-        var response = await authService.RefreshTokenByUserIdAsync(uid, rawToken, Ip, Ua);
+        ResponseData<LoginResponse> response = await authService.RefreshTokenByUserIdAsync(uid, rawToken, Ip, Ua);
         if (response.IsSuccess && response.Data?.RefreshToken is not null)
             SetRefreshTokenCookie(response.Data.RefreshToken);
-        if (response.Data is not null)
-            response.Data.RefreshToken = null;
+        response.Data?.RefreshToken = null;
         return StatusCode(response.StatusCode, response);
     }
 
@@ -99,7 +96,7 @@ public class AuthController(AuthService authService, IPasswordResetTokenReposito
     {
         var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         DeleteRefreshTokenCookie();
-        var response = await authService.LogoutAsync(userId);
+        ResponseData<bool> response = await authService.LogoutAsync(userId);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -112,7 +109,7 @@ public class AuthController(AuthService authService, IPasswordResetTokenReposito
     public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
     {
         var baseUrl = $"{Request.Scheme}://{Request.Host}";
-        var response = await authService.ForgotPasswordAsync(request.Email, baseUrl, resetTokenRepo);
+        ResponseData<bool> response = await authService.ForgotPasswordAsync(request.Email, baseUrl, resetTokenRepo);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -124,7 +121,7 @@ public class AuthController(AuthService authService, IPasswordResetTokenReposito
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
     {
-        var response = await authService.ResetPasswordAsync(request, resetTokenRepo, historyRepo);
+        ResponseData<bool> response = await authService.ResetPasswordAsync(request, resetTokenRepo, historyRepo);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -138,7 +135,7 @@ public class AuthController(AuthService authService, IPasswordResetTokenReposito
     {
         var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         DeleteRefreshTokenCookie();
-        var response = await authService.ChangePasswordAsync(userId, request, historyRepo);
+        ResponseData<bool> response = await authService.ChangePasswordAsync(userId, request, historyRepo);
         return StatusCode(response.StatusCode, response);
     }
 

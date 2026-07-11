@@ -26,7 +26,7 @@ public class GenericRepositoryUpdateTests
         var currentTenant = new Mock<ICurrentTenantService>();
         currentTenant.Setup(c => c.TenantId).Returns(_tenantId);
 
-        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+        DbContextOptions<ApplicationDbContext> options = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
         return new ApplicationDbContext(options, currentTenant.Object);
@@ -35,7 +35,7 @@ public class GenericRepositoryUpdateTests
     [Fact]
     public async Task UpdateAsync_DetachedInstanceWithSameIdAsTrackedEntity_UpdatesTrackedEntityValues()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         var discountId = Guid.NewGuid();
         var discount = new Discount
         {
@@ -54,7 +54,7 @@ public class GenericRepositoryUpdateTests
         var repo = new DiscountRepository(ctx);
 
         // Fetch TRACKED (GenericRepository.GetByIdAsync uses DbSet.FindAsync, which tracks).
-        var tracked = await repo.GetByIdAsync(discountId);
+        Discount? tracked = await repo.GetByIdAsync(discountId);
         tracked.Should().NotBeNull();
 
         // A SEPARATE detached instance with the same Id but different scalar values -
@@ -72,7 +72,7 @@ public class GenericRepositoryUpdateTests
             EndsAt = discount.EndsAt
         };
 
-        var act = async () =>
+        Func<Task> act = async () =>
         {
             await repo.UpdateAsync(detached);
             await ctx.SaveChangesAsync();
@@ -80,7 +80,7 @@ public class GenericRepositoryUpdateTests
 
         await act.Should().NotThrowAsync();
 
-        var persisted = await ctx.Discounts.AsNoTracking().SingleAsync(d => d.Id == discountId);
+        Discount persisted = await ctx.Discounts.AsNoTracking().SingleAsync(d => d.Id == discountId);
         persisted.Value.Should().Be(35);
         persisted.IsActive.Should().BeFalse();
     }

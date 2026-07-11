@@ -10,7 +10,7 @@ public class LoggingBehavior<TRequest, TResponse>(ILogger<LoggingBehavior<TReque
     {
         var requestName = typeof(TRequest).Name;
         logger.LogInformation("Handling domain event {RequestName}", requestName);
-        var response = await next();
+        TResponse? response = await next(cancellationToken);
         logger.LogInformation("Handled domain event {RequestName}", requestName);
         return response;
     }

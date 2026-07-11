@@ -1,6 +1,7 @@
 using FashionSaaS.Application.Products.DTOs;
 using FashionSaaS.Application.Products.Validators;
 using FluentAssertions;
+using FluentValidation.Results;
 
 namespace FashionSaaS.Application.Tests.Products;
 
@@ -11,15 +12,18 @@ public class ProductValidatorTests
 
     private static CreateProductRequest Valid() => new()
     {
-        Name = "Tee", Slug = "tee", CategoryId = Guid.NewGuid(), BasePrice = 10m
+        Name = "Tee",
+        Slug = "tee",
+        CategoryId = Guid.NewGuid(),
+        BasePrice = 10m
     };
 
     [Fact]
     public void Create_BlankName_Fails()
     {
-        var req = Valid();
+        CreateProductRequest req = Valid();
         req.Name = "";
-        var result = _create.Validate(req);
+        ValidationResult result = _create.Validate(req);
         result.IsValid.Should().BeFalse();
         result.Errors.Should().Contain(e => e.PropertyName == nameof(CreateProductRequest.Name));
     }
@@ -27,9 +31,9 @@ public class ProductValidatorTests
     [Fact]
     public void Create_NegativePrice_Fails()
     {
-        var req = Valid();
+        CreateProductRequest req = Valid();
         req.BasePrice = -1m;
-        var result = _create.Validate(req);
+        ValidationResult result = _create.Validate(req);
         result.IsValid.Should().BeFalse();
         result.Errors.Should().Contain(e => e.PropertyName == nameof(CreateProductRequest.BasePrice));
     }
@@ -37,9 +41,9 @@ public class ProductValidatorTests
     [Fact]
     public void Create_EmptyCategoryId_Fails()
     {
-        var req = Valid();
+        CreateProductRequest req = Valid();
         req.CategoryId = Guid.Empty;
-        var result = _create.Validate(req);
+        ValidationResult result = _create.Validate(req);
         result.IsValid.Should().BeFalse();
         result.Errors.Should().Contain(e => e.PropertyName == nameof(CreateProductRequest.CategoryId));
     }
@@ -52,9 +56,9 @@ public class ProductValidatorTests
     [InlineData("blue--tee")]  // double hyphen
     public void Create_BadSlug_Fails(string slug)
     {
-        var req = Valid();
+        CreateProductRequest req = Valid();
         req.Slug = slug;
-        var result = _create.Validate(req);
+        ValidationResult result = _create.Validate(req);
         result.IsValid.Should().BeFalse();
         result.Errors.Should().Contain(e => e.PropertyName == nameof(CreateProductRequest.Slug));
     }
@@ -65,18 +69,21 @@ public class ProductValidatorTests
     [InlineData("a1-b2-c3")]
     public void Create_GoodSlug_Passes(string slug)
     {
-        var req = Valid();
+        CreateProductRequest req = Valid();
         req.Slug = slug;
-        var result = _create.Validate(req);
+        ValidationResult result = _create.Validate(req);
         result.IsValid.Should().BeTrue();
     }
 
     [Fact]
     public void Update_BlankSlug_Fails()
     {
-        var result = _update.Validate(new UpdateProductRequest
+        ValidationResult result = _update.Validate(new UpdateProductRequest
         {
-            Name = "Tee", Slug = "", CategoryId = Guid.NewGuid(), BasePrice = 1m
+            Name = "Tee",
+            Slug = "",
+            CategoryId = Guid.NewGuid(),
+            BasePrice = 1m
         });
         result.IsValid.Should().BeFalse();
         result.Errors.Should().Contain(e => e.PropertyName == nameof(UpdateProductRequest.Slug));

@@ -22,7 +22,7 @@ public class UserRepository(ApplicationDbContext context)
 
     public async Task<int> GetRecentFailedLoginCountAsync(string email, int windowMinutes = 15)
     {
-        var since = DateTime.UtcNow.AddMinutes(-windowMinutes);
+        DateTime since = DateTime.UtcNow.AddMinutes(-windowMinutes);
         return await Context.UserLoginAttempts
             .Where(a => a.Email == email && !a.IsSuccess && a.CreatedAt >= since)
             .CountAsync();

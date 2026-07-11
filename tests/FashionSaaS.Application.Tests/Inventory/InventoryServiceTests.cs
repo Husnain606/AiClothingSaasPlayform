@@ -1,3 +1,4 @@
+using FashionSaaS.Application.Common;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Application.Inventory;
 using FashionSaaS.Application.Inventory.DTOs;
@@ -30,8 +31,13 @@ public class InventoryServiceTests
 
     private ProductVariant Variant(int stock) => new()
     {
-        Id = Guid.NewGuid(), TenantId = _tenantId, ProductId = Guid.NewGuid(),
-        Size = "M", Color = "Red", Sku = "SKU-1", StockQuantity = stock
+        Id = Guid.NewGuid(),
+        TenantId = _tenantId,
+        ProductId = Guid.NewGuid(),
+        Size = "M",
+        Color = "Red",
+        Sku = "SKU-1",
+        StockQuantity = stock
     };
 
     // ── AdjustStock ───────────────────────────────────────────────────────────────
@@ -39,13 +45,13 @@ public class InventoryServiceTests
     [Fact]
     public async Task AdjustStockAsync_PositiveDelta_IncreasesStock_AndWritesAudit()
     {
-        var variant = Variant(50);
+        ProductVariant variant = Variant(50);
         _variants.Setup(r => r.GetByIdAsync(variant.Id)).ReturnsAsync(variant);
         StockAdjustment? captured = null;
         _adjustments.Setup(r => r.AddAsync(It.IsAny<StockAdjustment>()))
             .Callback<StockAdjustment>(a => captured = a).Returns(Task.CompletedTask);
 
-        var result = await CreateService().AdjustStockAsync(
+        ResponseData<StockAdjustmentResponse> result = await CreateService().AdjustStockAsync(
             new AdjustStockRequest { VariantId = variant.Id, Delta = 10, Reason = StockAdjustmentReason.Restock },
             Guid.NewGuid(), "127.0.0.1", "ua");
 
@@ -63,10 +69,10 @@ public class InventoryServiceTests
     [Fact]
     public async Task AdjustStockAsync_NegativeDeltaWithinStock_DecreasesStock()
     {
-        var variant = Variant(50);
+        ProductVariant variant = Variant(50);
         _variants.Setup(r => r.GetByIdAsync(variant.Id)).ReturnsAsync(variant);
 
-        var result = await CreateService().AdjustStockAsync(
+        ResponseData<StockAdjustmentResponse> result = await CreateService().AdjustStockAsync(
             new AdjustStockRequest { VariantId = variant.Id, Delta = -20, Reason = StockAdjustmentReason.Sale },
             Guid.NewGuid(), "127.0.0.1", "ua");
 
@@ -77,10 +83,10 @@ public class InventoryServiceTests
     [Fact]
     public async Task AdjustStockAsync_WouldGoNegative_Returns400_NoMutation()
     {
-        var variant = Variant(5);
+        ProductVariant variant = Variant(5);
         _variants.Setup(r => r.GetByIdAsync(variant.Id)).ReturnsAsync(variant);
 
-        var result = await CreateService().AdjustStockAsync(
+        ResponseData<StockAdjustmentResponse> result = await CreateService().AdjustStockAsync(
             new AdjustStockRequest { VariantId = variant.Id, Delta = -10, Reason = StockAdjustmentReason.Sale },
             Guid.NewGuid(), "127.0.0.1", "ua");
 
@@ -93,11 +99,11 @@ public class InventoryServiceTests
     [Fact]
     public async Task AdjustStockAsync_AtOrBelowThreshold_RaisesLowStockEvent()
     {
-        var variant = Variant(8);
+        ProductVariant variant = Variant(8);
         _variants.Setup(r => r.GetByIdAsync(variant.Id)).ReturnsAsync(variant);
         var userId = Guid.NewGuid();
 
-        var result = await CreateService().AdjustStockAsync(
+        ResponseData<StockAdjustmentResponse> result = await CreateService().AdjustStockAsync(
             new AdjustStockRequest { VariantId = variant.Id, Delta = -3, Reason = StockAdjustmentReason.Sale },
             userId, "127.0.0.1", "ua");
 
@@ -111,7 +117,7 @@ public class InventoryServiceTests
     [Fact]
     public async Task AdjustStockAsync_RecordsActingUser()
     {
-        var variant = Variant(50);
+        ProductVariant variant = Variant(50);
         _variants.Setup(r => r.GetByIdAsync(variant.Id)).ReturnsAsync(variant);
         StockAdjustment? captured = null;
         _adjustments.Setup(r => r.AddAsync(It.IsAny<StockAdjustment>()))
@@ -131,7 +137,7 @@ public class InventoryServiceTests
         var variant = new ProductVariant { Id = Guid.NewGuid(), TenantId = Guid.NewGuid(), StockQuantity = 10 };
         _variants.Setup(r => r.GetByIdAsync(variant.Id)).ReturnsAsync(variant);
 
-        var result = await CreateService().AdjustStockAsync(
+        ResponseData<StockAdjustmentResponse> result = await CreateService().AdjustStockAsync(
             new AdjustStockRequest { VariantId = variant.Id, Delta = 1, Reason = StockAdjustmentReason.Restock },
             Guid.NewGuid(), "127.0.0.1", "ua");
 
@@ -143,11 +149,11 @@ public class InventoryServiceTests
     [Fact]
     public async Task GetLowStockAsync_ReturnsMappedItems()
     {
-        var v = Variant(2);
+        ProductVariant v = Variant(2);
         _variants.Setup(r => r.GetLowStockAsync(_tenantId, 5, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<ProductVariant> { v });
 
-        var result = await CreateService().GetLowStockAsync(5);
+        ResponseData<IReadOnlyList<LowStockItemResponse>> result = await CreateService().GetLowStockAsync(5);
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.Single().VariantId.Should().Be(v.Id);
@@ -157,7 +163,7 @@ public class InventoryServiceTests
     [Fact]
     public async Task GetStockHistoryAsync_ReturnsAdjustments()
     {
-        var v = Variant(10);
+        ProductVariant v = Variant(10);
         _variants.Setup(r => r.GetByIdAsync(v.Id)).ReturnsAsync(v);
         _adjustments.Setup(r => r.GetByVariantAsync(v.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<StockAdjustment>
@@ -165,7 +171,7 @@ public class InventoryServiceTests
                 new() { Id = Guid.NewGuid(), TenantId = _tenantId, ProductVariantId = v.Id, Delta = 5, ResultingQuantity = 10 }
             });
 
-        var result = await CreateService().GetStockHistoryAsync(v.Id);
+        ResponseData<IReadOnlyList<StockAdjustmentResponse>> result = await CreateService().GetStockHistoryAsync(v.Id);
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.Single().ResultingQuantity.Should().Be(10);

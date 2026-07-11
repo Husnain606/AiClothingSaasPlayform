@@ -1,3 +1,4 @@
+using FashionSaaS.Application.Common;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Application.Products;
 using FashionSaaS.Application.Products.DTOs;
@@ -34,18 +35,31 @@ public class ProductServiceTests
 
     private Product Product(Guid id, Guid categoryId, ProductStatus status = ProductStatus.Draft) => new()
     {
-        Id = id, TenantId = _tenantId, CategoryId = categoryId, Name = "Tee", Slug = "tee",
-        BasePrice = 10m, Status = status
+        Id = id,
+        TenantId = _tenantId,
+        CategoryId = categoryId,
+        Name = "Tee",
+        Slug = "tee",
+        BasePrice = 10m,
+        Status = status
     };
 
     private ProductVariant Variant(Guid productId, bool active = true) => new()
     {
-        Id = Guid.NewGuid(), TenantId = _tenantId, ProductId = productId, Sku = "SKU", IsActive = active
+        Id = Guid.NewGuid(),
+        TenantId = _tenantId,
+        ProductId = productId,
+        Sku = "SKU",
+        IsActive = active
     };
 
     private ProductImage Image(Guid productId) => new()
     {
-        Id = Guid.NewGuid(), TenantId = _tenantId, ProductId = productId, Url = "https://img/x", IsPrimary = true
+        Id = Guid.NewGuid(),
+        TenantId = _tenantId,
+        ProductId = productId,
+        Url = "https://img/x",
+        IsPrimary = true
     };
 
     // ── Create ──────────────────────────────────────────────────────────────────
@@ -57,7 +71,7 @@ public class ProductServiceTests
         _products.Setup(r => r.SlugExistsAsync(_tenantId, "tee", null, It.IsAny<CancellationToken>())).ReturnsAsync(false);
         _categories.Setup(r => r.GetByIdAsync(catId)).ReturnsAsync(Category(catId));
 
-        var result = await CreateService().CreateAsync(
+        ResponseData<ProductResponse> result = await CreateService().CreateAsync(
             new CreateProductRequest { Name = "Tee", Slug = "tee", CategoryId = catId, BasePrice = 10m },
             Guid.NewGuid(), "127.0.0.1", "ua");
 
@@ -73,7 +87,7 @@ public class ProductServiceTests
         var catId = Guid.NewGuid();
         _products.Setup(r => r.SlugExistsAsync(_tenantId, "tee", null, It.IsAny<CancellationToken>())).ReturnsAsync(true);
 
-        var result = await CreateService().CreateAsync(
+        ResponseData<ProductResponse> result = await CreateService().CreateAsync(
             new CreateProductRequest { Name = "Tee", Slug = "tee", CategoryId = catId, BasePrice = 10m },
             Guid.NewGuid(), "127.0.0.1", "ua");
 
@@ -89,7 +103,7 @@ public class ProductServiceTests
         _categories.Setup(r => r.GetByIdAsync(catId))
             .ReturnsAsync(new Category { Id = catId, TenantId = Guid.NewGuid() });
 
-        var result = await CreateService().CreateAsync(
+        ResponseData<ProductResponse> result = await CreateService().CreateAsync(
             new CreateProductRequest { Name = "Tee", Slug = "tee", CategoryId = catId, BasePrice = 10m },
             Guid.NewGuid(), "127.0.0.1", "ua");
 
@@ -106,7 +120,7 @@ public class ProductServiceTests
         _products.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(Product(id, catId));
         _products.Setup(r => r.SlugExistsAsync(_tenantId, "taken", id, It.IsAny<CancellationToken>())).ReturnsAsync(true);
 
-        var result = await CreateService().UpdateAsync(id,
+        ResponseData<ProductResponse> result = await CreateService().UpdateAsync(id,
             new UpdateProductRequest { Name = "X", Slug = "taken", CategoryId = catId, BasePrice = 1m },
             Guid.NewGuid(), "127.0.0.1", "ua");
 
@@ -118,8 +132,8 @@ public class ProductServiceTests
     {
         var id = Guid.NewGuid();
         var catId = Guid.NewGuid();
-        var stored = Product(id, catId);
-        var detailedProduct = Product(id, catId);
+        Product stored = Product(id, catId);
+        Product detailedProduct = Product(id, catId);
         detailedProduct.Variants.Add(Variant(id));
         detailedProduct.Images.Add(Image(id));
 
@@ -130,7 +144,7 @@ public class ProductServiceTests
         _products.Setup(r => r.GetByIdWithDetailsAsync(id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(detailedProduct);
 
-        var result = await CreateService().UpdateAsync(id,
+        ResponseData<ProductResponse> result = await CreateService().UpdateAsync(id,
             new UpdateProductRequest { Name = "Tee", Slug = "tee", CategoryId = catId, BasePrice = 10m },
             Guid.NewGuid(), "127.0.0.1", "ua");
 
@@ -147,14 +161,14 @@ public class ProductServiceTests
     {
         var id = Guid.NewGuid();
         var catId = Guid.NewGuid();
-        var product = Product(id, catId);
+        Product product = Product(id, catId);
         product.Variants.Add(Variant(id));
         product.Images.Add(Image(id));
 
         _products.Setup(r => r.GetBySlugWithDetailsAsync(_tenantId, "tee", It.IsAny<CancellationToken>()))
             .ReturnsAsync(product);
 
-        var result = await CreateService().GetBySlugAsync("tee");
+        ResponseData<ProductResponse> result = await CreateService().GetBySlugAsync("tee");
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.Slug.Should().Be("tee");
@@ -170,7 +184,7 @@ public class ProductServiceTests
         _products.Setup(r => r.GetBySlugWithDetailsAsync(_tenantId, "nope", It.IsAny<CancellationToken>()))
             .ReturnsAsync((Product?)null);
 
-        var result = await CreateService().GetBySlugAsync("nope");
+        ResponseData<ProductResponse> result = await CreateService().GetBySlugAsync("nope");
 
         result.StatusCode.Should().Be(404);
     }
@@ -187,7 +201,7 @@ public class ProductServiceTests
         _variants.Setup(r => r.GetByProductAsync(id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<ProductVariant> { Variant(id, active: false) });
 
-        var result = await CreateService().PublishAsync(id, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<ProductResponse> result = await CreateService().PublishAsync(id, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.StatusCode.Should().Be(400);
         result.Message.Should().Contain("variant");
@@ -206,7 +220,7 @@ public class ProductServiceTests
         _images.Setup(r => r.GetByProductAsync(id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<ProductImage>());
 
-        var result = await CreateService().PublishAsync(id, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<ProductResponse> result = await CreateService().PublishAsync(id, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.StatusCode.Should().Be(400);
         result.Message.Should().Contain("image");
@@ -217,7 +231,7 @@ public class ProductServiceTests
     {
         var id = Guid.NewGuid();
         var catId = Guid.NewGuid();
-        var product = Product(id, catId);
+        Product product = Product(id, catId);
         _products.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(product);
         _categories.Setup(r => r.GetByIdAsync(catId)).ReturnsAsync(Category(catId));
         _variants.Setup(r => r.GetByProductAsync(id, It.IsAny<CancellationToken>()))
@@ -225,7 +239,7 @@ public class ProductServiceTests
         _images.Setup(r => r.GetByProductAsync(id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<ProductImage> { Image(id) });
 
-        var result = await CreateService().PublishAsync(id, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<ProductResponse> result = await CreateService().PublishAsync(id, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.IsSuccess.Should().BeTrue();
         product.Status.Should().Be(ProductStatus.Active);
@@ -240,11 +254,11 @@ public class ProductServiceTests
     {
         var id = Guid.NewGuid();
         var catId = Guid.NewGuid();
-        var product = Product(id, catId, ProductStatus.Active);
+        Product product = Product(id, catId, ProductStatus.Active);
         _products.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(product);
         _categories.Setup(r => r.GetByIdAsync(catId)).ReturnsAsync(Category(catId));
 
-        var result = await CreateService().ArchiveAsync(id, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<ProductResponse> result = await CreateService().ArchiveAsync(id, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.IsSuccess.Should().BeTrue();
         product.Status.Should().Be(ProductStatus.Archived);
@@ -259,7 +273,7 @@ public class ProductServiceTests
         var id = Guid.NewGuid();
         _products.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(Product(id, Guid.NewGuid(), ProductStatus.Draft));
 
-        var result = await CreateService().DeleteAsync(id, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<bool> result = await CreateService().DeleteAsync(id, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.IsSuccess.Should().BeTrue();
         _products.Verify(r => r.DeleteAsync(It.IsAny<Product>()), Times.Once);
@@ -271,7 +285,7 @@ public class ProductServiceTests
         var id = Guid.NewGuid();
         _products.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(Product(id, Guid.NewGuid(), ProductStatus.Active));
 
-        var result = await CreateService().DeleteAsync(id, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<bool> result = await CreateService().DeleteAsync(id, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.StatusCode.Should().Be(409);
         _products.Verify(r => r.DeleteAsync(It.IsAny<Product>()), Times.Never);
@@ -287,7 +301,7 @@ public class ProductServiceTests
         _products.Setup(r => r.GetPagedAsync(It.IsAny<ProductFilter>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((list, 5));
 
-        var result = await CreateService().GetAllAsync(new ProductFilter { Page = 1, PageSize = 2 });
+        ResponseData<PagedResult<ProductResponse>> result = await CreateService().GetAllAsync(new ProductFilter { Page = 1, PageSize = 2 });
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.Items.Should().HaveCount(2);

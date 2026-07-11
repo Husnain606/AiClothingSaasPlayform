@@ -12,7 +12,7 @@ namespace FashionSaaS.API.Controllers.Store;
 [ApiController]
 [Authorize(Roles = "Customer")]
 [EnableRateLimiting("AuthenticatedPolicy")]
-public class StoreOrdersController(OrderService orderService) : ControllerBase
+internal class StoreOrdersController(OrderService orderService) : ControllerBase
 {
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     private string Email => User.FindFirstValue(ClaimTypes.Email)!;
@@ -27,7 +27,7 @@ public class StoreOrdersController(OrderService orderService) : ControllerBase
     {
         var firstName = request.ShippingAddress.FirstName;
         var lastName = request.ShippingAddress.LastName;
-        var response = await orderService.CreateAsync(Email, firstName, lastName,
+        ResponseData<OrderDto> response = await orderService.CreateAsync(Email, firstName, lastName,
             request.ShippingAddress.Phone, request, UserId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
@@ -37,7 +37,7 @@ public class StoreOrdersController(OrderService orderService) : ControllerBase
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetMine([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var response = await orderService.GetForCustomerAsync(Email, page, pageSize);
+        ResponseData<PagedResult<OrderDto>> response = await orderService.GetForCustomerAsync(Email, page, pageSize);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -47,7 +47,7 @@ public class StoreOrdersController(OrderService orderService) : ControllerBase
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetById(Guid id)
     {
-        var response = await orderService.GetByIdForCustomerAsync(id, Email);
+        ResponseData<OrderDto> response = await orderService.GetByIdForCustomerAsync(id, Email);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -58,7 +58,7 @@ public class StoreOrdersController(OrderService orderService) : ControllerBase
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Cancel(Guid id, [FromBody] CancelOrderRequest body)
     {
-        var response = await orderService.CancelAsync(id, body.Reason, asCustomer: true, Email, UserId, Ip, Ua);
+        ResponseData<OrderDto> response = await orderService.CancelAsync(id, body.Reason, asCustomer: true, Email, UserId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 }

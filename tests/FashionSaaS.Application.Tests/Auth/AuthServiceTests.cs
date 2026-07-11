@@ -1,5 +1,6 @@
 using FashionSaaS.Application.Auth;
 using FashionSaaS.Application.Auth.DTOs;
+using FashionSaaS.Application.Common;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Domain.Entities;
 using FashionSaaS.Domain.Enums;
@@ -36,8 +37,11 @@ public class AuthServiceTests
         var tenant = new Tenant { Id = tenantId, Slug = "brand-slug" };
         var user = new User
         {
-            Id = Guid.NewGuid(), Email = "owner@brand.com",
-            PasswordHash = "hash", IsActive = true, TenantId = tenantId,
+            Id = Guid.NewGuid(),
+            Email = "owner@brand.com",
+            PasswordHash = "hash",
+            IsActive = true,
+            TenantId = tenantId,
             Tenant = tenant,
             UserRoles = new List<UserRole>
             {
@@ -60,8 +64,8 @@ public class AuthServiceTests
         _passwordHasher.Setup(h => h.Hash("raw_refresh")).Returns("hashed_refresh");
         _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
 
-        var service = CreateService();
-        var result = await service.LoginAsync(
+        AuthService service = CreateService();
+        ResponseData<LoginResponse> result = await service.LoginAsync(
             new LoginRequest { Email = "owner@brand.com", Password = "Password@1" },
             "127.0.0.1", "Mozilla");
 
@@ -75,8 +79,10 @@ public class AuthServiceTests
     {
         var user = new User
         {
-            Id = Guid.NewGuid(), Email = "test@test.com",
-            PasswordHash = "hash", IsActive = true
+            Id = Guid.NewGuid(),
+            Email = "test@test.com",
+            PasswordHash = "hash",
+            IsActive = true
         };
         _userRepo.Setup(r => r.GetByEmailAsync("test@test.com")).ReturnsAsync(user);
         _userRepo.Setup(r => r.GetByIdWithRolesAsync(It.IsAny<Guid>())).ReturnsAsync(user);
@@ -84,8 +90,8 @@ public class AuthServiceTests
         _loginAttemptRepo.Setup(r => r.GetRecentFailureCountAsync("test@test.com", 15)).ReturnsAsync(0);
         _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
 
-        var service = CreateService();
-        var result = await service.LoginAsync(
+        AuthService service = CreateService();
+        ResponseData<LoginResponse> result = await service.LoginAsync(
             new LoginRequest { Email = "test@test.com", Password = "wrong" },
             "127.0.0.1", "Mozilla");
 
@@ -99,8 +105,8 @@ public class AuthServiceTests
         _userRepo.Setup(r => r.GetByEmailAsync("nobody@test.com")).ReturnsAsync((User?)null);
         _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
 
-        var service = CreateService();
-        var result = await service.LoginAsync(
+        AuthService service = CreateService();
+        ResponseData<LoginResponse> result = await service.LoginAsync(
             new LoginRequest { Email = "nobody@test.com", Password = "pass" },
             "127.0.0.1", "Mozilla");
 
@@ -113,8 +119,11 @@ public class AuthServiceTests
     {
         var user = new User
         {
-            Id = Guid.NewGuid(), Email = "superadmin@system.com",
-            PasswordHash = "hash", IsActive = true, TenantId = null,
+            Id = Guid.NewGuid(),
+            Email = "superadmin@system.com",
+            PasswordHash = "hash",
+            IsActive = true,
+            TenantId = null,
             UserRoles = new List<UserRole>
             {
                 new() { Role = new Role { Name = RoleType.SuperAdmin, Scope = RoleScope.Platform } }
@@ -128,8 +137,8 @@ public class AuthServiceTests
         _jwtService.Setup(j => j.GenerateMfaChallengeToken(user.Id)).Returns("mfa_challenge_token");
         _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
 
-        var service = CreateService();
-        var result = await service.LoginAsync(
+        AuthService service = CreateService();
+        ResponseData<LoginResponse> result = await service.LoginAsync(
             new LoginRequest { Email = "superadmin@system.com", Password = "Password@1" },
             "127.0.0.1", "Mozilla");
 
@@ -150,8 +159,10 @@ public class AuthServiceTests
     {
         var user = new User
         {
-            Id = Guid.NewGuid(), Email = "locked@test.com",
-            PasswordHash = "hash", IsActive = true
+            Id = Guid.NewGuid(),
+            Email = "locked@test.com",
+            PasswordHash = "hash",
+            IsActive = true
         };
         _userRepo.Setup(r => r.GetByEmailAsync("locked@test.com")).ReturnsAsync(user);
         // Lockout is checked BEFORE password verification; Verify must never be called.
@@ -159,8 +170,8 @@ public class AuthServiceTests
         _emailService.Setup(e => e.SendAccountLockedAsync(user.Email)).Returns(Task.CompletedTask);
         _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
 
-        var service = CreateService();
-        var result = await service.LoginAsync(
+        AuthService service = CreateService();
+        ResponseData<LoginResponse> result = await service.LoginAsync(
             new LoginRequest { Email = "locked@test.com", Password = "Password@1" },
             "127.0.0.1", "Mozilla");
 
@@ -177,8 +188,8 @@ public class AuthServiceTests
         _refreshRepo.Setup(r => r.RevokeAllByUserIdAsync(userId)).Returns(Task.CompletedTask);
         _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
 
-        var service = CreateService();
-        var result = await service.LogoutAsync(userId);
+        AuthService service = CreateService();
+        ResponseData<bool> result = await service.LogoutAsync(userId);
 
         result.IsSuccess.Should().BeTrue();
         result.Data.Should().BeTrue();
@@ -202,8 +213,11 @@ public class AuthServiceTests
         };
         var user = new User
         {
-            Id = userId, Email = "superadmin@system.com",
-            PasswordHash = "hash", IsActive = true, TenantId = null,
+            Id = userId,
+            Email = "superadmin@system.com",
+            PasswordHash = "hash",
+            IsActive = true,
+            TenantId = null,
             MfaSettings = mfaSettings,
             UserRoles = new List<UserRole>
             {
@@ -234,8 +248,8 @@ public class AuthServiceTests
         var totpServiceMock = new Mock<ITotpService>();
         totpServiceMock.Setup(t => t.Verify(rawSecret, "123456")).Returns(true);
 
-        var service = CreateService();
-        var result = await service.LoginMfaAsync(
+        AuthService service = CreateService();
+        ResponseData<LoginResponse> result = await service.LoginMfaAsync(
             new LoginMfaRequest { MfaToken = "mfa_challenge_token", Code = "123456" },
             totpServiceMock.Object, "127.0.0.1", "Mozilla");
 
@@ -293,8 +307,11 @@ public class AuthServiceTests
         };
         var user = new User
         {
-            Id = userId, Email = "superadmin@system.com",
-            PasswordHash = "hash", IsActive = true, TenantId = null,
+            Id = userId,
+            Email = "superadmin@system.com",
+            PasswordHash = "hash",
+            IsActive = true,
+            TenantId = null,
             MfaSettings = mfaSettings,
             UserRoles = new List<UserRole>
             {
@@ -320,10 +337,10 @@ public class AuthServiceTests
         _loginAttemptRepo.Setup(r => r.GetRecentFailureCountAsync(user.Email, 15)).ReturnsAsync(0);
         _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
 
-        var service = CreateService();
+        AuthService service = CreateService();
 
         // Act
-        var result = await service.LoginMfaAsync(
+        ResponseData<LoginResponse> result = await service.LoginMfaAsync(
             new LoginMfaRequest { MfaToken = "mfa_challenge_token", Code = "123456" },
             mockTotp.Object, "192.168.1.99", "Mozilla");
 
@@ -352,8 +369,11 @@ public class AuthServiceTests
         };
         var user = new User
         {
-            Id = userId, Email = "owner@brand.com",
-            PasswordHash = "hash", IsActive = true, TenantId = tenantId,
+            Id = userId,
+            Email = "owner@brand.com",
+            PasswordHash = "hash",
+            IsActive = true,
+            TenantId = tenantId,
             Tenant = tenant,
             MfaSettings = mfaSettings,
             UserRoles = new List<UserRole>
@@ -380,10 +400,10 @@ public class AuthServiceTests
         _loginAttemptRepo.Setup(r => r.GetRecentFailureCountAsync(user.Email, 15)).ReturnsAsync(0);
         _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
 
-        var service = CreateService();
+        AuthService service = CreateService();
 
         // Act
-        var result = await service.LoginMfaAsync(
+        ResponseData<LoginResponse> result = await service.LoginMfaAsync(
             new LoginMfaRequest { MfaToken = "mfa_challenge_token", Code = "654321" },
             mockTotp.Object, "192.168.1.99", "Mozilla");
 
@@ -404,8 +424,8 @@ public class AuthServiceTests
         // ValidateMfaChallengeToken returns null → 401 without touching the user store
         _jwtService.Setup(j => j.ValidateMfaChallengeToken("bad_token")).Returns((Guid?)null);
 
-        var service = CreateService();
-        var result = await service.LoginMfaAsync(
+        AuthService service = CreateService();
+        ResponseData<LoginResponse> result = await service.LoginMfaAsync(
             new LoginMfaRequest { MfaToken = "bad_token", Code = "123456" },
             _totpService.Object, "127.0.0.1", "Mozilla");
 
@@ -428,12 +448,16 @@ public class AuthServiceTests
 
         var mfaSettings = new UserMfaSettings
         {
-            TotpSecretEncrypted = encryptedSecret, IsEnabled = true, IsEnrolled = true
+            TotpSecretEncrypted = encryptedSecret,
+            IsEnabled = true,
+            IsEnrolled = true
         };
         var user = new User
         {
-            Id = userId, Email = "superadmin@system.com",
-            PasswordHash = "hash", IsActive = true,
+            Id = userId,
+            Email = "superadmin@system.com",
+            PasswordHash = "hash",
+            IsActive = true,
             MfaSettings = mfaSettings,
             UserRoles = new List<UserRole>
             {
@@ -449,8 +473,8 @@ public class AuthServiceTests
         _totpService.Setup(t => t.Verify(rawSecret, "wrong")).Returns(false);
         _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
 
-        var service = CreateService();
-        var result = await service.LoginMfaAsync(
+        AuthService service = CreateService();
+        ResponseData<LoginResponse> result = await service.LoginMfaAsync(
             new LoginMfaRequest { MfaToken = "mfa_token", Code = "wrong" },
             _totpService.Object, "127.0.0.1", "Mozilla");
 
@@ -470,15 +494,18 @@ public class AuthServiceTests
     {
         var user = new User
         {
-            Id = Guid.NewGuid(), Email = "locked@system.com",
-            PasswordHash = "hash", IsActive = true, IsLocked = true
+            Id = Guid.NewGuid(),
+            Email = "locked@system.com",
+            PasswordHash = "hash",
+            IsActive = true,
+            IsLocked = true
         };
         _userRepo.Setup(r => r.GetByEmailAsync(user.Email)).ReturnsAsync(user);
         // recentFailures check must NOT be needed; IsLocked should short-circuit
         _loginAttemptRepo.Setup(r => r.GetRecentFailureCountAsync(user.Email, 15)).ReturnsAsync(0);
 
-        var service = CreateService();
-        var result = await service.LoginAsync(
+        AuthService service = CreateService();
+        ResponseData<LoginResponse> result = await service.LoginAsync(
             new LoginRequest { Email = user.Email, Password = "any" },
             "127.0.0.1", "Mozilla");
 
@@ -493,8 +520,11 @@ public class AuthServiceTests
     {
         var user = new User
         {
-            Id = Guid.NewGuid(), Email = "target@system.com",
-            PasswordHash = "hash", IsActive = true, IsLocked = false
+            Id = Guid.NewGuid(),
+            Email = "target@system.com",
+            PasswordHash = "hash",
+            IsActive = true,
+            IsLocked = false
         };
         _userRepo.Setup(r => r.GetByEmailAsync(user.Email)).ReturnsAsync(user);
         // 10 failures triggers the persistent lock tier
@@ -502,8 +532,8 @@ public class AuthServiceTests
         _userRepo.Setup(r => r.UpdateAsync(user)).Returns(Task.CompletedTask);
         _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
 
-        var service = CreateService();
-        var result = await service.LoginAsync(
+        AuthService service = CreateService();
+        ResponseData<LoginResponse> result = await service.LoginAsync(
             new LoginRequest { Email = user.Email, Password = "any" },
             "127.0.0.1", "Mozilla");
 

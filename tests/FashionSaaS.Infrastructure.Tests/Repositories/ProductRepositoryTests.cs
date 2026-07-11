@@ -11,15 +11,15 @@ namespace FashionSaaS.Infrastructure.Tests.Repositories;
 
 public class ProductRepositoryTests
 {
-    private Guid _tenantId = Guid.NewGuid();
-    private Guid _categoryId = Guid.NewGuid();
+    private readonly Guid _tenantId = Guid.NewGuid();
+    private readonly Guid _categoryId = Guid.NewGuid();
 
     private ApplicationDbContext CreateContext()
     {
         var currentTenant = new Mock<ICurrentTenantService>();
         currentTenant.Setup(c => c.TenantId).Returns(_tenantId);
 
-        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+        DbContextOptions<ApplicationDbContext> options = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
         return new ApplicationDbContext(options, currentTenant.Object);
@@ -43,7 +43,7 @@ public class ProductRepositoryTests
     [Fact]
     public async Task SlugExistsAsync_ExistingSlug_ReturnsTrue()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         SeedCategory(ctx);
         var product = new Product
         {
@@ -66,7 +66,7 @@ public class ProductRepositoryTests
     [Fact]
     public async Task SlugExistsAsync_ExcludeId_IgnoresSpecificId()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         SeedCategory(ctx);
         var product = new Product
         {
@@ -89,7 +89,7 @@ public class ProductRepositoryTests
     [Fact]
     public async Task GetBySlugWithDetailsAsync_ExistingSlug_ReturnsProduct()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         SeedCategory(ctx);
         var product = new Product
         {
@@ -104,7 +104,7 @@ public class ProductRepositoryTests
         await ctx.SaveChangesAsync();
 
         var repo = new ProductRepository(ctx);
-        var result = await repo.GetBySlugWithDetailsAsync(_tenantId, "nike-air-max");
+        Product? result = await repo.GetBySlugWithDetailsAsync(_tenantId, "nike-air-max");
 
         result.Should().NotBeNull();
         result!.Name.Should().Be("Nike Air Max");
@@ -114,9 +114,9 @@ public class ProductRepositoryTests
     [Fact]
     public async Task GetBySlugWithDetailsAsync_NonExistentSlug_ReturnsNull()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         var repo = new ProductRepository(ctx);
-        var result = await repo.GetBySlugWithDetailsAsync(_tenantId, "nonexistent");
+        Product? result = await repo.GetBySlugWithDetailsAsync(_tenantId, "nonexistent");
 
         result.Should().BeNull();
     }
@@ -124,10 +124,10 @@ public class ProductRepositoryTests
     [Fact]
     public async Task GetPagedAsync_WithPagination_ReturnsPaginatedResults()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         SeedCategory(ctx);
 
-        for (int i = 1; i <= 5; i++)
+        for (var i = 1; i <= 5; i++)
         {
             var product = new Product
             {
@@ -150,7 +150,7 @@ public class ProductRepositoryTests
             Page = 1,
             PageSize = 2
         };
-        var (items, total) = await repo.GetPagedAsync(filter);
+        (IReadOnlyList<Product>? items, var total) = await repo.GetPagedAsync(filter);
 
         items.Should().HaveCount(2);
         total.Should().Be(5);
@@ -159,7 +159,7 @@ public class ProductRepositoryTests
     [Fact]
     public async Task HasVariantsAsync_ProductWithVariants_ReturnsTrue()
     {
-        await using var ctx = CreateContext();
+        await using ApplicationDbContext ctx = CreateContext();
         SeedCategory(ctx);
         var product = new Product
         {
@@ -183,7 +183,6 @@ public class ProductRepositoryTests
         ctx.ProductVariants.Add(variant);
         await ctx.SaveChangesAsync();
 
-        var repo = new ProductRepository(ctx);
         var hasVariants = await ctx.Products.AnyAsync(p => p.Id == product.Id && p.Variants.Any());
 
         hasVariants.Should().BeTrue();

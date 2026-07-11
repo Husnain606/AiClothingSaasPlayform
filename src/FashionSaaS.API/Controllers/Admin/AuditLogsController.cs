@@ -12,7 +12,7 @@ namespace FashionSaaS.API.Controllers.Admin;
 [Authorize(Roles = "SuperAdmin")]
 [Authorize(Policy = "MfaVerified")]
 [EnableRateLimiting("SuperAdminPolicy")]
-public class AuditLogsController(AuditLogQueryService auditLogService) : ControllerBase
+internal class AuditLogsController(AuditLogQueryService auditLogService) : ControllerBase
 {
     [HttpGet(ApiUrl.AdminAuditLogs.GetAll)]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -20,7 +20,7 @@ public class AuditLogsController(AuditLogQueryService auditLogService) : Control
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetAll([FromQuery] AuditLogFilterRequest filter)
     {
-        var response = await auditLogService.GetPagedAsync(filter);
+        ResponseData<PagedResult<AuditLogResponse>> response = await auditLogService.GetPagedAsync(filter);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -30,7 +30,7 @@ public class AuditLogsController(AuditLogQueryService auditLogService) : Control
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetById(Guid id)
     {
-        var response = await auditLogService.GetByIdAsync(id);
+        ResponseData<AuditLogResponse> response = await auditLogService.GetByIdAsync(id);
         return StatusCode(response.StatusCode, response);
     }
 }

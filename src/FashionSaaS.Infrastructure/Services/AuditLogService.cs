@@ -31,10 +31,10 @@ public class AuditLogService(ApplicationDbContext context) : IAuditLogService
         await context.SaveChangesAsync();
     }
 
-    private static object MaskSensitive(object obj)
+    private static Dictionary<string, object> MaskSensitive(object obj)
     {
         var json = JsonSerializer.Serialize(obj, JsonOptions);
-        var dict = JsonSerializer.Deserialize<Dictionary<string, object>>(json) ?? new();
+        Dictionary<string, object> dict = JsonSerializer.Deserialize<Dictionary<string, object>>(json) ?? new(StringComparer.Ordinal);
 
         var sensitiveKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -42,10 +42,9 @@ public class AuditLogService(ApplicationDbContext context) : IAuditLogService
             "AccountNumber", "Iban", "TotpSecret", "Secret"
         };
 
-        foreach (var key in dict.Keys.ToList())
+        foreach (var key in dict.Keys.Where(sensitiveKeys.Contains).ToList())
         {
-            if (sensitiveKeys.Contains(key))
-                dict[key] = "***MASKED***";
+            dict[key] = "***MASKED***";
         }
 
         return dict;

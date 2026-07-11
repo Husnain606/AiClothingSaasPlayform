@@ -1,3 +1,4 @@
+using FashionSaaS.Application.Common;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Application.Mapping;
 using FashionSaaS.Application.Orders;
@@ -99,7 +100,7 @@ public class OrderServiceTests
         _variants.Setup(r => r.GetByProductAsync(product2.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<ProductVariant> { variant2 });
         _orders.Setup(r => r.CountForYearAsync(_tenantId, It.IsAny<int>(), It.IsAny<CancellationToken>())).ReturnsAsync(0);
-        var customer = Customer();
+        Customer customer = Customer();
         SetupCustomer(customer);
 
         var request = new CreateOrderRequest
@@ -113,7 +114,7 @@ public class OrderServiceTests
             ]
         };
 
-        var result = await CreateService().CreateAsync(customer.Email, customer.FirstName, customer.LastName, null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<OrderDto> result = await CreateService().CreateAsync(customer.Email, customer.FirstName, customer.LastName, null, request, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.StatusCode.Should().Be(201);
         result.IsSuccess.Should().BeTrue();
@@ -137,8 +138,8 @@ public class OrderServiceTests
         _orders.Setup(r => r.CountForYearAsync(_tenantId, It.IsAny<int>(), It.IsAny<CancellationToken>())).ReturnsAsync(0);
         SetupCustomer(Customer());
 
-        var request = ValidRequestFor(productId, quantity: 1);
-        var result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+        CreateOrderRequest request = ValidRequestFor(productId, quantity: 1);
+        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.StatusCode.Should().Be(400);
         _uow.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
@@ -152,8 +153,8 @@ public class OrderServiceTests
         _orders.Setup(r => r.CountForYearAsync(_tenantId, It.IsAny<int>(), It.IsAny<CancellationToken>())).ReturnsAsync(0);
         SetupCustomer(Customer());
 
-        var request = ValidRequestFor(product.Id, quantity: 1);
-        var result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+        CreateOrderRequest request = ValidRequestFor(product.Id, quantity: 1);
+        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.StatusCode.Should().Be(400);
         _uow.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
@@ -169,8 +170,8 @@ public class OrderServiceTests
         _orders.Setup(r => r.CountForYearAsync(_tenantId, It.IsAny<int>(), It.IsAny<CancellationToken>())).ReturnsAsync(0);
         SetupCustomer(Customer());
 
-        var request = ValidRequestFor(product.Id, quantity: 1, size: "M", color: "Red");
-        var result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+        CreateOrderRequest request = ValidRequestFor(product.Id, quantity: 1, size: "M", color: "Red");
+        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.StatusCode.Should().Be(400);
         _uow.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
@@ -187,8 +188,8 @@ public class OrderServiceTests
         _orders.Setup(r => r.CountForYearAsync(_tenantId, It.IsAny<int>(), It.IsAny<CancellationToken>())).ReturnsAsync(0);
         SetupCustomer(Customer());
 
-        var request = ValidRequestFor(product.Id, quantity: 5, size: "M", color: "Red");
-        var result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+        CreateOrderRequest request = ValidRequestFor(product.Id, quantity: 5, size: "M", color: "Red");
+        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.StatusCode.Should().Be(400);
         result.Message.Should().Contain("stock");
@@ -206,8 +207,8 @@ public class OrderServiceTests
         _orders.Setup(r => r.CountForYearAsync(_tenantId, It.IsAny<int>(), It.IsAny<CancellationToken>())).ReturnsAsync(0);
         SetupCustomer(Customer());
 
-        var request = ValidRequestFor(product.Id, quantity: 2, size: "M", color: "Red");
-        var result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+        CreateOrderRequest request = ValidRequestFor(product.Id, quantity: 2, size: "M", color: "Red");
+        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.StatusCode.Should().Be(201);
         // 2 * 15 = 30 (override), not 2 * 20 = 40 (base)
@@ -225,8 +226,8 @@ public class OrderServiceTests
         _orders.Setup(r => r.CountForYearAsync(_tenantId, It.IsAny<int>(), It.IsAny<CancellationToken>())).ReturnsAsync(0);
         SetupCustomer(Customer());
 
-        var request = ValidRequestFor(product.Id, quantity: 3);
-        var result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+        CreateOrderRequest request = ValidRequestFor(product.Id, quantity: 3);
+        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.StatusCode.Should().Be(201);
         result.Data!.Subtotal.Should().Be(60m); // 3 * 20 BasePrice, server-computed
@@ -236,9 +237,9 @@ public class OrderServiceTests
     public async Task CreateAsync_TenantUnresolved_Returns400()
     {
         _tenant.SetupGet(t => t.TenantId).Returns((Guid?)null);
-        var request = ValidRequestFor(Guid.NewGuid(), quantity: 1);
+        CreateOrderRequest request = ValidRequestFor(Guid.NewGuid(), quantity: 1);
 
-        var result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.StatusCode.Should().Be(400);
     }
@@ -258,10 +259,10 @@ public class OrderServiceTests
     [Fact]
     public async Task ConfirmAsync_FromPending_Succeeds()
     {
-        var order = OrderWithStatus(OrderStatus.Pending);
+        Order order = OrderWithStatus(OrderStatus.Pending);
         _orders.Setup(r => r.GetByIdWithItemsAsync(order.Id, It.IsAny<CancellationToken>())).ReturnsAsync(order);
 
-        var result = await CreateService().ConfirmAsync(order.Id, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<OrderDto> result = await CreateService().ConfirmAsync(order.Id, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.StatusCode.Should().Be(200);
         order.Status.Should().Be(OrderStatus.Confirmed);
@@ -271,10 +272,10 @@ public class OrderServiceTests
     [Fact]
     public async Task ConfirmAsync_FromShipped_Returns400()
     {
-        var order = OrderWithStatus(OrderStatus.Shipped);
+        Order order = OrderWithStatus(OrderStatus.Shipped);
         _orders.Setup(r => r.GetByIdWithItemsAsync(order.Id, It.IsAny<CancellationToken>())).ReturnsAsync(order);
 
-        var result = await CreateService().ConfirmAsync(order.Id, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<OrderDto> result = await CreateService().ConfirmAsync(order.Id, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.StatusCode.Should().Be(400);
         result.Message.Should().Contain("Cannot confirm an order in status Shipped");
@@ -287,7 +288,7 @@ public class OrderServiceTests
         var id = Guid.NewGuid();
         _orders.Setup(r => r.GetByIdWithItemsAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync((Order?)null);
 
-        var result = await CreateService().ConfirmAsync(id, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<OrderDto> result = await CreateService().ConfirmAsync(id, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.StatusCode.Should().Be(404);
     }
@@ -295,10 +296,10 @@ public class OrderServiceTests
     [Fact]
     public async Task ShipAsync_SetsTrackingNumber()
     {
-        var order = OrderWithStatus(OrderStatus.Confirmed);
+        Order order = OrderWithStatus(OrderStatus.Confirmed);
         _orders.Setup(r => r.GetByIdWithItemsAsync(order.Id, It.IsAny<CancellationToken>())).ReturnsAsync(order);
 
-        var result = await CreateService().ShipAsync(order.Id, "TRACK123", Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<OrderDto> result = await CreateService().ShipAsync(order.Id, "TRACK123", Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.StatusCode.Should().Be(200);
         order.Status.Should().Be(OrderStatus.Shipped);
@@ -308,10 +309,10 @@ public class OrderServiceTests
     [Fact]
     public async Task ShipAsync_FromPending_Returns400()
     {
-        var order = OrderWithStatus(OrderStatus.Pending);
+        Order order = OrderWithStatus(OrderStatus.Pending);
         _orders.Setup(r => r.GetByIdWithItemsAsync(order.Id, It.IsAny<CancellationToken>())).ReturnsAsync(order);
 
-        var result = await CreateService().ShipAsync(order.Id, "TRACK123", Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<OrderDto> result = await CreateService().ShipAsync(order.Id, "TRACK123", Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.StatusCode.Should().Be(400);
         result.Message.Should().Contain("Cannot ship an order in status Pending");
@@ -320,10 +321,10 @@ public class OrderServiceTests
     [Fact]
     public async Task DeliverAsync_FromShipped_Succeeds()
     {
-        var order = OrderWithStatus(OrderStatus.Shipped);
+        Order order = OrderWithStatus(OrderStatus.Shipped);
         _orders.Setup(r => r.GetByIdWithItemsAsync(order.Id, It.IsAny<CancellationToken>())).ReturnsAsync(order);
 
-        var result = await CreateService().DeliverAsync(order.Id, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<OrderDto> result = await CreateService().DeliverAsync(order.Id, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.StatusCode.Should().Be(200);
         order.Status.Should().Be(OrderStatus.Delivered);
@@ -332,10 +333,10 @@ public class OrderServiceTests
     [Fact]
     public async Task DeliverAsync_FromPending_Returns400()
     {
-        var order = OrderWithStatus(OrderStatus.Pending);
+        Order order = OrderWithStatus(OrderStatus.Pending);
         _orders.Setup(r => r.GetByIdWithItemsAsync(order.Id, It.IsAny<CancellationToken>())).ReturnsAsync(order);
 
-        var result = await CreateService().DeliverAsync(order.Id, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<OrderDto> result = await CreateService().DeliverAsync(order.Id, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.StatusCode.Should().Be(400);
         result.Message.Should().Contain("Cannot deliver an order in status Pending");
@@ -347,12 +348,12 @@ public class OrderServiceTests
     public async Task CancelAsync_FromPending_RestoresStock()
     {
         var variant = new ProductVariant { Id = Guid.NewGuid(), StockQuantity = 3 };
-        var order = OrderWithStatus(OrderStatus.Pending);
+        Order order = OrderWithStatus(OrderStatus.Pending);
         order.Items.Add(new OrderItem { OrderId = order.Id, ProductId = Guid.NewGuid(), ProductVariantId = variant.Id, Quantity = 2, UnitPrice = 20m, ProductName = "Tee" });
         _orders.Setup(r => r.GetByIdWithItemsAsync(order.Id, It.IsAny<CancellationToken>())).ReturnsAsync(order);
         _variants.Setup(r => r.GetByIdAsync(variant.Id)).ReturnsAsync(variant);
 
-        var result = await CreateService().CancelAsync(order.Id, "Customer changed mind", false, null, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<OrderDto> result = await CreateService().CancelAsync(order.Id, "Customer changed mind", false, null, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.StatusCode.Should().Be(200);
         order.Status.Should().Be(OrderStatus.Cancelled);
@@ -364,10 +365,10 @@ public class OrderServiceTests
     [Fact]
     public async Task CancelAsync_FromShipped_Returns400()
     {
-        var order = OrderWithStatus(OrderStatus.Shipped);
+        Order order = OrderWithStatus(OrderStatus.Shipped);
         _orders.Setup(r => r.GetByIdWithItemsAsync(order.Id, It.IsAny<CancellationToken>())).ReturnsAsync(order);
 
-        var result = await CreateService().CancelAsync(order.Id, "reason", false, null, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<OrderDto> result = await CreateService().CancelAsync(order.Id, "reason", false, null, Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.StatusCode.Should().Be(400);
         _uow.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
@@ -376,10 +377,10 @@ public class OrderServiceTests
     [Fact]
     public async Task CancelAsync_AsCustomer_WrongEmail_Returns404()
     {
-        var order = OrderWithStatus(OrderStatus.Pending, shippingEmail: "owner@example.com");
+        Order order = OrderWithStatus(OrderStatus.Pending, shippingEmail: "owner@example.com");
         _orders.Setup(r => r.GetByIdWithItemsAsync(order.Id, It.IsAny<CancellationToken>())).ReturnsAsync(order);
 
-        var result = await CreateService().CancelAsync(order.Id, "reason", true, "someone-else@example.com", Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<OrderDto> result = await CreateService().CancelAsync(order.Id, "reason", true, "someone-else@example.com", Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.StatusCode.Should().Be(404);
         _uow.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
@@ -388,10 +389,10 @@ public class OrderServiceTests
     [Fact]
     public async Task CancelAsync_AsCustomer_CorrectEmail_Succeeds()
     {
-        var order = OrderWithStatus(OrderStatus.Pending, shippingEmail: "owner@example.com");
+        Order order = OrderWithStatus(OrderStatus.Pending, shippingEmail: "owner@example.com");
         _orders.Setup(r => r.GetByIdWithItemsAsync(order.Id, It.IsAny<CancellationToken>())).ReturnsAsync(order);
 
-        var result = await CreateService().CancelAsync(order.Id, "reason", true, "OWNER@example.com", Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<OrderDto> result = await CreateService().CancelAsync(order.Id, "reason", true, "OWNER@example.com", Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.StatusCode.Should().Be(200);
         order.Status.Should().Be(OrderStatus.Cancelled);
@@ -402,10 +403,10 @@ public class OrderServiceTests
     [Fact]
     public async Task GetByIdAsync_Found_ReturnsOrder()
     {
-        var order = OrderWithStatus(OrderStatus.Pending);
+        Order order = OrderWithStatus(OrderStatus.Pending);
         _orders.Setup(r => r.GetByIdWithItemsAsync(order.Id, It.IsAny<CancellationToken>())).ReturnsAsync(order);
 
-        var result = await CreateService().GetByIdAsync(order.Id);
+        ResponseData<OrderDto> result = await CreateService().GetByIdAsync(order.Id);
 
         result.StatusCode.Should().Be(200);
         result.Data!.Id.Should().Be(order.Id);
@@ -417,7 +418,7 @@ public class OrderServiceTests
         var id = Guid.NewGuid();
         _orders.Setup(r => r.GetByIdWithItemsAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync((Order?)null);
 
-        var result = await CreateService().GetByIdAsync(id);
+        ResponseData<OrderDto> result = await CreateService().GetByIdAsync(id);
 
         result.StatusCode.Should().Be(404);
     }
@@ -425,10 +426,10 @@ public class OrderServiceTests
     [Fact]
     public async Task GetByIdForCustomerAsync_NotOwner_Returns404()
     {
-        var order = OrderWithStatus(OrderStatus.Pending, shippingEmail: "owner@example.com");
+        Order order = OrderWithStatus(OrderStatus.Pending, shippingEmail: "owner@example.com");
         _orders.Setup(r => r.GetByIdWithItemsAsync(order.Id, It.IsAny<CancellationToken>())).ReturnsAsync(order);
 
-        var result = await CreateService().GetByIdForCustomerAsync(order.Id, "stranger@example.com");
+        ResponseData<OrderDto> result = await CreateService().GetByIdForCustomerAsync(order.Id, "stranger@example.com");
 
         result.StatusCode.Should().Be(404);
     }
@@ -436,10 +437,10 @@ public class OrderServiceTests
     [Fact]
     public async Task GetByIdForCustomerAsync_Owner_ReturnsOrder()
     {
-        var order = OrderWithStatus(OrderStatus.Pending, shippingEmail: "owner@example.com");
+        Order order = OrderWithStatus(OrderStatus.Pending, shippingEmail: "owner@example.com");
         _orders.Setup(r => r.GetByIdWithItemsAsync(order.Id, It.IsAny<CancellationToken>())).ReturnsAsync(order);
 
-        var result = await CreateService().GetByIdForCustomerAsync(order.Id, "owner@example.com");
+        ResponseData<OrderDto> result = await CreateService().GetByIdForCustomerAsync(order.Id, "owner@example.com");
 
         result.StatusCode.Should().Be(200);
     }
@@ -448,11 +449,11 @@ public class OrderServiceTests
     public async Task GetAllAsync_ReturnsPagedOrders()
     {
         var filter = new OrderFilter { Page = 1, PageSize = 20 };
-        var order = OrderWithStatus(OrderStatus.Pending);
+        Order order = OrderWithStatus(OrderStatus.Pending);
         _orders.Setup(r => r.GetPagedAsync(It.Is<OrderFilter>(f => f.TenantId == _tenantId), It.IsAny<CancellationToken>()))
             .ReturnsAsync((new List<Order> { order }.AsReadOnly() as IReadOnlyList<Order>, 1));
 
-        var result = await CreateService().GetAllAsync(filter);
+        ResponseData<PagedResult<OrderDto>> result = await CreateService().GetAllAsync(filter);
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.TotalCount.Should().Be(1);
@@ -463,11 +464,11 @@ public class OrderServiceTests
     {
         var foreignTenantId = Guid.NewGuid();
         var filter = new OrderFilter { TenantId = foreignTenantId, Page = 1, PageSize = 20 };
-        var order = OrderWithStatus(OrderStatus.Pending);
+        Order order = OrderWithStatus(OrderStatus.Pending);
         _orders.Setup(r => r.GetPagedAsync(It.Is<OrderFilter>(f => f.TenantId == _tenantId), It.IsAny<CancellationToken>()))
             .ReturnsAsync((new List<Order> { order }.AsReadOnly() as IReadOnlyList<Order>, 1));
 
-        var result = await CreateService().GetAllAsync(filter);
+        ResponseData<PagedResult<OrderDto>> result = await CreateService().GetAllAsync(filter);
 
         result.IsSuccess.Should().BeTrue();
         filter.TenantId.Should().Be(_tenantId);
@@ -477,11 +478,11 @@ public class OrderServiceTests
     [Fact]
     public async Task GetForCustomerAsync_FiltersByEmail()
     {
-        var order = OrderWithStatus(OrderStatus.Pending, shippingEmail: "customer@example.com");
+        Order order = OrderWithStatus(OrderStatus.Pending, shippingEmail: "customer@example.com");
         _orders.Setup(r => r.GetPagedAsync(It.IsAny<OrderFilter>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((new List<Order> { order }.AsReadOnly() as IReadOnlyList<Order>, 1));
 
-        var result = await CreateService().GetForCustomerAsync("customer@example.com", 1, 20);
+        ResponseData<PagedResult<OrderDto>> result = await CreateService().GetForCustomerAsync("customer@example.com", 1, 20);
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.Items.Should().HaveCount(1);
@@ -493,13 +494,13 @@ public class OrderServiceTests
         // Repository is the source of truth for filtering/pagination now — the service must
         // forward CustomerEmail in the filter and trust the repo's TotalCount verbatim,
         // rather than re-filtering/re-counting in memory.
-        var order = OrderWithStatus(OrderStatus.Pending, shippingEmail: "customer@example.com");
+        Order order = OrderWithStatus(OrderStatus.Pending, shippingEmail: "customer@example.com");
         _orders.Setup(r => r.GetPagedAsync(
                 It.Is<OrderFilter>(f => f.TenantId == _tenantId && f.CustomerEmail == "customer@example.com" && f.Page == 2 && f.PageSize == 20),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync((new List<Order> { order }.AsReadOnly() as IReadOnlyList<Order>, 25));
 
-        var result = await CreateService().GetForCustomerAsync("customer@example.com", 2, 20);
+        ResponseData<PagedResult<OrderDto>> result = await CreateService().GetForCustomerAsync("customer@example.com", 2, 20);
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.TotalCount.Should().Be(25);

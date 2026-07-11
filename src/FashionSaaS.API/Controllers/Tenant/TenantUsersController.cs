@@ -14,7 +14,7 @@ namespace FashionSaaS.API.Controllers.Tenant;
 [ApiController]
 [Authorize(Roles = "AdminOwner")]
 [EnableRateLimiting("AuthenticatedPolicy")]
-public class TenantUsersController(UserService userService, ICurrentTenantService currentTenant) : ControllerBase
+internal class TenantUsersController(UserService userService, ICurrentTenantService currentTenant) : ControllerBase
 {
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     private string Ip => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
@@ -26,7 +26,7 @@ public class TenantUsersController(UserService userService, ICurrentTenantServic
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetAll([FromQuery] UserFilterRequest filter)
     {
-        var response = await userService.GetByTenantAsync(currentTenant.TenantId!.Value, filter);
+        ResponseData<PagedResult<UserResponse>> response = await userService.GetByTenantAsync(currentTenant.TenantId!.Value, filter);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -39,8 +39,9 @@ public class TenantUsersController(UserService userService, ICurrentTenantServic
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetById(Guid id)
     {
-        var response = await userService.GetByIdAsync(id);
-        if (!response.IsSuccess) return StatusCode(response.StatusCode, response);
+        ResponseData<UserResponse> response = await userService.GetByIdAsync(id);
+        if (!response.IsSuccess)
+            return StatusCode(response.StatusCode, response);
 
         // Enforce tenant scope: a tenant admin may only read users in their own tenant.
         if (response.Data?.TenantId != currentTenant.TenantId)
@@ -57,7 +58,7 @@ public class TenantUsersController(UserService userService, ICurrentTenantServic
     {
         // Force the user into the current tenant — caller cannot target another tenant.
         request.TenantId = currentTenant.TenantId;
-        var response = await userService.CreateAsync(request, UserId, Ip, Ua);
+        ResponseData<UserResponse> response = await userService.CreateAsync(request, UserId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -68,12 +69,13 @@ public class TenantUsersController(UserService userService, ICurrentTenantServic
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateUserRequest request)
     {
         // Verify the target user belongs to this tenant before allowing update.
-        var check = await userService.GetByIdAsync(id);
-        if (!check.IsSuccess) return StatusCode(check.StatusCode, check);
+        ResponseData<UserResponse> check = await userService.GetByIdAsync(id);
+        if (!check.IsSuccess)
+            return StatusCode(check.StatusCode, check);
         if (check.Data?.TenantId != currentTenant.TenantId)
             return StatusCode(403, ResponseData<string>.Failure("Forbidden: user does not belong to your tenant.", 403));
 
-        var response = await userService.UpdateAsync(id, request, UserId, Ip, Ua);
+        ResponseData<UserResponse> response = await userService.UpdateAsync(id, request, UserId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -84,12 +86,13 @@ public class TenantUsersController(UserService userService, ICurrentTenantServic
     public async Task<IActionResult> AssignRole(Guid id, [FromBody] RoleType role)
     {
         // Verify the target user belongs to this tenant before assigning a role.
-        var check = await userService.GetByIdAsync(id);
-        if (!check.IsSuccess) return StatusCode(check.StatusCode, check);
+        ResponseData<UserResponse> check = await userService.GetByIdAsync(id);
+        if (!check.IsSuccess)
+            return StatusCode(check.StatusCode, check);
         if (check.Data?.TenantId != currentTenant.TenantId)
             return StatusCode(403, ResponseData<string>.Failure("Forbidden: user does not belong to your tenant.", 403));
 
-        var response = await userService.AssignRoleAsync(id, role, UserId, Ip, Ua);
+        ResponseData<bool> response = await userService.AssignRoleAsync(id, role, UserId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 
@@ -100,12 +103,13 @@ public class TenantUsersController(UserService userService, ICurrentTenantServic
     public async Task<IActionResult> Delete(Guid id)
     {
         // Verify the target user belongs to this tenant before deletion.
-        var check = await userService.GetByIdAsync(id);
-        if (!check.IsSuccess) return StatusCode(check.StatusCode, check);
+        ResponseData<UserResponse> check = await userService.GetByIdAsync(id);
+        if (!check.IsSuccess)
+            return StatusCode(check.StatusCode, check);
         if (check.Data?.TenantId != currentTenant.TenantId)
             return StatusCode(403, ResponseData<string>.Failure("Forbidden: user does not belong to your tenant.", 403));
 
-        var response = await userService.DeleteAsync(id, UserId, Ip, Ua);
+        ResponseData<bool> response = await userService.DeleteAsync(id, UserId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 }
