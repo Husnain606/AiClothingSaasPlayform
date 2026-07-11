@@ -1,0 +1,16 @@
+# Layers on top of the repo-root .editorconfig (root = true there). This service tree
+# sits outside apps/api, so the root's [tests/**.cs] section (glob-relative to the repo
+# root) doesn't reach services/fashionsaas-tryon/tests/**.cs — mirror the same two
+# test-naming overrides here, scoped to this tree, per the "test overrides" mechanism in
+# docs/projectStandards/build-configuration.md.
+
+[tests/**.cs]
+
+# Test methods don't carry the Async suffix even when async — the name describes
+# the scenario under test, not the calling convention.
+dotnet_naming_rule.async_methods_end_with_async.severity = none
+
+# CA1707: xUnit test names use underscores as word separators between scenario/expectation
+# (e.g. NewOrder_DefaultsToPending) — a standard, widely-used test-naming convention, not
+# an accidental style violation. — 2026-07-11
+dotnet_diagnostic.CA1707.severity = suggestion

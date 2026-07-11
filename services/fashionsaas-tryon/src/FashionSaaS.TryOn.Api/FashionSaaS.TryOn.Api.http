@@ -1,0 +1,6 @@
+@FashionSaaS.TryOn.Api_HostAddress = http://localhost:5231
+
+GET {{FashionSaaS.TryOn.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
