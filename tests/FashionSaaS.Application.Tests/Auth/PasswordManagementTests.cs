@@ -23,11 +23,13 @@ public class PasswordManagementTests
     private readonly Mock<IFieldEncryptionService> _fieldEncryption = new();
     private readonly Mock<ISuperAdminIpGuardService> _ipGuardService = new();
 
+    private readonly Mock<ISubscriptionRepository> _subscriptionRepo = new();
+
     private AuthService CreateService() => new(
         _userRepo.Object, _refreshRepo.Object, _loginAttemptRepo.Object,
         _passwordHasher.Object, _jwtService.Object, _uow.Object,
         _auditLog.Object, _emailService.Object, _fieldEncryption.Object,
-        _ipGuardService.Object);
+        _ipGuardService.Object, _subscriptionRepo.Object);
 
     // ------------------------------------------------------------------
     // ForgotPassword

@@ -24,11 +24,13 @@ public class AuthServiceTests
     private readonly Mock<ITotpService> _totpService = new();
     private readonly Mock<ISuperAdminIpGuardService> _ipGuardService = new();
 
+    private readonly Mock<ISubscriptionRepository> _subscriptionRepo = new();
+
     private AuthService CreateService() => new(
         _userRepo.Object, _refreshRepo.Object, _loginAttemptRepo.Object,
         _passwordHasher.Object, _jwtService.Object, _uow.Object,
         _auditLog.Object, _emailService.Object, _fieldEncryption.Object,
-        _ipGuardService.Object);
+        _ipGuardService.Object, _subscriptionRepo.Object);
 
     [Fact]
     public async Task LoginAsync_ValidCredentials_NonSuperAdmin_ReturnsTokens()
@@ -54,12 +56,12 @@ public class AuthServiceTests
         _passwordHasher.Setup(h => h.Verify("Password@1", "hash")).Returns(true);
         _loginAttemptRepo.Setup(r => r.GetRecentFailureCountAsync("owner@brand.com", 15)).ReturnsAsync(0);
 
-        // Correct 4-arg signature: (user, roles, tenantSlug, mfaVerified)
         _jwtService.Setup(j => j.GenerateAccessToken(
             user,
             It.IsAny<IEnumerable<string>>(),
             It.IsAny<string?>(),
-            false)).Returns("access_token");
+            false,
+            It.IsAny<int>())).Returns("access_token");
         _jwtService.Setup(j => j.GenerateRefreshToken()).Returns("raw_refresh");
         _passwordHasher.Setup(h => h.Hash("raw_refresh")).Returns("hashed_refresh");
         _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
@@ -72,6 +74,89 @@ public class AuthServiceTests
         result.IsSuccess.Should().BeTrue();
         result.Data!.AccessToken.Should().Be("access_token");
         result.Data.MfaRequired.Should().BeFalse();
+    }
+
+
+    [Fact]
+    public async Task LoginAsync_ReadsAiUsageLimitFromActiveSubscription_PassesToJwtService()
+    {
+        var tenantId = Guid.NewGuid();
+        var tenant = new Tenant { Id = tenantId, Slug = "brand-slug" };
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            Email = "owner@brand.com",
+            PasswordHash = "hash",
+            IsActive = true,
+            TenantId = tenantId,
+            Tenant = tenant,
+            UserRoles = new List<UserRole>
+            {
+                new() { Role = new Role { Name = RoleType.AdminOwner, Scope = RoleScope.Tenant } }
+            }
+        };
+        var plan = new SubscriptionPlan { AiUsageLimit = 250 };
+        var subscription = new TenantSubscription { TenantId = tenantId, Plan = plan };
+
+        _userRepo.Setup(r => r.GetByEmailAsync("owner@brand.com")).ReturnsAsync(user);
+        _userRepo.Setup(r => r.GetByIdWithRolesAsync(user.Id)).ReturnsAsync(user);
+        _passwordHasher.Setup(h => h.Verify("Password@1", "hash")).Returns(true);
+        _loginAttemptRepo.Setup(r => r.GetRecentFailureCountAsync("owner@brand.com", 15)).ReturnsAsync(0);
+        _subscriptionRepo.Setup(r => r.GetActiveByTenantIdAsync(tenantId)).ReturnsAsync(subscription);
+        _jwtService.Setup(j => j.GenerateAccessToken(
+            user, It.IsAny<IEnumerable<string>>(), It.IsAny<string?>(), false, 250)).Returns("access_token");
+        _jwtService.Setup(j => j.GenerateRefreshToken()).Returns("raw_refresh");
+        _passwordHasher.Setup(h => h.Hash("raw_refresh")).Returns("hashed_refresh");
+        _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
+
+        AuthService service = CreateService();
+        ResponseData<LoginResponse> result = await service.LoginAsync(
+            new LoginRequest { Email = "owner@brand.com", Password = "Password@1" },
+            "127.0.0.1", "Mozilla");
+
+        result.IsSuccess.Should().BeTrue();
+        _jwtService.Verify(j => j.GenerateAccessToken(
+            user, It.IsAny<IEnumerable<string>>(), It.IsAny<string?>(), false, 250), Times.Once);
+    }
+
+    [Fact]
+    public async Task LoginAsync_NoActiveSubscription_PassesZeroAiUsageLimit()
+    {
+        var tenantId = Guid.NewGuid();
+        var tenant = new Tenant { Id = tenantId, Slug = "brand-slug" };
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            Email = "owner@brand.com",
+            PasswordHash = "hash",
+            IsActive = true,
+            TenantId = tenantId,
+            Tenant = tenant,
+            UserRoles = new List<UserRole>
+            {
+                new() { Role = new Role { Name = RoleType.AdminOwner, Scope = RoleScope.Tenant } }
+            }
+        };
+
+        _userRepo.Setup(r => r.GetByEmailAsync("owner@brand.com")).ReturnsAsync(user);
+        _userRepo.Setup(r => r.GetByIdWithRolesAsync(user.Id)).ReturnsAsync(user);
+        _passwordHasher.Setup(h => h.Verify("Password@1", "hash")).Returns(true);
+        _loginAttemptRepo.Setup(r => r.GetRecentFailureCountAsync("owner@brand.com", 15)).ReturnsAsync(0);
+        _subscriptionRepo.Setup(r => r.GetActiveByTenantIdAsync(tenantId)).ReturnsAsync((TenantSubscription?)null);
+        _jwtService.Setup(j => j.GenerateAccessToken(
+            user, It.IsAny<IEnumerable<string>>(), It.IsAny<string?>(), false, 0)).Returns("access_token");
+        _jwtService.Setup(j => j.GenerateRefreshToken()).Returns("raw_refresh");
+        _passwordHasher.Setup(h => h.Hash("raw_refresh")).Returns("hashed_refresh");
+        _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
+
+        AuthService service = CreateService();
+        ResponseData<LoginResponse> result = await service.LoginAsync(
+            new LoginRequest { Email = "owner@brand.com", Password = "Password@1" },
+            "127.0.0.1", "Mozilla");
+
+        result.IsSuccess.Should().BeTrue();
+        _jwtService.Verify(j => j.GenerateAccessToken(
+            user, It.IsAny<IEnumerable<string>>(), It.IsAny<string?>(), false, 0), Times.Once);
     }
 
     [Fact]
@@ -149,7 +234,7 @@ public class AuthServiceTests
         // No JWT should be issued at this step
         result.Data.AccessToken.Should().BeNull();
         _jwtService.Verify(j => j.GenerateAccessToken(
-            It.IsAny<User>(), It.IsAny<IEnumerable<string>>(), It.IsAny<string?>(), It.IsAny<bool>()),
+            It.IsAny<User>(), It.IsAny<IEnumerable<string>>(), It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<int>()),
             Times.Never);
         _jwtService.Verify(j => j.GenerateMfaChallengeToken(user.Id), Times.Once);
     }

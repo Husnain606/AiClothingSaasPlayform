@@ -14,7 +14,7 @@ public class JwtService(IOptions<JwtSettings> jwtOptions) : IJwtService
 {
     private readonly JwtSettings _jwt = jwtOptions.Value;
 
-    public string GenerateAccessToken(User user, IEnumerable<string> roles, string? tenantSlug = null, bool mfaVerified = false)
+    public string GenerateAccessToken(User user, IEnumerable<string> roles, string? tenantSlug = null, bool mfaVerified = false, int aiUsageLimit = 0)
     {
         var secret = _jwt.Secret is { Length: > 0 } s ? s
             : throw new InvalidOperationException("JwtSettings:Secret not set.");
@@ -37,8 +37,9 @@ public class JwtService(IOptions<JwtSettings> jwtOptions) : IJwtService
             // by the "MfaVerified" authorization policy (RequireClaim("mfa_verified", "true"))
             // — flipping to uppercase would break that exact-match check.
 #pragma warning disable CA1308
-            new("mfa_verified", mfaVerified.ToString().ToLowerInvariant())
+            new("mfa_verified", mfaVerified.ToString().ToLowerInvariant()),
 #pragma warning restore CA1308
+            new("ai_usage_limit", aiUsageLimit.ToString(System.Globalization.CultureInfo.InvariantCulture))
         };
 
         if (!string.IsNullOrEmpty(tenantSlug))

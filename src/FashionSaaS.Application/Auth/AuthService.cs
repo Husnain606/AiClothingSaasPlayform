@@ -20,7 +20,8 @@ public class AuthService(
     IAuditLogService auditLogService,
     IEmailService emailService,
     IFieldEncryptionService fieldEncryption,
-    ISuperAdminIpGuardService ipGuardService)
+    ISuperAdminIpGuardService ipGuardService,
+    ISubscriptionRepository subscriptionRepository)
 {
     // No nested/unbounded-then-overlapping quantifiers (each lookahead is independent and
     // anchored), so catastrophic backtracking isn't reachable here either — the timeout is
@@ -320,8 +321,17 @@ public class AuthService(
         // Materialize once — roles is used for both JWT generation and SuperAdmin check below.
         IReadOnlyList<string> roleList = roles as IReadOnlyList<string> ?? roles.ToList();
 
+        // Tenant-less users (platform SuperAdmin) get 0 — there is no subscription to read a
+        // limit from, and SuperAdmin never calls the TryOn service as a tenant customer.
+        var aiUsageLimit = 0;
+        if (user.TenantId is { } tenantId)
+        {
+            TenantSubscription? subscription = await subscriptionRepository.GetActiveByTenantIdAsync(tenantId);
+            aiUsageLimit = subscription?.Plan.AiUsageLimit ?? 0;
+        }
+
         // Pass tenantSlug so the JWT carries the tenant_slug claim (security requirement)
-        var accessToken = jwtService.GenerateAccessToken(user, roleList, tenantSlug, mfaVerified);
+        var accessToken = jwtService.GenerateAccessToken(user, roleList, tenantSlug, mfaVerified, aiUsageLimit);
         var rawRefreshToken = jwtService.GenerateRefreshToken();
         var hashedToken = passwordHasher.Hash(rawRefreshToken);
 

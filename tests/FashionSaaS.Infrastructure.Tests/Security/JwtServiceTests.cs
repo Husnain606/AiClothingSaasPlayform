@@ -118,4 +118,22 @@ public class JwtServiceTests
         ClaimsPrincipal? principal = _service.GetPrincipalFromExpiredToken(token);
         principal.Should().NotBeNull();
     }
+
+
+    [Fact]
+    public void GenerateAccessToken_IncludesAiUsageLimitClaim()
+    {
+        var user = new FashionSaaS.Domain.Entities.User
+        {
+            Id = Guid.NewGuid(),
+            Email = "owner@brand.com",
+            TenantId = Guid.NewGuid()
+        };
+        var token = _service.GenerateAccessToken(user, new List<string> { "AdminOwner" }, aiUsageLimit: 500);
+
+        System.IdentityModel.Tokens.Jwt.JwtSecurityToken jwt =
+            new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler().ReadJwtToken(token);
+
+        jwt.Claims.Should().ContainSingle(c => c.Type == "ai_usage_limit" && c.Value == "500");
+    }
 }
