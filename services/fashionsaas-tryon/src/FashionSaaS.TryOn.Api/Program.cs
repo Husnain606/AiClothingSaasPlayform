@@ -3,6 +3,8 @@ using FashionSaaS.TryOn.Infrastructure;
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddTryOnInfrastructure(builder.Configuration);
+builder.Services.AddTryOnAuthentication(builder.Configuration);
+builder.Services.AddAuthorization();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -20,6 +22,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseAuthentication();
+app.UseAuthorization();
 app.MapControllers();
 
 await app.RunAsync();
