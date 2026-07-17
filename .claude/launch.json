@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "storefront",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "fashionsaas-storefront", "start"],
+      "port": 4200
+    },
+    {
+      "name": "api",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "src/FashionSaaS.API/FashionSaaS.API.csproj"],
+      "port": 5129
+    },
+    {
+      "name": "tryon-api",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "services/fashionsaas-tryon/src/FashionSaaS.TryOn.Api/FashionSaaS.TryOn.Api.csproj"],
+      "port": 5231
+    }
+  ]
+}
