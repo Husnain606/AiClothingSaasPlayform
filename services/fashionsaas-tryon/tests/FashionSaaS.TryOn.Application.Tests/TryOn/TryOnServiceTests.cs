@@ -1,6 +1,7 @@
 using System.Net;
 using FashionSaaS.TryOn.Application.Gemini;
 using FashionSaaS.TryOn.Application.Messaging;
+using FashionSaaS.TryOn.Application.Quota;
 using FashionSaaS.TryOn.Application.TryOn;
 using FashionSaaS.TryOn.Domain;
 using FashionSaaS.TryOn.Infrastructure.Persistence;
@@ -18,6 +19,7 @@ public class TryOnServiceTests
     private readonly Mock<ICurrentTryOnContext> _context = new();
     private readonly Mock<IGeminiImageClient> _gemini = new();
     private readonly Mock<ITryOnEventPublisher> _eventPublisher = new();
+    private readonly Mock<IUsageQuotaService> _usageQuota = new();
     private readonly Guid _tenantId = Guid.NewGuid();
 
     private static TryOnDbContext CreateDbContext() =>
@@ -28,6 +30,15 @@ public class TryOnServiceTests
         _context.Setup(c => c.TenantId).Returns(_tenantId);
         _context.Setup(c => c.CustomerId).Returns(Guid.NewGuid());
         _context.Setup(c => c.AiUsageLimit).Returns(aiUsageLimit);
+
+        // The quota-exceeded test (RenderAsync_QuotaExceeded_ReturnsFailureWithoutCallingGemini) still
+        // seeds a Completed TryOnRequest row directly into dbContext and asserts on it — but the SERVICE
+        // no longer counts it itself; it asks IUsageQuotaService. So that test must also stub the mock
+        // to return a used-count reflecting the seeded row (1), keeping the test's existing assertions
+        // (429, no Gemini call, Failed row persisted) valid. Evaluated lazily (at invocation time,
+        // not CreateService time) because some tests seed their Completed row after CreateService.
+        _usageQuota.Setup(q => q.GetUsedThisMonthAsync(_tenantId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => dbContext.TryOnRequests.Count(t => t.TenantId == _tenantId && t.Status == TryOnStatus.Completed));
 
         // CA2000 suppressed: the handler/HttpClient are test doubles handed to the mocked
         // IHttpClientFactory; TryOnService disposes the HttpClient itself (via its own `using`
@@ -40,7 +51,7 @@ public class TryOnServiceTests
 
         IOptions<GeminiSettings> options = Options.Create(new GeminiSettings { ApiKey = "test-key", Model = "test-model" });
 
-        return new TryOnService(dbContext, _context.Object, _gemini.Object, factory.Object, options, _eventPublisher.Object);
+        return new TryOnService(dbContext, _context.Object, _gemini.Object, factory.Object, options, _eventPublisher.Object, _usageQuota.Object);
     }
 
     private static FormFile CreateFakePhoto()

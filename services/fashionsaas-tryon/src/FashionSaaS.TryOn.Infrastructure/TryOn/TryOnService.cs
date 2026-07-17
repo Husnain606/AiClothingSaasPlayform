@@ -1,10 +1,10 @@
 using FashionSaaS.TryOn.Application;
 using FashionSaaS.TryOn.Application.Gemini;
 using FashionSaaS.TryOn.Application.Messaging;
+using FashionSaaS.TryOn.Application.Quota;
 using FashionSaaS.TryOn.Application.TryOn;
 using FashionSaaS.TryOn.Domain;
 using FashionSaaS.TryOn.Infrastructure.Persistence;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 // This type lives in Infrastructure (not Application, as an earlier plan draft suggested) because
@@ -22,7 +22,8 @@ public class TryOnService(
     IGeminiImageClient geminiClient,
     IHttpClientFactory httpClientFactory,
     IOptions<GeminiSettings> geminiOptions,
-    ITryOnEventPublisher eventPublisher)
+    ITryOnEventPublisher eventPublisher,
+    IUsageQuotaService usageQuotaService)
 {
     private const string ResultMimeType = "image/png";
 
@@ -35,12 +36,8 @@ public class TryOnService(
     public async Task<(bool IsSuccess, int StatusCode, string Message, TryOnResultResponse? Data)> RenderAsync(
         TryOnRequestForm form, CancellationToken cancellationToken)
     {
-        DateTime startOfMonth = new(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, DateTimeKind.Utc);
-        var usedThisMonth = await dbContext.TryOnRequests
-            .Where(t => t.TenantId == currentContext.TenantId
-                        && t.Status == TryOnStatus.Completed
-                        && t.CreatedAt >= startOfMonth)
-            .CountAsync(cancellationToken).ConfigureAwait(false);
+        var usedThisMonth = await usageQuotaService.GetUsedThisMonthAsync(currentContext.TenantId, cancellationToken)
+            .ConfigureAwait(false);
 
         if (usedThisMonth >= currentContext.AiUsageLimit)
         {

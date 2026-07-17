@@ -2,8 +2,10 @@ using System.Text;
 using Azure.Messaging.ServiceBus;
 using FashionSaaS.TryOn.Application;
 using FashionSaaS.TryOn.Application.Messaging;
+using FashionSaaS.TryOn.Application.Quota;
 using FashionSaaS.TryOn.Infrastructure.Messaging;
 using FashionSaaS.TryOn.Infrastructure.Persistence;
+using FashionSaaS.TryOn.Infrastructure.Quota;
 using FashionSaaS.TryOn.Infrastructure.Security;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -25,6 +27,7 @@ public static class DependencyInjection
                 b => b.MigrationsAssembly(typeof(TryOnDbContext).Assembly.FullName)));
 
         services.AddScoped<TryOn.TryOnService>();
+        services.AddScoped<IUsageQuotaService, UsageQuotaService>();
 
         services.AddOptions<ServiceBusSettings>()
             .Bind(configuration.GetSection(ServiceBusSettings.SectionName))

@@ -23,6 +23,13 @@ builder.Services.AddRefitClient<IGeminiImageClient>()
         client.BaseAddress = new Uri(settings.BaseUrl);
     });
 
+builder.Services.AddRefitClient<IGeminiTextClient>()
+    .ConfigureHttpClient((sp, client) =>
+    {
+        GeminiSettings settings = sp.GetRequiredService<IOptions<GeminiSettings>>().Value;
+        client.BaseAddress = new Uri(settings.BaseUrl);
+    });
+
 builder.Services.AddHttpClient(); // plain named client for the garment-image GET (TryOnService's IHttpClientFactory.CreateClient())
 
 builder.Services.AddFluentValidationAutoValidation();
