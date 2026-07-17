@@ -31,4 +31,30 @@ public class ServiceBusTryOnEventPublisherTests
 
         await act.Should().NotThrowAsync();
     }
+
+    [Fact]
+    public async Task PublishAsync_UnexpectedExceptionType_SwallowsAndDoesNotThrow()
+    {
+        // ITryOnEventPublisher's contract is "must never throw" for ANY messaging failure, not just
+        // ServiceBusException or InvalidOperationException. A disposed ServiceBusClient throws
+        // ObjectDisposedException when creating a sender, representative of that broader exception
+        // class, proving the widened catch-all still swallows and logs it.
+        const string unreachableConnectionString =
+            "Endpoint=sb://127.0.0.1:1;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=invalid;";
+
+        ServiceBusClient client = new(unreachableConnectionString, new ServiceBusClientOptions
+        {
+            RetryOptions = new ServiceBusRetryOptions { MaxRetries = 0, TryTimeout = TimeSpan.FromSeconds(2) }
+        });
+        await client.DisposeAsync();
+
+        IOptions<ServiceBusSettings> settings = Options.Create(new ServiceBusSettings { ConnectionString = unreachableConnectionString, TopicName = "tryon-events" });
+        var publisher = new ServiceBusTryOnEventPublisher(client, settings, NullLogger<ServiceBusTryOnEventPublisher>.Instance);
+
+        var @event = new TryOnCompletedEvent(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), DateTime.UtcNow);
+
+        Func<Task> act = async () => await publisher.PublishAsync(@event, CancellationToken.None);
+
+        await act.Should().NotThrowAsync();
+    }
 }

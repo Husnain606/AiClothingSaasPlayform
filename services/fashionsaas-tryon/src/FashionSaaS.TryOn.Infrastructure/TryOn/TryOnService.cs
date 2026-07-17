@@ -26,6 +26,10 @@ public class TryOnService(
 {
     private const string ResultMimeType = "image/png";
 
+    // Mirrors TryOnController's [RequestSizeLimit(15_000_000)] on the inbound photo upload, applied here
+    // to the server-side garment-image fetch so a malicious/misbehaving host can't force an unbounded download.
+    private const long MaxGarmentImageBytes = 15_000_000;
+
     private readonly GeminiSettings _gemini = geminiOptions.Value;
 
     public async Task<(bool IsSuccess, int StatusCode, string Message, TryOnResultResponse? Data)> RenderAsync(
@@ -56,7 +60,40 @@ public class TryOnService(
         try
         {
             using HttpClient httpClient = httpClientFactory.CreateClient();
-            garmentBytes = await httpClient.GetByteArrayAsync(new Uri(form.GarmentImageUrl), cancellationToken).ConfigureAwait(false);
+            using HttpResponseMessage garmentResponse = await httpClient
+                .GetAsync(new Uri(form.GarmentImageUrl), HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+                .ConfigureAwait(false);
+            garmentResponse.EnsureSuccessStatusCode();
+
+            // SSRF/DoS guard: GetByteArrayAsync has no body-size cap, so a malicious or misbehaving host
+            // (even one that passed the host allowlist) could stream an unbounded response. Reject up front
+            // via Content-Length when the server reports it, and enforce the same cap while reading, mirroring
+            // TryOnController's [RequestSizeLimit(15_000_000)] on the inbound request.
+            var declaredLength = garmentResponse.Content.Headers.ContentLength;
+            if (declaredLength is > MaxGarmentImageBytes)
+            {
+                await RecordAsync(form, TryOnStatus.Failed, "Garment image exceeds the maximum allowed size.", cancellationToken).ConfigureAwait(false);
+                return (false, 502, "We couldn't load the product image right now. Please try again.", null);
+            }
+
+            await using Stream garmentStream = await garmentResponse.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+            using MemoryStream garmentMemory = new();
+            var buffer = new byte[81920];
+            long totalRead = 0;
+            int bytesRead;
+            while ((bytesRead = await garmentStream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0)
+            {
+                totalRead += bytesRead;
+                if (totalRead > MaxGarmentImageBytes)
+                {
+                    await RecordAsync(form, TryOnStatus.Failed, "Garment image exceeds the maximum allowed size.", cancellationToken).ConfigureAwait(false);
+                    return (false, 502, "We couldn't load the product image right now. Please try again.", null);
+                }
+
+                await garmentMemory.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken).ConfigureAwait(false);
+            }
+
+            garmentBytes = garmentMemory.ToArray();
         }
         catch (HttpRequestException ex)
         {
