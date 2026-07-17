@@ -1,5 +1,6 @@
 using System.Net;
 using FashionSaaS.TryOn.Application.Gemini;
+using FashionSaaS.TryOn.Application.Messaging;
 using FashionSaaS.TryOn.Application.TryOn;
 using FashionSaaS.TryOn.Domain;
 using FashionSaaS.TryOn.Infrastructure.Persistence;
@@ -16,6 +17,7 @@ public class TryOnServiceTests
 {
     private readonly Mock<ICurrentTryOnContext> _context = new();
     private readonly Mock<IGeminiImageClient> _gemini = new();
+    private readonly Mock<ITryOnEventPublisher> _eventPublisher = new();
     private readonly Guid _tenantId = Guid.NewGuid();
 
     private static TryOnDbContext CreateDbContext() =>
@@ -38,7 +40,7 @@ public class TryOnServiceTests
 
         IOptions<GeminiSettings> options = Options.Create(new GeminiSettings { ApiKey = "test-key", Model = "test-model" });
 
-        return new TryOnService(dbContext, _context.Object, _gemini.Object, factory.Object, options);
+        return new TryOnService(dbContext, _context.Object, _gemini.Object, factory.Object, options, _eventPublisher.Object);
     }
 
     private static FormFile CreateFakePhoto()
@@ -93,6 +95,24 @@ public class TryOnServiceTests
         TryOnRequest saved = await dbContext.TryOnRequests.SingleAsync();
         saved.Status.Should().Be(TryOnStatus.Completed);
         saved.TenantId.Should().Be(_tenantId);
+
+        _eventPublisher.Verify(p => p.PublishAsync(
+            It.Is<TryOnCompletedEvent>(e => e.TryOnRequestId == saved.Id && e.TenantId == _tenantId),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RenderAsync_Failure_NeverPublishesEvent()
+    {
+        await using TryOnDbContext dbContext = CreateDbContext();
+        TryOnService service = CreateService(dbContext, aiUsageLimit: 1);
+        dbContext.TryOnRequests.Add(new TryOnRequest { TenantId = _tenantId, Status = TryOnStatus.Completed, CreatedAt = DateTime.UtcNow });
+        await dbContext.SaveChangesAsync();
+        TryOnRequestForm form = new() { Photo = CreateFakePhoto(), GarmentImageUrl = "https://example.com/g.jpg", ProductId = Guid.NewGuid() };
+
+        await service.RenderAsync(form, CancellationToken.None);
+
+        _eventPublisher.Verify(p => p.PublishAsync(It.IsAny<TryOnCompletedEvent>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]

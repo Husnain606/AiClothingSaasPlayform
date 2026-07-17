@@ -1,11 +1,15 @@
 using System.Text;
+using Azure.Messaging.ServiceBus;
 using FashionSaaS.TryOn.Application;
+using FashionSaaS.TryOn.Application.Messaging;
+using FashionSaaS.TryOn.Infrastructure.Messaging;
 using FashionSaaS.TryOn.Infrastructure.Persistence;
 using FashionSaaS.TryOn.Infrastructure.Security;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
 namespace FashionSaaS.TryOn.Infrastructure;
@@ -21,6 +25,15 @@ public static class DependencyInjection
                 b => b.MigrationsAssembly(typeof(TryOnDbContext).Assembly.FullName)));
 
         services.AddScoped<TryOn.TryOnService>();
+
+        services.AddOptions<ServiceBusSettings>()
+            .Bind(configuration.GetSection(ServiceBusSettings.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddSingleton(sp =>
+            new ServiceBusClient(sp.GetRequiredService<IOptions<ServiceBusSettings>>().Value.ConnectionString));
+        services.AddScoped<ITryOnEventPublisher, ServiceBusTryOnEventPublisher>();
 
         return services;
     }

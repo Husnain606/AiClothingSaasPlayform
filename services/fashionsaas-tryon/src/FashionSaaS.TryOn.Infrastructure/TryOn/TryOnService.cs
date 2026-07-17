@@ -1,5 +1,6 @@
 using FashionSaaS.TryOn.Application;
 using FashionSaaS.TryOn.Application.Gemini;
+using FashionSaaS.TryOn.Application.Messaging;
 using FashionSaaS.TryOn.Application.TryOn;
 using FashionSaaS.TryOn.Domain;
 using FashionSaaS.TryOn.Infrastructure.Persistence;
@@ -20,7 +21,8 @@ public class TryOnService(
     ICurrentTryOnContext currentContext,
     IGeminiImageClient geminiClient,
     IHttpClientFactory httpClientFactory,
-    IOptions<GeminiSettings> geminiOptions)
+    IOptions<GeminiSettings> geminiOptions,
+    ITryOnEventPublisher eventPublisher)
 {
     private const string ResultMimeType = "image/png";
 
@@ -95,15 +97,18 @@ public class TryOnService(
             return (false, 502, "The try-on render failed. Please try again in a moment.", null);
         }
 
-        await RecordAsync(form, TryOnStatus.Completed, null, cancellationToken).ConfigureAwait(false);
+        TryOnRequest saved = await RecordAsync(form, TryOnStatus.Completed, null, cancellationToken).ConfigureAwait(false);
+        await eventPublisher.PublishAsync(
+            new TryOnCompletedEvent(saved.Id, saved.TenantId, saved.CustomerId, saved.ProductId, saved.CreatedAt),
+            cancellationToken).ConfigureAwait(false);
 
         var dataUri = $"data:{resultPart.InlineData.MimeType};base64,{resultPart.InlineData.Data}";
         return (true, 200, "Success", new TryOnResultResponse(dataUri));
     }
 
-    private async Task RecordAsync(TryOnRequestForm form, TryOnStatus status, string? failureReason, CancellationToken cancellationToken)
+    private async Task<TryOnRequest> RecordAsync(TryOnRequestForm form, TryOnStatus status, string? failureReason, CancellationToken cancellationToken)
     {
-        dbContext.TryOnRequests.Add(new TryOnRequest
+        TryOnRequest entity = new()
         {
             TenantId = currentContext.TenantId,
             CustomerId = currentContext.CustomerId,
@@ -111,7 +116,9 @@ public class TryOnService(
             ProductVariantId = form.ProductVariantId,
             Status = status,
             FailureReason = failureReason
-        });
+        };
+        dbContext.TryOnRequests.Add(entity);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return entity;
     }
 }
