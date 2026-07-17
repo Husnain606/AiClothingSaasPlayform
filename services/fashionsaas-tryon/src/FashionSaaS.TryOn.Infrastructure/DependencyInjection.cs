@@ -20,6 +20,8 @@ public static class DependencyInjection
                 ?? throw new InvalidOperationException("ConnectionStrings:TryOnConnection not set."),
                 b => b.MigrationsAssembly(typeof(TryOnDbContext).Assembly.FullName)));
 
+        services.AddScoped<TryOn.TryOnService>();
+
         return services;
     }
 
