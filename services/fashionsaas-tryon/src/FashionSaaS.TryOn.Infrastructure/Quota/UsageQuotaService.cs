@@ -19,6 +19,10 @@ public class UsageQuotaService(TryOnDbContext dbContext) : IUsageQuotaService
             .Where(m => m.TenantId == tenantId && m.Status == MeasurementStatus.Completed && m.CreatedAt >= startOfMonth)
             .CountAsync(cancellationToken).ConfigureAwait(false);
 
-        return tryOnCount + measurementCount;
+        var chatCount = await dbContext.ChatRequests
+            .Where(c => c.TenantId == tenantId && c.Status == ChatRequestStatus.Completed && c.CreatedAt >= startOfMonth)
+            .CountAsync(cancellationToken).ConfigureAwait(false);
+
+        return tryOnCount + measurementCount + chatCount;
     }
 }

@@ -93,4 +93,47 @@ public class TryOnDbContextTests
 
         count.Should().Be(1);
     }
+
+    [Fact]
+    public async Task SaveChangesAsync_PersistsChatRequest()
+    {
+        await using TryOnDbContext ctx = CreateContext();
+        var request = new ChatRequest
+        {
+            TenantId = Guid.NewGuid(),
+            CustomerId = Guid.NewGuid(),
+            Status = ChatRequestStatus.Completed,
+            MessageLength = 42,
+            ReplyLength = 120,
+            HadProductContext = true
+        };
+
+        ctx.ChatRequests.Add(request);
+        await ctx.SaveChangesAsync();
+
+        ChatRequest? saved = await ctx.ChatRequests.FindAsync(request.Id);
+        saved.Should().NotBeNull();
+        saved!.Status.Should().Be(ChatRequestStatus.Completed);
+        saved.MessageLength.Should().Be(42);
+        saved.ReplyLength.Should().Be(120);
+        saved.HadProductContext.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ChatRequests_QueryByTenantAndStatus_ReturnsOnlyMatching()
+    {
+        await using TryOnDbContext ctx = CreateContext();
+        var tenantId = Guid.NewGuid();
+        ctx.ChatRequests.AddRange(
+            new ChatRequest { TenantId = tenantId, CustomerId = Guid.NewGuid(), Status = ChatRequestStatus.Completed },
+            new ChatRequest { TenantId = tenantId, CustomerId = Guid.NewGuid(), Status = ChatRequestStatus.Failed },
+            new ChatRequest { TenantId = Guid.NewGuid(), CustomerId = Guid.NewGuid(), Status = ChatRequestStatus.Completed });
+        await ctx.SaveChangesAsync();
+
+        var count = await ctx.ChatRequests
+            .Where(c => c.TenantId == tenantId && c.Status == ChatRequestStatus.Completed)
+            .CountAsync();
+
+        count.Should().Be(1);
+    }
 }

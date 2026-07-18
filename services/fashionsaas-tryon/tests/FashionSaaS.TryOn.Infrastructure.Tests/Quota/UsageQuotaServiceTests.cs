@@ -102,4 +102,31 @@ public class UsageQuotaServiceTests
 
         count.Should().Be(2);
     }
+
+    [Fact]
+    public async Task UsageQuotaService_GetUsedThisMonthAsync_SumsAllThreeTablesForTenant()
+    {
+        await using TryOnDbContext ctx = CreateContext();
+        ctx.TryOnRequests.Add(CreateTryOnRequest(_tenantId, TryOnStatus.Completed));
+        ctx.MeasurementRequests.Add(new MeasurementRequest
+        {
+            TenantId = _tenantId,
+            CustomerId = Guid.NewGuid(),
+            Status = MeasurementStatus.Completed,
+            CreatedAt = DateTime.UtcNow
+        });
+        ctx.ChatRequests.Add(new ChatRequest
+        {
+            TenantId = _tenantId,
+            CustomerId = Guid.NewGuid(),
+            Status = ChatRequestStatus.Completed,
+            CreatedAt = DateTime.UtcNow
+        });
+        await ctx.SaveChangesAsync();
+        UsageQuotaService service = new(ctx);
+
+        var count = await service.GetUsedThisMonthAsync(_tenantId, CancellationToken.None);
+
+        count.Should().Be(3);
+    }
 }

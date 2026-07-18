@@ -28,6 +28,7 @@ public static class DependencyInjection
 
         services.AddScoped<TryOn.TryOnService>();
         services.AddScoped<Measurement.MeasurementService>();
+        services.AddScoped<Chat.ChatService>();
         services.AddScoped<IUsageQuotaService, UsageQuotaService>();
 
         services.AddOptions<ServiceBusSettings>()

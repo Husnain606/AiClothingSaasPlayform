@@ -4,6 +4,7 @@ using FashionSaaS.TryOn.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace FashionSaaS.TryOn.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(TryOnDbContext))]
-    partial class TryOnDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260718114044_AddChatRequest")]
+    partial class AddChatRequest
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
