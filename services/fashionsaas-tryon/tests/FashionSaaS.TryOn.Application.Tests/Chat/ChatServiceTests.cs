@@ -6,6 +6,7 @@ using FashionSaaS.TryOn.Infrastructure.Chat;
 using FashionSaaS.TryOn.Infrastructure.Persistence;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 
@@ -37,7 +38,8 @@ public class ChatServiceTests
 
         IOptions<GeminiSettings> options = Options.Create(new GeminiSettings { ApiKey = "test-key", TextModel = "test-text-model" });
 
-        return new ChatService(dbContext, _context.Object, _gemini.Object, options, _usageQuota.Object);
+        return new ChatService(dbContext, _context.Object, _gemini.Object, options, _usageQuota.Object,
+            NullLogger<ChatService>.Instance);
     }
 
     private static ChatRequestDto CreateDto(ChatProductContext? productContext = null) =>

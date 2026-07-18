@@ -7,6 +7,7 @@ using FashionSaaS.TryOn.Infrastructure.Persistence;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 
@@ -38,7 +39,8 @@ public class MeasurementServiceTests
 
         IOptions<GeminiSettings> options = Options.Create(new GeminiSettings { ApiKey = "test-key", TextModel = "test-text-model" });
 
-        return new MeasurementService(dbContext, _context.Object, _gemini.Object, options, _usageQuota.Object);
+        return new MeasurementService(dbContext, _context.Object, _gemini.Object, options, _usageQuota.Object,
+            NullLogger<MeasurementService>.Instance);
     }
 
     private static FormFile CreateFakePhoto()
@@ -144,6 +146,51 @@ public class MeasurementServiceTests
         MeasurementRequest saved = await dbContext.MeasurementRequests.SingleAsync();
         saved.Status.Should().Be(MeasurementStatus.Failed);
         saved.FailureReason.Should().Be("Could not parse measurement response.");
+    }
+
+    [Fact]
+    public async Task MeasurementService_GeminiReturnsFencedJson_ParsesSuccessfully()
+    {
+        await using TryOnDbContext dbContext = CreateDbContext();
+        MeasurementService service = CreateService(dbContext, aiUsageLimit: 10);
+        MeasurementRequestForm form = new() { Photo = CreateFakePhoto() };
+        SetupGeminiReply("```json\n" + ValidReplyJson + "\n```");
+
+        (var isSuccess, var statusCode, var _, MeasurementResultResponse? data) = await service.EstimateAsync(form, CancellationToken.None);
+
+        isSuccess.Should().BeTrue();
+        statusCode.Should().Be(200);
+        data!.ChestCm.Should().Be(96.5m);
+        data.RecommendedSize.Should().Be(SizeCode.M);
+
+        MeasurementRequest saved = await dbContext.MeasurementRequests.SingleAsync();
+        saved.Status.Should().Be(MeasurementStatus.Completed);
+        saved.ChestCm.Should().Be(96.5m);
+        saved.WaistCm.Should().Be(80.0m);
+        saved.ConfidenceScore.Should().Be(0.85m);
+    }
+
+    [Fact]
+    public async Task MeasurementService_GeminiReturnsPartialJson_PersistsFailedRowWithReason()
+    {
+        await using TryOnDbContext dbContext = CreateDbContext();
+        MeasurementService service = CreateService(dbContext, aiUsageLimit: 10);
+        MeasurementRequestForm form = new() { Photo = CreateFakePhoto() };
+
+        // waistCm is missing — the service must fail rather than fabricate a 0 measurement.
+        SetupGeminiReply(
+            """{"chestCm": 96.5, "hipsCm": 100.0, "shoulderWidthCm": 45.5, "inseamCm": 78.0, "recommendedSize": "M", "confidence": 0.85}""");
+
+        (var isSuccess, var statusCode, var _, MeasurementResultResponse? data) = await service.EstimateAsync(form, CancellationToken.None);
+
+        isSuccess.Should().BeFalse();
+        statusCode.Should().Be(502);
+        data.Should().BeNull();
+
+        MeasurementRequest saved = await dbContext.MeasurementRequests.SingleAsync();
+        saved.Status.Should().Be(MeasurementStatus.Failed);
+        saved.FailureReason.Should().Be("incomplete measurement data from model");
+        saved.WaistCm.Should().BeNull();
     }
 
     [Fact]

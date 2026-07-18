@@ -5,6 +5,7 @@ using FashionSaaS.TryOn.Application.Measurement;
 using FashionSaaS.TryOn.Application.Quota;
 using FashionSaaS.TryOn.Domain;
 using FashionSaaS.TryOn.Infrastructure.Persistence;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 // Lives in Infrastructure for the same reason as TryOnService (see the note atop TryOnService.cs):
@@ -17,7 +18,8 @@ public class MeasurementService(
     ICurrentTryOnContext currentContext,
     IGeminiTextClient geminiClient,
     IOptions<GeminiSettings> geminiOptions,
-    IUsageQuotaService usageQuotaService)
+    IUsageQuotaService usageQuotaService,
+    ILogger<MeasurementService> logger)
 {
     private readonly GeminiSettings _gemini = geminiOptions.Value;
 
@@ -29,7 +31,8 @@ public class MeasurementService(
 
         if (usedThisMonth >= currentContext.AiUsageLimit)
         {
-            await RecordAsync(form, MeasurementStatus.Failed, "Monthly AI usage quota exceeded.", null, cancellationToken).ConfigureAwait(false);
+            MeasurementRequest quotaRow = await RecordAsync(form, MeasurementStatus.Failed, "Monthly AI usage quota exceeded.", null, cancellationToken).ConfigureAwait(false);
+            logger.LogWarning("Measurement request {MeasurementRequestId} for tenant {TenantId} rejected: monthly AI usage quota exceeded", quotaRow.Id, currentContext.TenantId);
             return (false, 429, "You've reached this month's AI usage limit. Upgrade your plan or try again next month.", null);
         }
 
@@ -63,7 +66,8 @@ public class MeasurementService(
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
-            await RecordAsync(form, MeasurementStatus.Failed, $"Gemini API error: {ex.Message}", null, cancellationToken).ConfigureAwait(false);
+            MeasurementRequest apiErrorRow = await RecordAsync(form, MeasurementStatus.Failed, $"Gemini API error: {ex.Message}", null, cancellationToken).ConfigureAwait(false);
+            logger.LogWarning(ex, "Measurement request {MeasurementRequestId} for tenant {TenantId} failed: Gemini API error", apiErrorRow.Id, currentContext.TenantId);
             return (false, 502, "The measurement estimate failed. Please try again in a moment.", null);
         }
 
@@ -72,11 +76,12 @@ public class MeasurementService(
             .FirstOrDefault(p => !string.IsNullOrEmpty(p.Text))?.Text;
 
         GeminiMeasurementResult? parsed = null;
-        if (replyText is not null)
+        var jsonPayload = replyText is null ? null : ExtractJsonPayload(replyText);
+        if (jsonPayload is not null)
         {
             try
             {
-                parsed = JsonSerializer.Deserialize<GeminiMeasurementResult>(replyText);
+                parsed = JsonSerializer.Deserialize<GeminiMeasurementResult>(jsonPayload);
             }
             catch (JsonException)
             {
@@ -86,16 +91,61 @@ public class MeasurementService(
 
         if (parsed is null || !Enum.TryParse<SizeCode>(parsed.RecommendedSize, ignoreCase: true, out SizeCode recommendedSize))
         {
-            await RecordAsync(form, MeasurementStatus.Failed, "Could not parse measurement response.", null, cancellationToken).ConfigureAwait(false);
+            MeasurementRequest unparseableRow = await RecordAsync(form, MeasurementStatus.Failed, "Could not parse measurement response.", null, cancellationToken).ConfigureAwait(false);
+            logger.LogWarning("Measurement request {MeasurementRequestId} for tenant {TenantId} failed: could not parse measurement response", unparseableRow.Id, currentContext.TenantId);
             return (false, 502, "The measurement estimate failed. Please try again in a moment.", null);
         }
 
-        MeasurementResultResponse result = new(
-            parsed.ChestCm, parsed.WaistCm, parsed.HipsCm, parsed.ShoulderWidthCm, parsed.InseamCm,
-            recommendedSize, parsed.Confidence);
+        MeasurementResultResponse? result = TryBuildValidatedResponse(parsed, recommendedSize);
+        if (result is null)
+        {
+            MeasurementRequest incompleteRow = await RecordAsync(form, MeasurementStatus.Failed, "incomplete measurement data from model", null, cancellationToken).ConfigureAwait(false);
+            logger.LogWarning("Measurement request {MeasurementRequestId} for tenant {TenantId} failed: incomplete measurement data from model", incompleteRow.Id, currentContext.TenantId);
+            return (false, 502, "The measurement estimate failed. Please try again in a moment.", null);
+        }
 
-        await RecordAsync(form, MeasurementStatus.Completed, null, result, cancellationToken).ConfigureAwait(false);
+        MeasurementRequest completedRow = await RecordAsync(form, MeasurementStatus.Completed, null, result, cancellationToken).ConfigureAwait(false);
+        logger.LogInformation("Measurement request {MeasurementRequestId} for tenant {TenantId} completed with status {Status}", completedRow.Id, currentContext.TenantId, MeasurementStatus.Completed);
         return (true, 200, "Success", result);
+    }
+
+    // Gemini routinely wraps its JSON reply in a markdown code fence or surrounds it with prose
+    // despite prompt instructions. Strip a leading/trailing fence if present; otherwise fall back
+    // to the substring between the first '{' and the last '}'.
+    private static string? ExtractJsonPayload(string replyText)
+    {
+        var text = replyText.Trim();
+
+        if (text.StartsWith("```", StringComparison.Ordinal) && text.EndsWith("```", StringComparison.Ordinal) && text.Length > 6)
+        {
+            text = text[3..^3];
+            if (text.StartsWith("json", StringComparison.OrdinalIgnoreCase))
+            {
+                text = text[4..];
+            }
+
+            return text.Trim();
+        }
+
+        var start = text.IndexOf('{', StringComparison.Ordinal);
+        var end = text.LastIndexOf('}');
+        return start >= 0 && end > start ? text[start..(end + 1)] : null;
+    }
+
+    // Every numeric field must be present and positive before we return a Completed result —
+    // a missing field must never silently become 0 in a response handed to the customer.
+    private static MeasurementResultResponse? TryBuildValidatedResponse(GeminiMeasurementResult parsed, SizeCode recommendedSize)
+    {
+        if (parsed.ChestCm is not > 0m || parsed.WaistCm is not > 0m || parsed.HipsCm is not > 0m ||
+            parsed.ShoulderWidthCm is not > 0m || parsed.InseamCm is not > 0m || parsed.Confidence is not > 0m)
+        {
+            return null;
+        }
+
+        return new MeasurementResultResponse(
+            parsed.ChestCm.GetValueOrDefault(), parsed.WaistCm.GetValueOrDefault(), parsed.HipsCm.GetValueOrDefault(),
+            parsed.ShoulderWidthCm.GetValueOrDefault(), parsed.InseamCm.GetValueOrDefault(),
+            recommendedSize, parsed.Confidence.GetValueOrDefault());
     }
 
     private async Task<MeasurementRequest> RecordAsync(
