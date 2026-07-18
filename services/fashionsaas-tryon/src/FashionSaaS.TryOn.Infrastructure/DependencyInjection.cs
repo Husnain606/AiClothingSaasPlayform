@@ -27,6 +27,7 @@ public static class DependencyInjection
                 b => b.MigrationsAssembly(typeof(TryOnDbContext).Assembly.FullName)));
 
         services.AddScoped<TryOn.TryOnService>();
+        services.AddScoped<Measurement.MeasurementService>();
         services.AddScoped<IUsageQuotaService, UsageQuotaService>();
 
         services.AddOptions<ServiceBusSettings>()

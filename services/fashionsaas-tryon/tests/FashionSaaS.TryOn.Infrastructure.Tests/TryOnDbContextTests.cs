@@ -52,4 +52,45 @@ public class TryOnDbContextTests
 
         count.Should().Be(1);
     }
+
+    [Fact]
+    public async Task SaveChangesAsync_PersistsMeasurementRequest()
+    {
+        await using TryOnDbContext ctx = CreateContext();
+        var request = new MeasurementRequest
+        {
+            TenantId = Guid.NewGuid(),
+            CustomerId = Guid.NewGuid(),
+            Status = MeasurementStatus.Completed,
+            ChestCm = 96.5m,
+            RecommendedSize = SizeCode.M
+        };
+
+        ctx.MeasurementRequests.Add(request);
+        await ctx.SaveChangesAsync();
+
+        MeasurementRequest? saved = await ctx.MeasurementRequests.FindAsync(request.Id);
+        saved.Should().NotBeNull();
+        saved!.Status.Should().Be(MeasurementStatus.Completed);
+        saved.ChestCm.Should().Be(96.5m);
+        saved.RecommendedSize.Should().Be(SizeCode.M);
+    }
+
+    [Fact]
+    public async Task MeasurementRequests_QueryByTenantAndStatus_ReturnsOnlyMatching()
+    {
+        await using TryOnDbContext ctx = CreateContext();
+        var tenantId = Guid.NewGuid();
+        ctx.MeasurementRequests.AddRange(
+            new MeasurementRequest { TenantId = tenantId, CustomerId = Guid.NewGuid(), Status = MeasurementStatus.Completed },
+            new MeasurementRequest { TenantId = tenantId, CustomerId = Guid.NewGuid(), Status = MeasurementStatus.Failed },
+            new MeasurementRequest { TenantId = Guid.NewGuid(), CustomerId = Guid.NewGuid(), Status = MeasurementStatus.Completed });
+        await ctx.SaveChangesAsync();
+
+        var count = await ctx.MeasurementRequests
+            .Where(m => m.TenantId == tenantId && m.Status == MeasurementStatus.Completed)
+            .CountAsync();
+
+        count.Should().Be(1);
+    }
 }

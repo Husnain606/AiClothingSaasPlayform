@@ -7,6 +7,8 @@ public class TryOnDbContext(DbContextOptions<TryOnDbContext> options) : DbContex
 {
     public DbSet<TryOnRequest> TryOnRequests => Set<TryOnRequest>();
 
+    public DbSet<MeasurementRequest> MeasurementRequests => Set<MeasurementRequest>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(TryOnDbContext).Assembly);
