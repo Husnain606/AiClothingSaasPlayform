@@ -39,6 +39,9 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
 
+    // Phase 7 notifications
+    public DbSet<Notification> Notifications => Set<Notification>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -81,5 +84,11 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         // Phase 4a orders — same dynamic tenant filter pattern as the catalog entities above.
         modelBuilder.Entity<Order>()
             .HasQueryFilter(o => o.TenantId == currentTenantService.TenantId);
+
+        // Phase 7 notifications — TenantId is nullable (null = platform-broadcast row, e.g. a
+        // future SuperAdmin-facing notification); fail-closed still applies: a row scoped to a
+        // specific tenant is only visible when the current tenant context matches it.
+        modelBuilder.Entity<Notification>()
+            .HasQueryFilter(n => n.TenantId == null || n.TenantId == currentTenantService.TenantId);
     }
 }
