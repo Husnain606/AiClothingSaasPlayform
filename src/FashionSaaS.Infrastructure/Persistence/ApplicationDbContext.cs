@@ -85,10 +85,13 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         modelBuilder.Entity<Order>()
             .HasQueryFilter(o => o.TenantId == currentTenantService.TenantId);
 
-        // Phase 7 notifications — TenantId is nullable (null = platform-broadcast row, e.g. a
-        // future SuperAdmin-facing notification); fail-closed still applies: a row scoped to a
-        // specific tenant is only visible when the current tenant context matches it.
+        // Phase 7 notifications — TenantId is nullable (null = platform/SuperAdmin-scoped row).
+        // Strict equality, matching the BankAccount/catalog pattern above: fail-closed means a
+        // null-TenantId row is visible ONLY when the current context is also tenant-less
+        // (true SuperAdmin), never to every tenant. Broadcast-vs-targeted delivery within a
+        // tenant (RecipientUserId null vs a specific user) is handled by NotificationService's
+        // queries, not by this global tenant-boundary filter.
         modelBuilder.Entity<Notification>()
-            .HasQueryFilter(n => n.TenantId == null || n.TenantId == currentTenantService.TenantId);
+            .HasQueryFilter(n => n.TenantId == currentTenantService.TenantId);
     }
 }
