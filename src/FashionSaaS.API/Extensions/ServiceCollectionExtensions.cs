@@ -30,6 +30,7 @@ using FashionSaaS.Infrastructure.EventHandlers;
 using Mapster;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.Primitives;
 using Microsoft.IdentityModel.Tokens;
 
 namespace FashionSaaS.API.Extensions;
@@ -89,6 +90,27 @@ internal static class ServiceCollectionExtensions
                     ValidAudience = jwtSettings.Audience,
                     ValidateLifetime = true,
                     ClockSkew = TimeSpan.Zero
+                };
+
+                // SignalR cannot set an Authorization header on WebSocket/Server-Sent-Events
+                // connections, so the access token travels as a query-string parameter instead.
+                // Scoped ONLY to the notifications hub path — this must never become a blanket
+                // alternate-auth mechanism for the rest of the API. Pattern confirmed against
+                // Microsoft Learn ("SignalR authentication and authorization", aspnetcore-10.0).
+                options.Events = new JwtBearerEvents
+                {
+                    OnMessageReceived = context =>
+                    {
+                        StringValues accessToken = context.Request.Query["access_token"];
+                        PathString path = context.HttpContext.Request.Path;
+                        if (!string.IsNullOrEmpty(accessToken)
+                            && path.StartsWithSegments("/hubs/notifications", StringComparison.Ordinal))
+                        {
+                            context.Token = accessToken;
+                        }
+
+                        return Task.CompletedTask;
+                    }
                 };
             });
 

@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using FashionSaaS.API.Extensions;
 using FashionSaaS.API.Handlers;
+using FashionSaaS.API.Hubs;
 using FashionSaaS.API.Logging;
 using FashionSaaS.API.Middleware;
 using FashionSaaS.Application.Configuration;
@@ -41,6 +42,9 @@ builder.Services.AddApplicationServices();
 
 // JWT bearer auth (HS256)
 builder.Services.AddJwtAuthentication(builder.Configuration);
+
+// SignalR (real-time notifications hub) — in-framework, no new server NuGet package
+builder.Services.AddSignalR();
 
 // Authorization policies — MfaVerified requires mfa_verified=true claim in JWT
 builder.Services.AddAuthorization(options =>
@@ -158,5 +162,6 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapControllers();
+app.MapHub<NotificationsHub>("/hubs/notifications");
 
 await app.RunAsync();
