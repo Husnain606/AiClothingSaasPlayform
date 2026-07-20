@@ -31,4 +31,9 @@ public class ReviewRepository(ApplicationDbContext context)
 
         return (items, total);
     }
+
+    public async Task<bool> ExistsByCustomerAndProductAsync(Guid tenantId, Guid customerId, Guid productId, CancellationToken ct = default)
+        => await DbSet.AnyAsync(
+            r => r.TenantId == tenantId && r.CustomerId == customerId && r.ProductId == productId,
+            ct);
 }

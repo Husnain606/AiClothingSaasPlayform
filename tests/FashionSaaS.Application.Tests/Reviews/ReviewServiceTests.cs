@@ -205,4 +205,25 @@ public class ReviewServiceTests
         result.StatusCode.Should().Be(404);
         _uow.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
+
+    [Fact]
+    public async Task SubmitAsync_DuplicateReview_Returns409()
+    {
+        var product = new Product { Id = Guid.NewGuid(), TenantId = _tenantId, Name = "Tee", BasePrice = 20m };
+        var customer = new Customer { Id = Guid.NewGuid(), TenantId = _tenantId, Email = "customer@example.com" };
+        _products.Setup(r => r.GetByIdAsync(product.Id)).ReturnsAsync(product);
+        _customers.Setup(r => r.GetOrCreateByEmailAsync(_tenantId, customer.Email, "Jane", "Doe", null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(customer);
+        _reviews.Setup(r => r.ExistsByCustomerAndProductAsync(_tenantId, customer.Id, product.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var request = new SubmitReviewRequest { ProductId = product.Id, Rating = 5, Title = "Great", Body = "Loved it" };
+
+        ResponseData<ReviewResponse> result = await CreateService().SubmitAsync(
+            customer.Email, "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+
+        result.StatusCode.Should().Be(409);
+        _reviews.Verify(r => r.AddAsync(It.IsAny<Review>()), Times.Never);
+        _uow.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
 }

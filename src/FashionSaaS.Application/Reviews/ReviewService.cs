@@ -51,6 +51,11 @@ public class ReviewService(
         Customer customer = await customerRepository.GetOrCreateByEmailAsync(
             tenantId, customerEmail, customerFirstName, customerLastName, customerPhone, ct);
 
+        var alreadyReviewed = await reviewRepository.ExistsByCustomerAndProductAsync(
+            tenantId, customer.Id, request.ProductId, ct);
+        if (alreadyReviewed)
+            return ResponseData<ReviewResponse>.Failure("You have already reviewed this product.", 409);
+
         var review = new Review
         {
             TenantId = tenantId,
