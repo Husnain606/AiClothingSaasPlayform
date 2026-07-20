@@ -50,11 +50,12 @@ public class NotificationService(
             return ResponseData<PagedResult<NotificationResponse>>.Failure("Tenant could not be resolved.", 400);
 
         filter.TenantId = tenantId;
-        (IReadOnlyList<Notification> items, var total) = await notificationRepository.GetPagedAsync(filter, ct);
+        (IReadOnlyList<Notification> items, var total, IReadOnlySet<Guid> readBroadcastIds) =
+            await notificationRepository.GetPagedAsync(filter, ct);
 
         var page = new PagedResult<NotificationResponse>
         {
-            Items = items.Select(MapToResponse).ToList(),
+            Items = items.Select(n => MapToResponse(n, readBroadcastIds)).ToList(),
             TotalCount = total,
             Page = filter.Page,
             PageSize = filter.PageSize
@@ -84,12 +85,23 @@ public class NotificationService(
         if (notification is null || notification.TenantId != tenantId)
             return ResponseData<bool>.Failure("Notification not found.", 404);
 
-        if (notification.RecipientUserId is { } owner && owner != recipientUserId)
-            return ResponseData<bool>.Failure("Notification not found.", 404);
+        if (notification.RecipientUserId is { } owner)
+        {
+            if (owner != recipientUserId)
+                return ResponseData<bool>.Failure("Notification not found.", 404);
 
-        notification.IsRead = true;
-        notification.ReadAt = DateTime.UtcNow;
-        await notificationRepository.UpdateAsync(notification);
+            notification.IsRead = true;
+            notification.ReadAt = DateTime.UtcNow;
+            await notificationRepository.UpdateAsync(notification);
+        }
+        else
+        {
+            // Broadcast notification (no single recipient) — record a per-user read receipt
+            // instead of mutating the shared row; otherwise one admin marking it read would hide
+            // it from every other admin in the tenant who hasn't seen it yet.
+            await notificationRepository.MarkBroadcastReadAsync(notification.Id, recipientUserId, ct);
+        }
+
         await unitOfWork.SaveChangesAsync(ct);
 
         return ResponseData<bool>.Success(true, "Notification marked read.");
@@ -106,7 +118,11 @@ public class NotificationService(
         return ResponseData<bool>.Success(true, "All notifications marked read.");
     }
 
-    private static NotificationResponse MapToResponse(Notification n) => new()
+    // IsRead reflects "read BY THE REQUESTING USER", not the raw entity field: a broadcast row's
+    // own IsRead is shared across every recipient and is meaningless per-user, so it's read from
+    // the caller-supplied per-page read-receipt set instead. A targeted row has exactly one
+    // recipient, so its own IsRead is already correct.
+    private static NotificationResponse MapToResponse(Notification n, IReadOnlySet<Guid> readBroadcastIds) => new()
     {
         Id = n.Id,
         Type = n.Type,
@@ -114,7 +130,7 @@ public class NotificationService(
         Message = n.Message,
         EntityName = n.EntityName,
         EntityId = n.EntityId,
-        IsRead = n.IsRead,
+        IsRead = n.RecipientUserId is null ? readBroadcastIds.Contains(n.Id) : n.IsRead,
         CreatedAt = n.CreatedAt
     };
 }

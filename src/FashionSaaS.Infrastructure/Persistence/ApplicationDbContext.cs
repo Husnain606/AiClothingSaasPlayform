@@ -41,6 +41,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 
     // Phase 7 notifications
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<NotificationRead> NotificationReads => Set<NotificationRead>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

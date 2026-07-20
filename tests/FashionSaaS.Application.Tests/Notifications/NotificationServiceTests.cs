@@ -189,7 +189,7 @@ public class NotificationServiceTests
     }
 
     [Fact]
-    public async Task MarkAllReadAsync_MarksAllForRecipient()
+    public async Task MarkAllReadAsync_MarksTargetedRowAndRecordsPerUserBroadcastReceipt()
     {
         var dbName = Guid.NewGuid().ToString();
         using ApplicationDbContext ctx = CreateContext(_tenantA, dbName);
@@ -205,8 +205,66 @@ public class NotificationServiceTests
         ResponseData<bool> result = await service.MarkAllReadAsync(_userA);
 
         result.IsSuccess.Should().BeTrue();
-        (await ctx.Notifications.FindAsync(broadcast.Id))!.IsRead.Should().BeTrue();
+        // The broadcast row is shared across every recipient — it must stay untouched. Only a
+        // per-user NotificationRead receipt records that userA (specifically) has read it, so
+        // userB (who never marked anything read) is unaffected.
+        (await ctx.Notifications.FindAsync(broadcast.Id))!.IsRead.Should().BeFalse();
+        ctx.NotificationReads.Should().ContainSingle(r => r.NotificationId == broadcast.Id && r.UserId == _userA);
         (await ctx.Notifications.FindAsync(forUserA.Id))!.IsRead.Should().BeTrue();
         (await ctx.Notifications.FindAsync(forUserB.Id))!.IsRead.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task MarkReadAsync_BroadcastNotification_OnlyMarksReadForRequestingUser()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        using ApplicationDbContext ctx = CreateContext(_tenantA, dbName);
+        Notification broadcast = MakeNotification(_tenantA, null);
+        ctx.Notifications.Add(broadcast);
+        await ctx.SaveChangesAsync();
+        ctx.ChangeTracker.Clear();
+
+        NotificationService service = CreateService(ctx, _tenantA);
+
+        ResponseData<bool> result = await service.MarkReadAsync(broadcast.Id, _userA);
+
+        result.IsSuccess.Should().BeTrue();
+        // The shared row itself must stay unread — admin B, who never marked it read, must still
+        // see it as unread in both the list and the unread count.
+        (await ctx.Notifications.FindAsync(broadcast.Id))!.IsRead.Should().BeFalse();
+
+        var filterForUserB = new NotificationFilter { RecipientUserId = _userB, Page = 1, PageSize = 20 };
+        ResponseData<PagedResult<NotificationResponse>> pageForUserB = await service.GetPagedAsync(filterForUserB);
+        pageForUserB.Data!.Items.Should().ContainSingle(n => n.Id == broadcast.Id && !n.IsRead);
+
+        ResponseData<int> unreadCountForUserB = await service.GetUnreadCountAsync(_userB);
+        unreadCountForUserB.Data.Should().Be(1);
+
+        var filterForUserA = new NotificationFilter { RecipientUserId = _userA, Page = 1, PageSize = 20 };
+        ResponseData<PagedResult<NotificationResponse>> pageForUserA = await service.GetPagedAsync(filterForUserA);
+        pageForUserA.Data!.Items.Should().ContainSingle(n => n.Id == broadcast.Id && n.IsRead);
+
+        ResponseData<int> unreadCountForUserA = await service.GetUnreadCountAsync(_userA);
+        unreadCountForUserA.Data.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task MarkReadAsync_BroadcastNotification_CalledTwice_IsIdempotent()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        using ApplicationDbContext ctx = CreateContext(_tenantA, dbName);
+        Notification broadcast = MakeNotification(_tenantA, null);
+        ctx.Notifications.Add(broadcast);
+        await ctx.SaveChangesAsync();
+        ctx.ChangeTracker.Clear();
+
+        NotificationService service = CreateService(ctx, _tenantA);
+
+        ResponseData<bool> first = await service.MarkReadAsync(broadcast.Id, _userA);
+        ResponseData<bool> second = await service.MarkReadAsync(broadcast.Id, _userA);
+
+        first.IsSuccess.Should().BeTrue();
+        second.IsSuccess.Should().BeTrue();
+        ctx.NotificationReads.Should().ContainSingle(r => r.NotificationId == broadcast.Id && r.UserId == _userA);
     }
 }
