@@ -87,6 +87,9 @@ public static class DependencyInjection
         // Phase 4a — Reporting
         services.AddScoped<IReportRepository, ReportRepository>();
 
+        // Phase 7 — Notifications
+        services.AddScoped<INotificationRepository, NotificationRepository>();
+
         // Background jobs
         services.AddHostedService<SubscriptionExpiryJob>();
 

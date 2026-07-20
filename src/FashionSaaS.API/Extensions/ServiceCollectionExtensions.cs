@@ -14,6 +14,7 @@ using FashionSaaS.Application.Inventory;
 using FashionSaaS.Application.LoginAttempts;
 using FashionSaaS.Application.Mapping;
 using FashionSaaS.Application.Mfa;
+using FashionSaaS.Application.Notifications;
 using FashionSaaS.Application.Orders;
 using FashionSaaS.Application.ProductImages;
 using FashionSaaS.Application.Products;
@@ -54,6 +55,7 @@ internal static class ServiceCollectionExtensions
         services.AddScoped<OrderService>();
         services.AddScoped<ReportService>();
         services.AddScoped<ReviewService>();
+        services.AddScoped<NotificationService>();
         services.AddScoped<WishlistService>();
         services.AddScoped<AuditLogQueryService>();
         services.AddScoped<LoginAttemptService>();

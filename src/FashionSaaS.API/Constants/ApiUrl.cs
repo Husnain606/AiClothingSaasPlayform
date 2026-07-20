@@ -195,6 +195,15 @@ internal static class ApiUrl
         public const string Delete = "api/tenant/reviews/{id}";
     }
 
+
+    internal static class TenantNotifications
+    {
+        public const string GetAll = "api/tenant/notifications";
+        public const string GetUnreadCount = "api/tenant/notifications/unread-count";
+        public const string MarkRead = "api/tenant/notifications/{id}/mark-read";
+        public const string MarkAllRead = "api/tenant/notifications/mark-all-read";
+    }
+
     internal static class TenantWishlists
     {
         public const string GetByCustomer = "api/tenant/customers/{customerId}/wishlist";
