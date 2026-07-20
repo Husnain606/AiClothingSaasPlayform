@@ -184,6 +184,12 @@ internal static class ServiceCollectionExtensions
             cfg.RegisterServicesFromAssembly(typeof(AuthService).Assembly);
             // Infrastructure layer: domain event handlers (e.g. SuperAdminLoginFromNewIpEventHandler)
             cfg.RegisterServicesFromAssembly(typeof(SuperAdminLoginFromNewIpEventHandler).Assembly);
+            // API layer: notification-trigger event handlers (Phase 7, Group 4) that push via
+            // IHubContext<NotificationsHub> — they live here rather than Infrastructure because
+            // the hub type requires the ASP.NET Core SignalR/hosting surface only this project
+            // references (Infrastructure has no project reference to API; API already
+            // references Infrastructure, so the reverse would be circular).
+            cfg.RegisterServicesFromAssembly(typeof(Program).Assembly);
             cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
             cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
         });

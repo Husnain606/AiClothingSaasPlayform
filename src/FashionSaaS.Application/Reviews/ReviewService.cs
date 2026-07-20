@@ -20,11 +20,58 @@ namespace FashionSaaS.Application.Reviews;
 /// </summary>
 public class ReviewService(
     IReviewRepository reviewRepository,
+    IProductRepository productRepository,
+    ICustomerRepository customerRepository,
     IUnitOfWork unitOfWork,
     IAuditLogService auditLogService,
     ICurrentTenantService currentTenant,
     ILogger<ReviewService> logger)
 {
+    /// <summary>
+    /// Customer-facing review submission (Phase 7). Resolves/creates the tenant-scoped
+    /// <see cref="Customer"/> record from the authenticated user's email — the same
+    /// get-or-create pattern <c>OrderService.CreateAsync</c> uses — because
+    /// <see cref="Review.CustomerId"/> references <see cref="Customer"/>, not the JWT
+    /// user id directly. Creates the review in <see cref="ReviewStatus.Pending"/> (this
+    /// codebase's existing moderation entry point — see <see cref="ApproveAsync"/>/
+    /// <see cref="RejectAsync"/>) and raises <see cref="ReviewSubmittedEvent"/> before
+    /// SaveChanges so it rides the same commit.
+    /// </summary>
+    public async Task<ResponseData<ReviewResponse>> SubmitAsync(string customerEmail, string customerFirstName,
+        string customerLastName, string? customerPhone, SubmitReviewRequest request, Guid actingUserId,
+        string ipAddress, string userAgent, CancellationToken ct = default)
+    {
+        if (currentTenant.TenantId is not { } tenantId)
+            return ResponseData<ReviewResponse>.Failure("Tenant could not be resolved.", 400);
+
+        Product? product = await productRepository.GetByIdAsync(request.ProductId);
+        if (product is null || product.TenantId != tenantId)
+            return ResponseData<ReviewResponse>.Failure("Product not found.", 404);
+
+        Customer customer = await customerRepository.GetOrCreateByEmailAsync(
+            tenantId, customerEmail, customerFirstName, customerLastName, customerPhone, ct);
+
+        var review = new Review
+        {
+            TenantId = tenantId,
+            ProductId = request.ProductId,
+            CustomerId = customer.Id,
+            Rating = request.Rating,
+            Title = request.Title,
+            Body = request.Body,
+            Status = ReviewStatus.Pending
+        };
+        review.AddDomainEvent(new ReviewSubmittedEvent(review.Id, tenantId, request.ProductId, request.Rating));
+
+        await reviewRepository.AddAsync(review);
+        await unitOfWork.SaveChangesAsync(ct);
+
+        await auditLogService.LogAsync(actingUserId, tenantId, "ReviewSubmitted", "Review", review.Id,
+            null, new { review.ProductId, review.Rating }, ipAddress, userAgent);
+
+        logger.LogInformation("Review {ReviewId} submitted for product {ProductId}", review.Id, request.ProductId);
+        return ResponseData<ReviewResponse>.Success(MapToResponse(review), "Review submitted.", 201);
+    }
     public async Task<ResponseData<ReviewResponse>> ApproveAsync(Guid id,
         Guid moderatedByUserId, string ipAddress, string userAgent, CancellationToken ct = default)
     {

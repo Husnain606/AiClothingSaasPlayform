@@ -14,6 +14,8 @@ namespace FashionSaaS.Application.Tests.Reviews;
 public class ReviewServiceTests
 {
     private readonly Mock<IReviewRepository> _reviews = new();
+    private readonly Mock<IProductRepository> _products = new();
+    private readonly Mock<ICustomerRepository> _customers = new();
     private readonly Mock<IUnitOfWork> _uow = new();
     private readonly Mock<IAuditLogService> _audit = new();
     private readonly Mock<ICurrentTenantService> _tenant = new();
@@ -25,7 +27,7 @@ public class ReviewServiceTests
     }
 
     private ReviewService CreateService() => new(
-        _reviews.Object, _uow.Object, _audit.Object, _tenant.Object,
+        _reviews.Object, _products.Object, _customers.Object, _uow.Object, _audit.Object, _tenant.Object,
         NullLogger<ReviewService>.Instance);
 
     private Review Review(ReviewStatus status = ReviewStatus.Pending) => new()
@@ -128,5 +130,79 @@ public class ReviewServiceTests
         result.IsSuccess.Should().BeTrue();
         result.Data!.TotalCount.Should().Be(3);
         result.Data.Items.Should().HaveCount(1);
+    }
+
+    // ── Submit ────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task SubmitAsync_ValidRequest_CreatesPendingReviewAndRaisesReviewSubmittedEvent()
+    {
+        var product = new Product { Id = Guid.NewGuid(), TenantId = _tenantId, Name = "Tee", BasePrice = 20m };
+        var customer = new Customer { Id = Guid.NewGuid(), TenantId = _tenantId, Email = "customer@example.com" };
+        _products.Setup(r => r.GetByIdAsync(product.Id)).ReturnsAsync(product);
+        _customers.Setup(r => r.GetOrCreateByEmailAsync(_tenantId, customer.Email, "Jane", "Doe", null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(customer);
+
+        var request = new SubmitReviewRequest { ProductId = product.Id, Rating = 5, Title = "Great", Body = "Loved it" };
+        var eventPresentAtSave = false;
+        Review? savedReview = null;
+        _reviews.Setup(r => r.AddAsync(It.IsAny<Review>()))
+            .Callback<Review>(r => savedReview = r)
+            .Returns(Task.CompletedTask);
+        _uow.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .Callback(() => eventPresentAtSave = savedReview!.DomainEvents.Any(e => e is ReviewSubmittedEvent))
+            .ReturnsAsync(1);
+
+        ResponseData<ReviewResponse> result = await CreateService().SubmitAsync(
+            customer.Email, "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+
+        result.StatusCode.Should().Be(201);
+        result.Data!.ProductId.Should().Be(product.Id);
+        result.Data.CustomerId.Should().Be(customer.Id);
+        result.Data.Status.Should().Be(ReviewStatus.Pending);
+        eventPresentAtSave.Should().BeTrue("the ReviewSubmittedEvent must be added before SaveChanges");
+        savedReview!.DomainEvents.OfType<ReviewSubmittedEvent>().Single().Rating.Should().Be(5);
+        _reviews.Verify(r => r.AddAsync(It.IsAny<Review>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task SubmitAsync_TenantUnresolved_ReturnsFailure400()
+    {
+        _tenant.SetupGet(t => t.TenantId).Returns((Guid?)null);
+        var request = new SubmitReviewRequest { ProductId = Guid.NewGuid(), Rating = 5 };
+
+        ResponseData<ReviewResponse> result = await CreateService().SubmitAsync(
+            "customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+
+        result.StatusCode.Should().Be(400);
+        _uow.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SubmitAsync_UnknownProduct_Returns404()
+    {
+        var productId = Guid.NewGuid();
+        _products.Setup(r => r.GetByIdAsync(productId)).ReturnsAsync((Product?)null);
+        var request = new SubmitReviewRequest { ProductId = productId, Rating = 5 };
+
+        ResponseData<ReviewResponse> result = await CreateService().SubmitAsync(
+            "customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+
+        result.StatusCode.Should().Be(404);
+        _uow.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SubmitAsync_ProductBelongsToAnotherTenant_Returns404()
+    {
+        var product = new Product { Id = Guid.NewGuid(), TenantId = Guid.NewGuid(), Name = "Tee", BasePrice = 20m };
+        _products.Setup(r => r.GetByIdAsync(product.Id)).ReturnsAsync(product);
+        var request = new SubmitReviewRequest { ProductId = product.Id, Rating = 5 };
+
+        ResponseData<ReviewResponse> result = await CreateService().SubmitAsync(
+            "customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+
+        result.StatusCode.Should().Be(404);
+        _uow.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 }

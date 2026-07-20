@@ -218,6 +218,11 @@ internal static class ApiUrl
         public const string Cancel = "api/store/orders/{id}/cancel";
     }
 
+    internal static class StoreReviews
+    {
+        public const string Submit = "api/store/reviews";
+    }
+
     internal static class TenantOrders
     {
         public const string GetAll = "api/tenant/orders";

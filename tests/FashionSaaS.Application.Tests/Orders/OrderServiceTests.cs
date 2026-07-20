@@ -5,6 +5,7 @@ using FashionSaaS.Application.Orders;
 using FashionSaaS.Application.Orders.DTOs;
 using FashionSaaS.Domain.Entities;
 using FashionSaaS.Domain.Enums;
+using FashionSaaS.Domain.Events;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -507,5 +508,84 @@ public class OrderServiceTests
         result.Data.Items.Should().HaveCount(1);
         _orders.Verify(r => r.GetPagedAsync(
             It.Is<OrderFilter>(f => f.CustomerEmail == "customer@example.com"), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    // ── Domain events (Phase 7) ──────────────────────────────────────────────────
+
+    [Fact]
+    public async Task CreateAsync_RaisesOrderPlacedEvent()
+    {
+        var product = new Product { Id = Guid.NewGuid(), TenantId = _tenantId, Name = "Tee", BasePrice = 20m, Status = ProductStatus.Active };
+        _products.Setup(r => r.GetByIdAsync(product.Id)).ReturnsAsync(product);
+        _variants.Setup(r => r.GetByProductAsync(product.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<ProductVariant>());
+        _orders.Setup(r => r.CountForYearAsync(_tenantId, It.IsAny<int>(), It.IsAny<CancellationToken>())).ReturnsAsync(0);
+        SetupCustomer(Customer());
+        Order? addedOrder = null;
+        _orders.Setup(r => r.AddAsync(It.IsAny<Order>())).Callback<Order>(o => addedOrder = o).Returns(Task.CompletedTask);
+
+        CreateOrderRequest request = ValidRequestFor(product.Id, quantity: 2);
+        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+
+        result.StatusCode.Should().Be(201);
+        addedOrder.Should().NotBeNull();
+        addedOrder!.DomainEvents.OfType<OrderPlacedEvent>().Single().OrderNumber.Should().Be(addedOrder.OrderNumber);
+        addedOrder.DomainEvents.OfType<OrderPlacedEvent>().Single().Total.Should().Be(addedOrder.Total);
+    }
+
+    [Fact]
+    public async Task ConfirmAsync_RaisesOrderStatusChangedEvent_PendingToConfirmed()
+    {
+        Order order = OrderWithStatus(OrderStatus.Pending);
+        _orders.Setup(r => r.GetByIdWithItemsAsync(order.Id, It.IsAny<CancellationToken>())).ReturnsAsync(order);
+
+        ResponseData<OrderDto> result = await CreateService().ConfirmAsync(order.Id, Guid.NewGuid(), "127.0.0.1", "ua");
+
+        result.StatusCode.Should().Be(200);
+        OrderStatusChangedEvent evt = order.DomainEvents.OfType<OrderStatusChangedEvent>().Single();
+        evt.PreviousStatus.Should().Be(OrderStatus.Pending);
+        evt.NewStatus.Should().Be(OrderStatus.Confirmed);
+    }
+
+    [Fact]
+    public async Task ShipAsync_RaisesOrderStatusChangedEvent_ConfirmedToShipped()
+    {
+        Order order = OrderWithStatus(OrderStatus.Confirmed);
+        _orders.Setup(r => r.GetByIdWithItemsAsync(order.Id, It.IsAny<CancellationToken>())).ReturnsAsync(order);
+
+        ResponseData<OrderDto> result = await CreateService().ShipAsync(order.Id, "TRACK123", Guid.NewGuid(), "127.0.0.1", "ua");
+
+        result.StatusCode.Should().Be(200);
+        OrderStatusChangedEvent evt = order.DomainEvents.OfType<OrderStatusChangedEvent>().Single();
+        evt.PreviousStatus.Should().Be(OrderStatus.Confirmed);
+        evt.NewStatus.Should().Be(OrderStatus.Shipped);
+    }
+
+    [Fact]
+    public async Task DeliverAsync_RaisesOrderStatusChangedEvent_ShippedToDelivered()
+    {
+        Order order = OrderWithStatus(OrderStatus.Shipped);
+        _orders.Setup(r => r.GetByIdWithItemsAsync(order.Id, It.IsAny<CancellationToken>())).ReturnsAsync(order);
+
+        ResponseData<OrderDto> result = await CreateService().DeliverAsync(order.Id, Guid.NewGuid(), "127.0.0.1", "ua");
+
+        result.StatusCode.Should().Be(200);
+        OrderStatusChangedEvent evt = order.DomainEvents.OfType<OrderStatusChangedEvent>().Single();
+        evt.PreviousStatus.Should().Be(OrderStatus.Shipped);
+        evt.NewStatus.Should().Be(OrderStatus.Delivered);
+    }
+
+    [Fact]
+    public async Task CancelAsync_RaisesOrderStatusChangedEvent_ToCancelled()
+    {
+        Order order = OrderWithStatus(OrderStatus.Pending);
+        _orders.Setup(r => r.GetByIdWithItemsAsync(order.Id, It.IsAny<CancellationToken>())).ReturnsAsync(order);
+
+        ResponseData<OrderDto> result = await CreateService().CancelAsync(order.Id, "reason", false, null, Guid.NewGuid(), "127.0.0.1", "ua");
+
+        result.StatusCode.Should().Be(200);
+        OrderStatusChangedEvent evt = order.DomainEvents.OfType<OrderStatusChangedEvent>().Single();
+        evt.PreviousStatus.Should().Be(OrderStatus.Pending);
+        evt.NewStatus.Should().Be(OrderStatus.Cancelled);
     }
 }

@@ -3,6 +3,7 @@ using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Application.Orders.DTOs;
 using FashionSaaS.Domain.Entities;
 using FashionSaaS.Domain.Enums;
+using FashionSaaS.Domain.Events;
 using Mapster;
 using Microsoft.Extensions.Logging;
 
@@ -142,6 +143,8 @@ public class OrderService(
             });
         }
 
+        order.AddDomainEvent(new OrderPlacedEvent(order.Id, tenantId, order.OrderNumber, order.Total));
+
         await orderRepository.AddAsync(order);
         await unitOfWork.SaveChangesAsync(ct);
 
@@ -238,6 +241,8 @@ public class OrderService(
         OrderStatus previousStatus = order.Status;
         order.Status = target;
         beforeSave?.Invoke(order);
+        order.AddDomainEvent(new OrderStatusChangedEvent(
+            order.Id, order.TenantId, order.CustomerId, order.OrderNumber, previousStatus, target));
 
         await unitOfWork.SaveChangesAsync(ct);
 
@@ -290,6 +295,9 @@ public class OrderService(
                 AdjustedByUserId = actingUserId
             });
         }
+
+        order.AddDomainEvent(new OrderStatusChangedEvent(
+            order.Id, order.TenantId, order.CustomerId, order.OrderNumber, previousStatus, OrderStatus.Cancelled));
 
         await unitOfWork.SaveChangesAsync(ct);
 
