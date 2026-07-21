@@ -1,0 +1,127 @@
+name: fashionsaas
+
+# Migrations are NOT run automatically by any service on startup (locked decision D3 in
+# docs/superpowers/plans/2026-07-18-phase8-docker-ci-azure.md). After `docker compose up`, apply
+# pending EF Core migrations manually from a dev machine before the api/tryon-api containers are
+# expected to serve real traffic:
+#   dotnet ef database update --project src/FashionSaaS.Infrastructure --startup-project src/FashionSaaS.API
+#   dotnet ef database update --project services/fashionsaas-tryon/src/FashionSaaS.TryOn.Infrastructure --startup-project services/fashionsaas-tryon/src/FashionSaaS.TryOn.Api
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: fashionsaas-sqlserver
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - fashionsaas
+
+  servicebus-sql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: fashionsaas-servicebus-sql
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${SERVICEBUS_SQL_SA_PASSWORD}
+    networks:
+      fashionsaas:
+        aliases:
+          - servicebus-sql
+
+  servicebus-emulator:
+    image: mcr.microsoft.com/azure-messaging/servicebus-emulator:latest
+    container_name: fashionsaas-servicebus-emulator
+    pull_policy: always
+    volumes:
+      - ./services/fashionsaas-tryon/servicebus-emulator-config.json:/ServiceBus_Emulator/ConfigFiles/Config.json
+    ports:
+      - "5672:5672"
+      - "5300:5300"
+    environment:
+      SQL_SERVER: servicebus-sql
+      MSSQL_SA_PASSWORD: ${SERVICEBUS_SQL_SA_PASSWORD}
+      ACCEPT_EULA: "Y"
+    depends_on:
+      - servicebus-sql
+    networks:
+      fashionsaas:
+        aliases:
+          - servicebus-emulator
+
+  api:
+    build:
+      context: .
+      dockerfile: src/FashionSaaS.API/Dockerfile
+    container_name: fashionsaas-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: "8080"
+      ConnectionStrings__DefaultConnection: ${API_DB_CONNECTION_STRING}
+      JwtSettings__Secret: ${JWT_SECRET}
+      EncryptionSettings__BankFieldKey: ${ENCRYPTION_BANK_FIELD_KEY}
+      SmtpSettings__Username: ${SMTP_USERNAME}
+      SmtpSettings__Password: ${SMTP_PASSWORD}
+      Cloudinary__CloudName: ${CLOUDINARY_CLOUD_NAME}
+      Cloudinary__ApiKey: ${CLOUDINARY_API_KEY}
+      Cloudinary__ApiSecret: ${CLOUDINARY_API_SECRET}
+      Cors__AllowedOrigins__0: ${STOREFRONT_ORIGIN}
+    ports:
+      - "5000:8080"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    networks:
+      - fashionsaas
+
+  tryon-api:
+    build:
+      context: services/fashionsaas-tryon
+      dockerfile: src/FashionSaaS.TryOn.Api/Dockerfile
+    container_name: fashionsaas-tryon-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: "8080"
+      ConnectionStrings__TryOnConnection: ${TRYON_DB_CONNECTION_STRING}
+      JwtSettings__Secret: ${JWT_SECRET}
+      GeminiSettings__ApiKey: ${GEMINI_API_KEY}
+      ServiceBusSettings__ConnectionString: ${SERVICEBUS_CONNECTION_STRING}
+    ports:
+      - "5050:8080"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      servicebus-emulator:
+        condition: service_started
+    networks:
+      - fashionsaas
+
+  storefront:
+    build:
+      context: fashionsaas-storefront
+      dockerfile: Dockerfile
+      args:
+        API_BASE_URL: ${STOREFRONT_API_BASE_URL}
+        TRYON_API_BASE_URL: ${STOREFRONT_TRYON_API_BASE_URL}
+    container_name: fashionsaas-storefront
+    ports:
+      - "4200:80"
+    depends_on:
+      - api
+    networks:
+      - fashionsaas
+
+networks:
+  fashionsaas:
+
+volumes:
+  sqlserver-data:
