@@ -70,6 +70,9 @@ builder.Services.AddValidatorsFromAssembly(typeof(FashionSaaS.Application.Catego
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 
+// Health checks — consumed by the Dockerfile's HEALTHCHECK directive (Phase 8, D6).
+builder.Services.AddHealthChecks();
+
 // Controllers + Swagger
 // JsonStringEnumConverter: all enum-typed request/response DTO properties serialize/bind as their
 // member name (e.g. "Pending"), not the underlying int. Without this, any DTO exposing a raw enum
@@ -163,5 +166,6 @@ if (app.Environment.IsDevelopment())
 
 app.MapControllers();
 app.MapHub<NotificationsHub>("/hubs/notifications");
+app.MapHealthChecks("/health");
 
 await app.RunAsync();
