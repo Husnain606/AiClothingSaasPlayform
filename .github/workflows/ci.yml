@@ -1,0 +1,152 @@
+name: CI
+
+# Default branch for this repo is `master` (confirmed via `git branch -a`), not `main`.
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  backend:
+    name: Backend (FashionSaaS.sln)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # NOTE: actions/setup-dotnet's own `cache: true` option hashes **/packages.lock.json by
+      # default, but this repo has no committed lock files (no RestorePackagesWithLockFile
+      # anywhere) — enabling it would error with "no lock files found". Cache the NuGet
+      # global-packages folder manually instead, keyed on the csproj/Directory.Packages.props
+      # contents, which works with Central Package Management and no lock files.
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', 'Directory.Packages.props') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore FashionSaaS.sln
+
+      - name: Build (warnings as errors)
+        run: dotnet build FashionSaaS.sln --no-restore -warnaserror
+
+      - name: Test
+        run: dotnet test FashionSaaS.sln --no-build --logger "console;verbosity=normal"
+        # Expected baseline (re-verified this session, not the stale plan figures): 487 passed
+        # (Domain 25, Application 362, Infrastructure 100), 0 failed. Not enforced as a hard
+        # count-gate here — see plan's Open Question 1.
+
+  tryon:
+    name: Try-On (FashionSaaS.TryOn.sln)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/fashionsaas-tryon
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-tryon-${{ hashFiles('services/fashionsaas-tryon/**/*.csproj', 'Directory.Packages.props') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-tryon-
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore FashionSaaS.TryOn.sln
+
+      - name: Build (warnings as errors)
+        run: dotnet build FashionSaaS.TryOn.sln --no-restore -warnaserror
+
+      - name: Test
+        run: dotnet test FashionSaaS.TryOn.sln --no-build --logger "console;verbosity=normal"
+        # Expected baseline (re-verified this session): 65 passed (Domain 9, Application 31,
+        # Infrastructure 19, Api 6), 0 failed. Not enforced as a hard count-gate — see backend
+        # job's note.
+
+  storefront:
+    name: Storefront (Angular)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: fashionsaas-storefront
+    steps:
+      # fashionsaas-storefront is checked in as a git submodule (gitlink / mode 160000 tree
+      # entry) of the superproject. `submodules: true` is required or this checkout populates
+      # an empty directory and every later step in this job fails confusingly.
+      #
+      # KNOWN GAP (verified this session, flagged — not fixed here, out of Group E scope): this
+      # repo has NO .gitmodules file at the root, even though `fashionsaas-storefront` is a
+      # 160000 gitlink entry in the superproject tree and has its own independent .git history.
+      # `git submodule status` on the host confirms: "no submodule mapping found in .gitmodules
+      # for path 'fashionsaas-storefront'". Without .gitmodules registering the submodule's URL,
+      # `actions/checkout`'s `submodules: true` (which drives `git submodule update --init
+      # --recursive`) has nothing to initialize from and will most likely still leave this
+      # directory empty on a clean CI runner (no local .git history to fall back on, unlike this
+      # dev machine). This job is therefore expected to fail on a real run until a proper
+      # `.gitmodules` entry (with a fetchable URL) is added — flagged for Dan, not silently
+      # worked around.
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: fashionsaas-storefront/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Build (production)
+        run: npm run build:prod
+
+      - name: Test
+        run: npm run test:ci
+        # `npm test` (bare) resolves to `ng test`, which runs Karma/Jasmine in watch mode and
+        # would hang the CI job forever. `npm run test:ci` maps to `ng test --watch=false` —
+        # confirmed against fashionsaas-storefront/package.json's "scripts" block this session.
+        # Expected baseline (re-verified this session): 882 passing.
+
+  docker:
+    name: Docker image builds (no push)
+    runs-on: ubuntu-latest
+    needs: [backend, tryon, storefront]
+    steps:
+      # Same submodule caveat as the storefront job above applies here too — the storefront
+      # image build step will fail on a clean runner until .gitmodules is fixed.
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      # GitHub-hosted ubuntu-latest runners ship Docker pre-installed; no setup-docker action
+      # needed. Nothing is pushed to any registry — no registry login step, no credentials.
+
+      - name: Build API image
+        run: docker build -f src/FashionSaaS.API/Dockerfile -t fashionsaas-api:ci .
+
+      - name: Build TryOn API image
+        run: |
+          docker build -f services/fashionsaas-tryon/src/FashionSaaS.TryOn.Api/Dockerfile \
+            -t fashionsaas-tryon:ci services/fashionsaas-tryon
+
+      - name: Build Storefront image
+        run: |
+          docker build -f fashionsaas-storefront/Dockerfile \
+            -t fashionsaas-storefront:ci fashionsaas-storefront
