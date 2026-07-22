@@ -12,6 +12,8 @@ public class UserRepository(ApplicationDbContext context)
 
     public async Task<User?> GetByIdWithRolesAsync(Guid id)
         => await DbSet.Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
+            .Include(u => u.MfaSettings)
+            .Include(u => u.Tenant)
             .FirstOrDefaultAsync(u => u.Id == id);
 
     public async Task<bool> EmailExistsAsync(string email)
