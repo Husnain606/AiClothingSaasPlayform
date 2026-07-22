@@ -19,16 +19,6 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <!-- NU1701: OtpSharp and its transitive Base32 dependency only ship .NET Framework TFMs,
-         no netstandard/net-modern target — NuGet restores both via compat-mode into net10.0,
-         a real (if narrow) risk, not a false positive. TreatWarningsAsErrors would otherwise
-         block restore entirely; suppressed on both references directly (Base32 pinned
-         explicitly here so the NoWarn metadata has somewhere to attach), not solution-wide.
-         Every project that transitively resolves this pair (FashionSaaS.API and the two test
-         projects referencing Infrastructure) needs the same NoWarn — NuGet evaluates NU1701
-         per consuming project's own restore, not once at the defining project. — 2026-07-11 -->
-    <PackageReference Include="OtpSharp" Version="1.3.0.4" NoWarn="NU1701" />
-    <PackageReference Include="Base32" Version="1.0.0.26" NoWarn="NU1701" />
     <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
