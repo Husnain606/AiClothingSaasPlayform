@@ -3,6 +3,7 @@ using FashionSaaS.Application.Common;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Domain.Entities;
 using FashionSaaS.Domain.Events;
+using Microsoft.Extensions.Logging;
 
 namespace FashionSaaS.Application.BankAccounts;
 
@@ -14,7 +15,8 @@ public class BankAccountService(
     IAuditLogService auditLogService,
     IEmailService emailService,
     IUnitOfWork unitOfWork,
-    ITotpService totpService)
+    ITotpService totpService,
+    ILogger<BankAccountService> logger)
 {
     public async Task<ResponseData<BankAccountResponse>> GetAsync(Guid? tenantId)
     {
@@ -87,7 +89,21 @@ public class BankAccountService(
 
         await auditLogService.LogAsync(userId, tenantId, "BankAccountCreated", "BankAccount", account.Id,
             null, new { AccountNumber = fieldEncryption.MaskAccountNumber(request.AccountNumber) }, ip, ua);
-        await emailService.SendBankAccountChangedAsync(user.Email);
+
+        // Best-effort: the bank account row already committed above (SaveChangesAsync). A
+        // notification-send failure must never turn an already-successful write into a 500.
+        try
+        {
+            await emailService.SendBankAccountChangedAsync(user.Email);
+        }
+#pragma warning disable CA1031
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex,
+                "Failed to send BankAccountChanged (Created) email to {Email} for bank account {BankAccountId}.",
+                user.Email, account.Id);
+        }
+#pragma warning restore CA1031
 
         return ResponseData<BankAccountResponse>.Success(MapMasked(account), "Bank account created.", 201);
     }
@@ -124,7 +140,21 @@ public class BankAccountService(
 
         await auditLogService.LogAsync(userId, tenantId, "BankAccountUpdated", "BankAccount", account.Id,
             oldMasked, new { AccountNumber = fieldEncryption.MaskAccountNumber(request.AccountNumber) }, ip, ua);
-        await emailService.SendBankAccountChangedAsync(user.Email);
+
+        // Best-effort: the bank account row already committed above (SaveChangesAsync). A
+        // notification-send failure must never turn an already-successful write into a 500.
+        try
+        {
+            await emailService.SendBankAccountChangedAsync(user.Email);
+        }
+#pragma warning disable CA1031
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex,
+                "Failed to send BankAccountChanged (Updated) email to {Email} for bank account {BankAccountId}.",
+                user.Email, account.Id);
+        }
+#pragma warning restore CA1031
 
         return ResponseData<BankAccountResponse>.Success(MapMasked(account));
     }

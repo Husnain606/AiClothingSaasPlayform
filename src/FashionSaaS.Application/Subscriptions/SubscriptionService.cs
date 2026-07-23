@@ -4,6 +4,7 @@ using FashionSaaS.Application.Subscriptions.DTOs;
 using FashionSaaS.Domain.Entities;
 using FashionSaaS.Domain.Enums;
 using FashionSaaS.Domain.Events;
+using Microsoft.Extensions.Logging;
 
 namespace FashionSaaS.Application.Subscriptions;
 
@@ -16,7 +17,8 @@ public class SubscriptionService(
     IEmailService emailService,
     IAuditLogService auditLogService,
     IUnitOfWork unitOfWork,
-    IFieldEncryptionService fieldEncryption)
+    IFieldEncryptionService fieldEncryption,
+    ILogger<SubscriptionService> logger)
 {
     // ── AssignAsync ──────────────────────────────────────────────────────────
 
@@ -65,7 +67,21 @@ public class SubscriptionService(
                   $"Account: {fieldEncryption.MaskAccountNumber(fieldEncryption.Decrypt(platformAccount.AccountNumberEncrypted))}"
                 : "Contact admin for bank details.";
 
-            await emailService.SendSubscriptionAssignedAsync(tenant.Email, plan.Name, endDate, bankDetails);
+            // Best-effort: a notification-send failure must never block the subscription/payment
+            // rows staged above from being committed by the SaveChangesAsync call below, nor
+            // turn an otherwise-successful assignment into a 500.
+            try
+            {
+                await emailService.SendSubscriptionAssignedAsync(tenant.Email, plan.Name, endDate, bankDetails);
+            }
+#pragma warning disable CA1031
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex,
+                    "Failed to send SubscriptionAssigned email to {Email} for tenant {TenantId}.",
+                    tenant.Email, tenant.Id);
+            }
+#pragma warning restore CA1031
         }
 
         await unitOfWork.SaveChangesAsync();
@@ -192,7 +208,20 @@ public class SubscriptionService(
 
         if (tenant is not null)
         {
-            await emailService.SendPaymentConfirmedAsync(tenant.Email, payment.Amount);
+            // Best-effort: the payment row already committed above (SaveChangesAsync). A
+            // notification-send failure must never turn an already-confirmed payment into a 500.
+            try
+            {
+                await emailService.SendPaymentConfirmedAsync(tenant.Email, payment.Amount);
+            }
+#pragma warning disable CA1031
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex,
+                    "Failed to send PaymentConfirmed email to {Email} for payment {PaymentId}.",
+                    tenant.Email, payment.Id);
+            }
+#pragma warning restore CA1031
         }
 
         await auditLogService.LogAsync(adminId, payment.TenantId, "PaymentConfirmed", "SubscriptionPayment",

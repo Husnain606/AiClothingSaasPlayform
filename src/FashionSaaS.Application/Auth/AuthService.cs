@@ -7,6 +7,7 @@ using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Domain.Entities;
 using FashionSaaS.Domain.Enums;
 using FashionSaaS.Domain.Events;
+using Microsoft.Extensions.Logging;
 
 namespace FashionSaaS.Application.Auth;
 
@@ -21,7 +22,8 @@ public class AuthService(
     IEmailService emailService,
     IFieldEncryptionService fieldEncryption,
     ISuperAdminIpGuardService ipGuardService,
-    ISubscriptionRepository subscriptionRepository)
+    ISubscriptionRepository subscriptionRepository,
+    ILogger<AuthService> logger)
 {
     // No nested/unbounded-then-overlapping quantifiers (each lookahead is independent and
     // anchored), so catastrophic backtracking isn't reachable here either — the timeout is
@@ -53,8 +55,24 @@ public class AuthService(
 
         if (recentFailures >= 5)
         {
+            // Best-effort: this notification email must never turn a normal "account locked"
+            // response into a 500 — the lockout decision itself doesn't depend on the email.
             if (user is not null)
-                await emailService.SendAccountLockedAsync(user.Email);
+            {
+                try
+                {
+                    await emailService.SendAccountLockedAsync(user.Email);
+                }
+#pragma warning disable CA1031
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex,
+                        "Failed to send AccountLocked email to {Email} during rate-based lockout.",
+                        user.Email);
+                }
+#pragma warning restore CA1031
+            }
+
             return ResponseData<LoginResponse>.Failure("Account temporarily locked. Try again in 15 minutes.", 423);
         }
 
@@ -240,7 +258,19 @@ public class AuthService(
         await unitOfWork.SaveChangesAsync();
 
         var resetLink = $"{baseUrl}/reset-password?token={Uri.EscapeDataString(rawToken)}";
-        await emailService.SendPasswordResetAsync(user.Email, resetLink);
+
+        // Best-effort: the reset token row already committed above (SaveChangesAsync). A
+        // notification-send failure must never turn an already-issued reset token into a 500.
+        try
+        {
+            await emailService.SendPasswordResetAsync(user.Email, resetLink);
+        }
+#pragma warning disable CA1031
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to send PasswordReset email to {Email}.", user.Email);
+        }
+#pragma warning restore CA1031
 
         return ResponseData<bool>.Success(true, "If this email is registered, a reset link has been sent.");
     }

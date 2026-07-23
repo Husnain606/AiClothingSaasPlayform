@@ -4,6 +4,7 @@ using FashionSaaS.Application.Common;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Domain.Entities;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 namespace FashionSaaS.Application.Tests.BankAccounts;
@@ -23,7 +24,8 @@ public class BankAccountServiceTests
     private const string Ua = "xunit";
 
     private BankAccountService CreateService() => new(_bankRepo.Object, _userRepo.Object,
-        _encryption.Object, _hasher.Object, _audit.Object, _email.Object, _uow.Object, _totp.Object);
+        _encryption.Object, _hasher.Object, _audit.Object, _email.Object, _uow.Object, _totp.Object,
+        NullLogger<BankAccountService>.Instance);
 
     private void SetupUow() =>
         _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
@@ -633,5 +635,91 @@ public class BankAccountServiceTests
         result.Data!.AccountNumber.Should().Be("99998888");
         result.Data.AccountNumber.Should().NotStartWith("****");
         _encryption.Verify(e => e.MaskAccountNumber(It.IsAny<string>()), Times.Never);
+    }
+
+    // ── Resilience: email delivery failures must not fail the business operation ─
+
+    [Fact]
+    public async Task CreateAsync_EmailSendThrows_StillReturnsSuccessAndPersistsAccount()
+    {
+        var user = new User { Id = Guid.NewGuid(), PasswordHash = "hash", Email = "admin@x.com" };
+        _userRepo.Setup(r => r.GetByIdAsync(user.Id)).ReturnsAsync(user);
+        _hasher.Setup(h => h.Verify("pwd", "hash")).Returns(true);
+        _bankRepo.Setup(r => r.GetPlatformAccountAsync()).ReturnsAsync((BankAccount?)null);
+        _bankRepo.Setup(r => r.AddAsync(It.IsAny<BankAccount>())).Returns(Task.CompletedTask);
+        _encryption.Setup(e => e.Encrypt(It.IsAny<string>())).Returns<string>(s => $"ENC({s})");
+        _encryption.Setup(e => e.Decrypt(It.IsAny<string>())).Returns<string>(s => s);
+        _encryption.Setup(e => e.MaskAccountNumber(It.IsAny<string>())).Returns("****5678");
+        _email.Setup(e => e.SendBankAccountChangedAsync(It.IsAny<string>()))
+            .ThrowsAsync(new InvalidOperationException("SMTP unavailable"));
+        SetupUow();
+        SetupAudit();
+
+        ResponseData<BankAccountResponse> result = await CreateService().CreateAsync(
+            new CreateBankAccountRequest
+            {
+                AccountTitle = "ACME Corp",
+                AccountNumber = "12345678",
+                BankName = "HBL",
+                BranchCode = "0012",
+                Iban = "PK36SCBL0000001123456702",
+                CurrentPassword = "pwd"
+            },
+            user.Id, null, Ip, Ua);
+
+        // The bank account row must still be created and the response must still report success —
+        // an email-send failure must never turn an already-committed write into a 500.
+        result.IsSuccess.Should().BeTrue();
+        result.StatusCode.Should().Be(201);
+        _bankRepo.Verify(r => r.AddAsync(It.IsAny<BankAccount>()), Times.Once);
+        _uow.Verify(u => u.SaveChangesAsync(default), Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_EmailSendThrows_StillReturnsSuccess()
+    {
+        var user = new User { Id = Guid.NewGuid(), PasswordHash = "hash", Email = "admin@x.com" };
+        var account = new BankAccount
+        {
+            Id = Guid.NewGuid(),
+            TenantId = null,
+            AccountTitleEncrypted = "ENC(OldTitle)",
+            AccountNumberEncrypted = "ENC(11111111)",
+            BankNameEncrypted = "ENC(OldBank)",
+            BranchCodeEncrypted = "ENC(0000)",
+            IbanEncrypted = "ENC(OLDIBAN)",
+            IsActive = true
+        };
+
+        _userRepo.Setup(r => r.GetByIdAsync(user.Id)).ReturnsAsync(user);
+        _hasher.Setup(h => h.Verify("pwd", "hash")).Returns(true);
+        _bankRepo.Setup(r => r.GetPlatformAccountAsync()).ReturnsAsync(account);
+        _bankRepo.Setup(r => r.UpdateAsync(account)).Returns(Task.CompletedTask);
+        _encryption.Setup(e => e.Encrypt(It.IsAny<string>())).Returns<string>(s => $"ENC({s})");
+        _encryption.Setup(e => e.Decrypt(It.IsAny<string>())).Returns<string>(s =>
+            s.StartsWith("ENC(", StringComparison.Ordinal) ? s[4..^1] : s);
+        _encryption.Setup(e => e.MaskAccountNumber(It.IsAny<string>())).Returns<string>(s =>
+            $"****{s[^4..]}");
+        _email.Setup(e => e.SendBankAccountChangedAsync(It.IsAny<string>()))
+            .ThrowsAsync(new InvalidOperationException("SMTP unavailable"));
+        SetupUow();
+        SetupAudit();
+
+        var request = new UpdateBankAccountRequest
+        {
+            AccountTitle = "NewTitle",
+            AccountNumber = "99998888",
+            BankName = "MCB",
+            BranchCode = "0099",
+            Iban = "PK36SCBL0000009999888877",
+            CurrentPassword = "pwd"
+        };
+
+        ResponseData<BankAccountResponse> result = await CreateService().UpdateAsync(request, user.Id, null, Ip, Ua);
+
+        // The update must still succeed — an email-send failure must never turn an
+        // already-committed write into a 500.
+        result.IsSuccess.Should().BeTrue();
+        _uow.Verify(u => u.SaveChangesAsync(default), Times.Once);
     }
 }

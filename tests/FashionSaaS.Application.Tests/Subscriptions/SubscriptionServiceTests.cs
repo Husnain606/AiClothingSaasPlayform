@@ -5,6 +5,7 @@ using FashionSaaS.Application.Subscriptions.DTOs;
 using FashionSaaS.Domain.Entities;
 using FashionSaaS.Domain.Enums;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 namespace FashionSaaS.Application.Tests.Subscriptions;
@@ -27,7 +28,8 @@ public class SubscriptionServiceTests
 
     private SubscriptionService CreateService() => new(
         _subRepo.Object, _payRepo.Object, _planRepo.Object, _tenantRepo.Object,
-        _bankRepo.Object, _email.Object, _audit.Object, _uow.Object, _encrypt.Object);
+        _bankRepo.Object, _email.Object, _audit.Object, _uow.Object, _encrypt.Object,
+        NullLogger<SubscriptionService>.Instance);
 
     private static Tenant MakeTenant(Guid? id = null) => new()
     {
@@ -144,6 +146,38 @@ public class SubscriptionServiceTests
     }
 
     [Fact]
+    public async Task AssignAsync_PaidPlan_EmailSendThrows_StillReturnsSuccessAndPersistsSubscription()
+    {
+        Tenant tenant = MakeTenant();
+        SubscriptionPlan plan = MakePaidPlan();
+        var startDate = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+        _tenantRepo.Setup(r => r.GetByIdAsync(tenant.Id)).ReturnsAsync(tenant);
+        _planRepo.Setup(r => r.GetByIdAsync(plan.Id)).ReturnsAsync(plan);
+        _subRepo.Setup(r => r.AddAsync(It.IsAny<TenantSubscription>())).Returns(Task.CompletedTask);
+        _payRepo.Setup(r => r.AddAsync(It.IsAny<SubscriptionPayment>())).Returns(Task.CompletedTask);
+        _bankRepo.Setup(r => r.GetPlatformAccountAsync()).ReturnsAsync((BankAccount?)null);
+        _email.Setup(e => e.SendSubscriptionAssignedAsync(It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<DateTime>(), It.IsAny<string>()))
+            .ThrowsAsync(new InvalidOperationException("SMTP unavailable"));
+        SetupUow();
+        SetupAudit();
+
+        ResponseData<SubscriptionResponse> result = await CreateService().AssignAsync(
+            new AssignSubscriptionRequest { TenantId = tenant.Id, PlanId = plan.Id, StartDate = startDate },
+            AdminId, Ip, Ua);
+
+        // The subscription + pending payment must still be committed and the response must still
+        // report success — a notification-email failure must never turn an already-staged write
+        // (and the SaveChangesAsync call that follows it) into a 500.
+        result.IsSuccess.Should().BeTrue();
+        result.StatusCode.Should().Be(201);
+        _subRepo.Verify(r => r.AddAsync(It.IsAny<TenantSubscription>()), Times.Once);
+        _payRepo.Verify(r => r.AddAsync(It.IsAny<SubscriptionPayment>()), Times.Once);
+        _uow.Verify(u => u.SaveChangesAsync(default), Times.Once);
+    }
+
+    [Fact]
     public async Task AssignAsync_FreeTrial_UsesTrialDays_NoPaymentCreated()
     {
         Tenant tenant = MakeTenant();
@@ -240,6 +274,39 @@ public class SubscriptionServiceTests
         _uow.Verify(u => u.SaveChangesAsync(default), Times.Once);
         _audit.Verify(a => a.LogAsync(AdminId, tenantId, "PaymentConfirmed",
             "SubscriptionPayment", payment.Id, It.IsAny<object>(), It.IsAny<object>(), Ip, Ua), Times.Once);
+    }
+
+    [Fact]
+    public async Task ConfirmPaymentAsync_EmailSendThrows_StillReturnsSuccessAndPersistsConfirmation()
+    {
+        var tenantId = Guid.NewGuid();
+        Tenant tenant = MakeTenant(tenantId);
+        var payment = new SubscriptionPayment
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            SubscriptionId = Guid.NewGuid(),
+            Amount = 99m,
+            DueDate = DateTime.UtcNow.AddDays(3),
+            Status = PaymentStatus.Pending
+        };
+
+        _payRepo.Setup(r => r.GetByIdAsync(payment.Id)).ReturnsAsync(payment);
+        _payRepo.Setup(r => r.UpdateAsync(payment)).Returns(Task.CompletedTask);
+        _tenantRepo.Setup(r => r.GetByIdAsync(tenantId)).ReturnsAsync(tenant);
+        _email.Setup(e => e.SendPaymentConfirmedAsync(tenant.Email, payment.Amount))
+            .ThrowsAsync(new InvalidOperationException("SMTP unavailable"));
+        SetupUow();
+        SetupAudit();
+
+        ResponseData<PaymentResponse> result = await CreateService().ConfirmPaymentAsync(payment.Id, AdminId, Ip, Ua);
+
+        // The payment row already committed (SaveChangesAsync) before the email is sent — a
+        // notification-email failure must never turn an already-confirmed payment into a 500.
+        result.IsSuccess.Should().BeTrue();
+        result.Data!.Status.Should().Be(PaymentStatus.Confirmed);
+        payment.Status.Should().Be(PaymentStatus.Confirmed);
+        _uow.Verify(u => u.SaveChangesAsync(default), Times.Once);
     }
 
     // ── SuspendAsync ─────────────────────────────────────────────────────────

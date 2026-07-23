@@ -80,4 +80,35 @@ public class SuperAdminLoginFromNewIpEventHandlerTests
                 "System"),
             Times.Once);
     }
+
+    [Fact]
+    public async Task Handle_SendSecurityAlertThrows_StillWritesAuditLog()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var evt = new SuperAdminLoginFromNewIpEvent(userId, "superadmin@system.com", "10.0.0.1", DateTime.UtcNow);
+        var notification = new DomainEventNotification<SuperAdminLoginFromNewIpEvent>(evt);
+
+        _emailService
+            .Setup(e => e.SendSecurityAlertAsync(evt.Email, evt.NewIpAddress, evt.OccurredAt))
+            .ThrowsAsync(new InvalidOperationException("SMTP unavailable"));
+        _auditLogService
+            .Setup(a => a.LogAsync(It.IsAny<Guid>(), It.IsAny<Guid?>(), It.IsAny<string>(),
+                It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<object?>(), It.IsAny<object?>(),
+                It.IsAny<string>(), It.IsAny<string>()))
+            .Returns(Task.CompletedTask);
+
+        SuperAdminLoginFromNewIpEventHandler handler = CreateHandler();
+
+        // Act — must not throw, and the audit log entry (the real record of the event) must
+        // still be written even though the security alert email failed to send.
+        await handler.Handle(notification, CancellationToken.None);
+
+        // Assert
+        _auditLogService.Verify(
+            a => a.LogAsync(
+                evt.UserId, null, "SuperAdminLoginFromNewIp", "User", evt.UserId,
+                null, It.IsAny<object?>(), evt.NewIpAddress, "System"),
+            Times.Once);
+    }
 }

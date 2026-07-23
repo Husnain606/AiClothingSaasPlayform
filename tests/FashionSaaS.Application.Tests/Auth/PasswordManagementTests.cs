@@ -4,6 +4,7 @@ using FashionSaaS.Application.Common;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Domain.Entities;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 namespace FashionSaaS.Application.Tests.Auth;
@@ -29,7 +30,8 @@ public class PasswordManagementTests
         _userRepo.Object, _refreshRepo.Object, _loginAttemptRepo.Object,
         _passwordHasher.Object, _jwtService.Object, _uow.Object,
         _auditLog.Object, _emailService.Object, _fieldEncryption.Object,
-        _ipGuardService.Object, _subscriptionRepo.Object);
+        _ipGuardService.Object, _subscriptionRepo.Object,
+        NullLogger<AuthService>.Instance);
 
     // ------------------------------------------------------------------
     // ForgotPassword
@@ -68,6 +70,27 @@ public class PasswordManagementTests
         _resetTokenRepo.Verify(r => r.InvalidateAllByUserIdAsync(user.Id), Times.Once);
         _resetTokenRepo.Verify(r => r.AddAsync(It.IsAny<PasswordResetToken>()), Times.Once);
         _emailService.Verify(e => e.SendPasswordResetAsync(user.Email, It.IsAny<string>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ForgotPasswordAsync_EmailSendThrows_StillReturnsSuccessAndPersistsToken()
+    {
+        var user = new User { Id = Guid.NewGuid(), Email = "user@test.com", PasswordHash = "hash", IsActive = true };
+        _userRepo.Setup(r => r.GetByEmailAsync("user@test.com")).ReturnsAsync(user);
+        _resetTokenRepo.Setup(r => r.InvalidateAllByUserIdAsync(user.Id)).Returns(Task.CompletedTask);
+        _resetTokenRepo.Setup(r => r.AddAsync(It.IsAny<PasswordResetToken>())).Returns(Task.CompletedTask);
+        _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
+        _emailService.Setup(e => e.SendPasswordResetAsync(user.Email, It.IsAny<string>()))
+            .ThrowsAsync(new InvalidOperationException("SMTP unavailable"));
+
+        AuthService service = CreateService();
+        ResponseData<bool> result = await service.ForgotPasswordAsync("user@test.com", "https://app.test", _resetTokenRepo.Object);
+
+        // The reset token must still be persisted and the response must still report success —
+        // a notification-email failure must never turn an already-committed write into a 500.
+        result.IsSuccess.Should().BeTrue();
+        result.Message.Should().Be("If this email is registered, a reset link has been sent.");
+        _resetTokenRepo.Verify(r => r.AddAsync(It.IsAny<PasswordResetToken>()), Times.Once);
     }
 
     [Fact]

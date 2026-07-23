@@ -4,6 +4,7 @@ using FashionSaaS.Application.Tenants;
 using FashionSaaS.Application.Tenants.DTOs;
 using FashionSaaS.Domain.Entities;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 namespace FashionSaaS.Application.Tests.Tenants;
@@ -15,7 +16,8 @@ public class TenantServiceTests
     private readonly Mock<IAuditLogService> _audit = new();
     private readonly Mock<IEmailService> _email = new();
 
-    private TenantService CreateService() => new(_tenantRepo.Object, _uow.Object, _audit.Object, _email.Object);
+    private TenantService CreateService() => new(_tenantRepo.Object, _uow.Object, _audit.Object, _email.Object,
+        NullLogger<TenantService>.Instance);
 
     [Fact]
     public async Task CreateAsync_NewSlug_ReturnsSuccess()
@@ -64,6 +66,24 @@ public class TenantServiceTests
 
         result.IsSuccess.Should().BeTrue();
         tenant.IsActive.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task SuspendAsync_EmailSendThrows_StillReturnsSuccessAndPersistsSuspension()
+    {
+        var tenant = new Tenant { Id = Guid.NewGuid(), IsActive = true, Email = "admin@nike.com", Name = "Nike" };
+        _tenantRepo.Setup(r => r.GetByIdAsync(tenant.Id)).ReturnsAsync(tenant);
+        _email.Setup(e => e.SendTenantSuspendedAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ThrowsAsync(new InvalidOperationException("SMTP unavailable"));
+
+        TenantService service = CreateService();
+        ResponseData<bool> result = await service.SuspendAsync(tenant.Id, Guid.NewGuid(), "127.0.0.1", "Mozilla");
+
+        // The suspension must still be persisted and the response must still report success — a
+        // notification-email failure must never turn an already-committed write into a 500.
+        result.IsSuccess.Should().BeTrue();
+        tenant.IsActive.Should().BeFalse();
+        _tenantRepo.Verify(r => r.UpdateAsync(It.IsAny<Tenant>()), Times.Once);
     }
 
     [Fact]

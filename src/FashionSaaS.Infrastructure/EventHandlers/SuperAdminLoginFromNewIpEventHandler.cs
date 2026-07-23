@@ -28,7 +28,21 @@ public class SuperAdminLoginFromNewIpEventHandler(
             evt.UserId);
 
         // Send security alert email — IEmailService.SendSecurityAlertAsync is defined in Application.Interfaces
-        await emailService.SendSecurityAlertAsync(evt.Email, evt.NewIpAddress, evt.OccurredAt);
+        try
+        {
+            await emailService.SendSecurityAlertAsync(evt.Email, evt.NewIpAddress, evt.OccurredAt);
+        }
+        // CA1031 suppressed: email delivery is best-effort; the business operation (login +
+        // audit trail) already committed and must not fail because a notification couldn't be
+        // sent — matches the persist-then-push swallow pattern used elsewhere in this codebase.
+#pragma warning disable CA1031
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex,
+                "Failed to send security alert email to {Email} for SuperAdmin {UserId} new-IP login.",
+                evt.Email, evt.UserId);
+        }
+#pragma warning restore CA1031
 
         // Append-only audit log entry — no raw secrets written, only IP + timestamp
         await auditLogService.LogAsync(

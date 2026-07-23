@@ -4,6 +4,7 @@ using FashionSaaS.Application.Tenants.DTOs;
 using FashionSaaS.Domain.Entities;
 using FashionSaaS.Domain.Events;
 using FashionSaaS.Domain.ValueObjects;
+using Microsoft.Extensions.Logging;
 
 namespace FashionSaaS.Application.Tenants;
 
@@ -11,7 +12,8 @@ public class TenantService(
     ITenantRepository tenantRepository,
     IUnitOfWork unitOfWork,
     IAuditLogService auditLogService,
-    IEmailService emailService)
+    IEmailService emailService,
+    ILogger<TenantService> logger)
 {
     public async Task<ResponseData<TenantResponse>> CreateAsync(CreateTenantRequest request,
         Guid createdByUserId, string ipAddress, string userAgent)
@@ -123,7 +125,21 @@ public class TenantService(
 
         await auditLogService.LogAsync(adminUserId, null, "TenantSuspended", "Tenant", tenant.Id,
             new { WasActive = wasActive }, new { IsActive = false }, ipAddress, userAgent);
-        await emailService.SendTenantSuspendedAsync(tenant.Email, "Administrative action");
+
+        // Best-effort: the tenant row already committed above (SaveChangesAsync). A
+        // notification-send failure must never turn an already-successful suspension into a 500.
+        try
+        {
+            await emailService.SendTenantSuspendedAsync(tenant.Email, "Administrative action");
+        }
+#pragma warning disable CA1031
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex,
+                "Failed to send TenantSuspended email to {Email} for tenant {TenantId}.",
+                tenant.Email, tenant.Id);
+        }
+#pragma warning restore CA1031
 
         return ResponseData<bool>.Success(true, "Tenant suspended.");
     }

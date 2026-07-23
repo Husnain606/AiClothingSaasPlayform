@@ -5,6 +5,7 @@ using FashionSaaS.Application.Users.DTOs;
 using FashionSaaS.Domain.Entities;
 using FashionSaaS.Domain.Enums;
 using FashionSaaS.Domain.Events;
+using Microsoft.Extensions.Logging;
 
 namespace FashionSaaS.Application.Users;
 
@@ -15,7 +16,8 @@ public class UserService(
     IAuditLogService auditLogService,
     IUnitOfWork unitOfWork,
     IRoleRepository roleRepository,
-    ILoginAttemptRepository loginAttemptRepository)
+    ILoginAttemptRepository loginAttemptRepository,
+    ILogger<UserService> logger)
 {
     public async Task<ResponseData<UserResponse>> CreateAsync(CreateUserRequest request,
         Guid createdByUserId, string ipAddress, string userAgent)
@@ -50,7 +52,21 @@ public class UserService(
         await userRepository.AddAsync(user);
         await unitOfWork.SaveChangesAsync();
 
-        await emailService.SendCredentialsAsync(user.Email, user.Email, tempPassword);
+        // Best-effort: the User row already committed above (SaveChangesAsync). A credentials-
+        // email failure must never turn an already-created user into a 500 to the caller.
+        try
+        {
+            await emailService.SendCredentialsAsync(user.Email, user.Email, tempPassword);
+        }
+#pragma warning disable CA1031
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex,
+                "Failed to send credentials email to {Email} for newly created user {UserId}.",
+                user.Email, user.Id);
+        }
+#pragma warning restore CA1031
+
         await auditLogService.LogAsync(createdByUserId, user.TenantId, "UserCreated", "User", user.Id,
             null, new { user.Email, user.TenantId }, ipAddress, userAgent);
 

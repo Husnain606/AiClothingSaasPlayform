@@ -6,6 +6,7 @@ using FashionSaaS.Domain.Entities;
 using FashionSaaS.Domain.Enums;
 using FashionSaaS.Domain.Events;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 namespace FashionSaaS.Application.Tests.Auth;
@@ -30,7 +31,8 @@ public class AuthServiceTests
         _userRepo.Object, _refreshRepo.Object, _loginAttemptRepo.Object,
         _passwordHasher.Object, _jwtService.Object, _uow.Object,
         _auditLog.Object, _emailService.Object, _fieldEncryption.Object,
-        _ipGuardService.Object, _subscriptionRepo.Object);
+        _ipGuardService.Object, _subscriptionRepo.Object,
+        NullLogger<AuthService>.Instance);
 
     [Fact]
     public async Task LoginAsync_ValidCredentials_NonSuperAdmin_ReturnsTokens()
@@ -264,6 +266,33 @@ public class AuthServiceTests
         result.StatusCode.Should().Be(423);
         // Prove the lockout short-circuits before any password verification
         _passwordHasher.Verify(h => h.Verify(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task LoginAsync_AccountLocked_EmailSendThrows_StillReturns423()
+    {
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            Email = "locked@test.com",
+            PasswordHash = "hash",
+            IsActive = true
+        };
+        _userRepo.Setup(r => r.GetByEmailAsync("locked@test.com")).ReturnsAsync(user);
+        _loginAttemptRepo.Setup(r => r.GetRecentFailureCountAsync("locked@test.com", 15)).ReturnsAsync(5);
+        _emailService.Setup(e => e.SendAccountLockedAsync(user.Email))
+            .ThrowsAsync(new InvalidOperationException("SMTP unavailable"));
+        _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
+
+        AuthService service = CreateService();
+        ResponseData<LoginResponse> result = await service.LoginAsync(
+            new LoginRequest { Email = "locked@test.com", Password = "Password@1" },
+            "127.0.0.1", "Mozilla");
+
+        // The "account locked" response must still be returned as normal — an account-locked
+        // notification-email failure must never turn it into a 500.
+        result.IsSuccess.Should().BeFalse();
+        result.StatusCode.Should().Be(423);
     }
 
     [Fact]

@@ -5,6 +5,7 @@ using FashionSaaS.Application.Users.DTOs;
 using FashionSaaS.Domain.Entities;
 using FashionSaaS.Domain.Enums;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 namespace FashionSaaS.Application.Tests.Users;
@@ -26,7 +27,8 @@ public class UserServiceTests
         _audit.Object,
         _uow.Object,
         _roleRepo.Object,
-        _loginAttemptRepo.Object);
+        _loginAttemptRepo.Object,
+        NullLogger<UserService>.Instance);
 
     // -------------------------------------------------------------------------
     // CreateAsync
@@ -116,6 +118,27 @@ public class UserServiceTests
         result.Data.Should().NotBeNull();
         IEnumerable<string> props = result.Data!.GetType().GetProperties().Select(p => p.Name);
         props.Should().NotContain("PasswordHash");
+    }
+
+    [Fact]
+    public async Task CreateAsync_EmailSendThrows_StillReturnsSuccessAndPersistsUser()
+    {
+        var seededRole = new Role { Id = Guid.NewGuid(), Name = RoleType.StoreManager, Scope = RoleScope.Tenant };
+        _userRepo.Setup(r => r.EmailExistsAsync("new@brand.com")).ReturnsAsync(false);
+        _hasher.Setup(h => h.Hash(It.IsAny<string>())).Returns("hashed");
+        _roleRepo.Setup(r => r.GetByRoleTypeAsync(RoleType.StoreManager, default)).ReturnsAsync(seededRole);
+        _email.Setup(e => e.SendCredentialsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .ThrowsAsync(new InvalidOperationException("SMTP unavailable"));
+
+        ResponseData<UserResponse> result = await CreateService().CreateAsync(
+            new CreateUserRequest { Email = "new@brand.com", FirstName = "Ali", LastName = "Khan", Role = RoleType.StoreManager },
+            Guid.NewGuid(), "127.0.0.1", "Mozilla");
+
+        // The user must still be created and the response must still report success — a
+        // credentials-email failure must never turn an already-committed write into a 500.
+        result.IsSuccess.Should().BeTrue();
+        result.StatusCode.Should().Be(201);
+        _userRepo.Verify(r => r.AddAsync(It.IsAny<User>()), Times.Once);
     }
 
     // -------------------------------------------------------------------------
