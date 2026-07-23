@@ -1,3 +1,4 @@
+using System.Net;
 using FashionSaaS.TryOn.Application;
 using FashionSaaS.TryOn.Application.Gemini;
 using FashionSaaS.TryOn.Application.Messaging;
@@ -6,6 +7,7 @@ using FashionSaaS.TryOn.Application.TryOn;
 using FashionSaaS.TryOn.Domain;
 using FashionSaaS.TryOn.Infrastructure.Persistence;
 using Microsoft.Extensions.Options;
+using Refit;
 
 // This type lives in Infrastructure (not Application, as an earlier plan draft suggested) because
 // it depends on the concrete TryOnDbContext, which lives in Infrastructure.Persistence. Infrastructure
@@ -115,10 +117,21 @@ public class TryOnService(
 
             response = await geminiClient.GenerateContentAsync(_gemini.Model, _gemini.ApiKey, request, cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or ApiException)
         {
-            await RecordAsync(form, TryOnStatus.Failed, $"Gemini API error: {ex.Message}", cancellationToken).ConfigureAwait(false);
-            return (false, 502, "The try-on render failed. Please try again in a moment.", null);
+            // Refit throws ApiException (distinct from HttpRequestException) for any non-2xx Gemini
+            // response — it carries the real status code and body, which HttpRequestException does not.
+            // Persist a status-aware reason for later debugging even though the client-facing message
+            // stays generic (except for a 429, which gets its own clearer message).
+            var failureReason = ex is ApiException apiEx
+                ? $"Gemini API error: {(int)apiEx.StatusCode} {apiEx.StatusCode} - {apiEx.Content ?? apiEx.Message}"
+                : $"Gemini API error: {ex.Message}";
+            var clientMessage = ex is ApiException { StatusCode: HttpStatusCode.TooManyRequests }
+                ? "The AI service is temporarily busy — please try again shortly."
+                : "The try-on render failed. Please try again in a moment.";
+
+            await RecordAsync(form, TryOnStatus.Failed, failureReason, cancellationToken).ConfigureAwait(false);
+            return (false, 502, clientMessage, null);
         }
 
         GeminiPart? resultPart = response.Candidates?

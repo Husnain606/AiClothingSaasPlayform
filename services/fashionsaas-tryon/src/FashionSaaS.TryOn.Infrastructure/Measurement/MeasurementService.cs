@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text.Json;
 using FashionSaaS.TryOn.Application;
 using FashionSaaS.TryOn.Application.Gemini;
@@ -7,6 +8,7 @@ using FashionSaaS.TryOn.Domain;
 using FashionSaaS.TryOn.Infrastructure.Persistence;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Refit;
 
 // Lives in Infrastructure for the same reason as TryOnService (see the note atop TryOnService.cs):
 // it depends on the concrete TryOnDbContext, and an Application -> Infrastructure reference would
@@ -64,11 +66,22 @@ public class MeasurementService(
             response = await geminiClient.GenerateContentAsync(_gemini.TextModel, _gemini.ApiKey, request, cancellationToken)
                 .ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or ApiException)
         {
-            MeasurementRequest apiErrorRow = await RecordAsync(form, MeasurementStatus.Failed, $"Gemini API error: {ex.Message}", null, cancellationToken).ConfigureAwait(false);
+            // Refit throws ApiException (distinct from HttpRequestException) for any non-2xx Gemini
+            // response — it carries the real status code and body, which HttpRequestException does not.
+            // Persist a status-aware reason for later debugging even though the client-facing message
+            // stays generic (except for a 429, which gets its own clearer message).
+            var failureReason = ex is ApiException apiEx
+                ? $"Gemini API error: {(int)apiEx.StatusCode} {apiEx.StatusCode} - {apiEx.Content ?? apiEx.Message}"
+                : $"Gemini API error: {ex.Message}";
+            var clientMessage = ex is ApiException { StatusCode: HttpStatusCode.TooManyRequests }
+                ? "The AI service is temporarily busy — please try again shortly."
+                : "The measurement estimate failed. Please try again in a moment.";
+
+            MeasurementRequest apiErrorRow = await RecordAsync(form, MeasurementStatus.Failed, failureReason, null, cancellationToken).ConfigureAwait(false);
             logger.LogWarning(ex, "Measurement request {MeasurementRequestId} for tenant {TenantId} failed: Gemini API error", apiErrorRow.Id, currentContext.TenantId);
-            return (false, 502, "The measurement estimate failed. Please try again in a moment.", null);
+            return (false, 502, clientMessage, null);
         }
 
         var replyText = response.Candidates?

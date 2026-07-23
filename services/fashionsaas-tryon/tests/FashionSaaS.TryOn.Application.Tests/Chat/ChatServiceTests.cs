@@ -1,3 +1,4 @@
+using System.Net;
 using FashionSaaS.TryOn.Application.Chat;
 using FashionSaaS.TryOn.Application.Gemini;
 using FashionSaaS.TryOn.Application.Quota;
@@ -9,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
+using Refit;
 
 namespace FashionSaaS.TryOn.Application.Tests.Chat;
 
@@ -166,5 +168,39 @@ public class ChatServiceTests
         ChatRequest saved = await dbContext.ChatRequests.SingleAsync();
         saved.Status.Should().Be(ChatRequestStatus.Failed);
         saved.FailureReason.Should().StartWith("Gemini API error:");
+    }
+
+
+    [Fact]
+    public async Task ChatService_GeminiReturnsRateLimitError_PersistsFailedRowWithReason()
+    {
+        await using TryOnDbContext dbContext = CreateDbContext();
+        ChatService service = CreateService(dbContext, aiUsageLimit: 10);
+        _gemini.Setup(g => g.GenerateContentAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<GeminiTextGenerateContentRequest>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(await CreateRateLimitApiExceptionAsync());
+
+        (var isSuccess, var statusCode, var message, ChatResultResponse? data) = await service.ReplyAsync(CreateDto(), CancellationToken.None);
+
+        isSuccess.Should().BeFalse();
+        statusCode.Should().Be(502);
+        message.Should().Be("The AI service is temporarily busy — please try again shortly.");
+        data.Should().BeNull();
+
+        ChatRequest saved = await dbContext.ChatRequests.SingleAsync();
+        saved.Status.Should().Be(ChatRequestStatus.Failed);
+        saved.FailureReason.Should().Contain("429").And.Contain("TooManyRequests");
+    }
+
+    // Refit doesn't expose a public ApiException constructor — the documented way to build one in a
+    // test is its internal `Create` factory (accessed via its public static entry point), fed a real
+    // HttpResponseMessage carrying the status code/body Refit would have received from Gemini.
+    private static async Task<ApiException> CreateRateLimitApiExceptionAsync()
+    {
+        using HttpRequestMessage request = new(HttpMethod.Post, "https://generativelanguage.googleapis.com/v1beta/models/test-text-model:generateContent");
+        using HttpResponseMessage response = new(HttpStatusCode.TooManyRequests)
+        {
+            Content = new StringContent("""{"error":{"code":429,"message":"Resource has been exhausted","status":"RESOURCE_EXHAUSTED"}}""")
+        };
+        return await ApiException.Create(request, HttpMethod.Post, response, new RefitSettings());
     }
 }
