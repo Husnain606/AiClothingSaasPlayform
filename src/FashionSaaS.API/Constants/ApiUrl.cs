@@ -243,4 +243,14 @@ internal static class ApiUrl
         public const string InventoryTrends = "api/tenant/reports/inventory-trends";
         public const string CategorySales = "api/tenant/reports/category-sales";
     }
+
+    // Public, unauthenticated storefront catalog-browsing routes. The leading {slug}
+    // segment is resolved by TenantResolutionMiddleware (context.GetRouteValue("slug"))
+    // before these actions run — it must stay the literal first URL segment for that to work.
+    internal static class PublicCatalog
+    {
+        public const string GetCategories = "api/{slug}/categories";
+        public const string GetProducts = "api/{slug}/products";
+        public const string GetProductById = "api/{slug}/products/{id}";
+    }
 }
