@@ -37,6 +37,11 @@ public class ProductRepository(ApplicationDbContext context)
     {
         IQueryable<Product> query = DbSet
             .AsNoTracking()
+            .AsSplitQuery()
+            .Include(p => p.Category)
+            .Include(p => p.Variants)
+            .Include(p => p.Images)
+            .Include(p => p.Reviews)
             .AsQueryable()
             .Where(p => p.TenantId == filter.TenantId);
 
