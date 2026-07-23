@@ -452,6 +452,21 @@ public class ReportServiceTests
     }
 
     [Fact]
+    public async Task Range_DefaultDateTime_Returns400()
+    {
+        // Regression test: an omitted (not just malformed) 'from'/'to' query parameter binds to
+        // default(DateTime) rather than failing model validation - this must be rejected
+        // explicitly rather than silently returning an empty/zero report as a false "success".
+        (ReportService? service, ApplicationDbContext? ctx, var _) = await SetupAsync();
+        await using ApplicationDbContext _ctx = ctx;
+
+        ResponseData<SummaryReportDto> result = await service.GetSummaryAsync(default, default);
+
+        result.IsSuccess.Should().BeFalse();
+        result.StatusCode.Should().Be(400);
+    }
+
+    [Fact]
     public async Task Range_Over366Days_Returns400()
     {
         (ReportService? service, ApplicationDbContext? ctx, var _) = await SetupAsync();
