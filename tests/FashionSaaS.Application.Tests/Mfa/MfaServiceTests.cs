@@ -54,6 +54,7 @@ public class MfaServiceTests
         _totpService.Setup(t => t.GenerateSetup("sa@system.com", "FashionSaaS"))
             .Returns(("RAWSECRET", "otpauth://..."));
         _fieldEncryption.Setup(e => e.Encrypt("RAWSECRET")).Returns("ENCRYPTEDSECRET");
+        _userRepo.Setup(r => r.AddMfaSettingsAsync(It.IsAny<UserMfaSettings>())).Returns(Task.CompletedTask);
         _userRepo.Setup(r => r.UpdateAsync(user)).Returns(Task.CompletedTask);
         _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
 
@@ -66,6 +67,10 @@ public class MfaServiceTests
         // Verify encryption was applied before storing
         user.MfaSettings!.TotpSecretEncrypted.Should().Be("ENCRYPTEDSECRET");
         _fieldEncryption.Verify(e => e.Encrypt("RAWSECRET"), Times.Once);
+        // A brand-new UserMfaSettings must be explicitly tracked as Added — see
+        // IUserRepository.AddMfaSettingsAsync remarks for why relying only on navigation
+        // fixup on an already-tracked User causes a DbUpdateConcurrencyException.
+        _userRepo.Verify(r => r.AddMfaSettingsAsync(user.MfaSettings), Times.Once);
     }
 
     [Fact]
@@ -138,6 +143,7 @@ public class MfaServiceTests
         ReadOnlyCollection<string> rawCodes = Enumerable.Range(1, 8).Select(i => $"code{i:D8}").ToList().AsReadOnly();
         _totpService.Setup(t => t.GenerateBackupCodes()).Returns(rawCodes);
         _passwordHasher.Setup(h => h.Hash(It.IsAny<string>())).Returns<string>(c => $"hashed_{c}");
+        _userRepo.Setup(r => r.AddMfaBackupCodesAsync(It.IsAny<IEnumerable<MfaBackupCode>>())).Returns(Task.CompletedTask);
         _userRepo.Setup(r => r.UpdateAsync(user)).Returns(Task.CompletedTask);
         _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
 
@@ -151,6 +157,10 @@ public class MfaServiceTests
         // Backup codes should be stored hashed, not raw
         user.MfaSettings.BackupCodes.Should().HaveCount(8);
         user.MfaSettings.BackupCodes.All(c => c.CodeHash.StartsWith("hashed_", StringComparison.Ordinal)).Should().BeTrue();
+        // Brand-new MfaBackupCode rows must be explicitly tracked as Added — see
+        // IUserRepository.AddMfaBackupCodesAsync remarks.
+        _userRepo.Verify(r => r.AddMfaBackupCodesAsync(
+            It.Is<IEnumerable<MfaBackupCode>>(codes => codes.Count() == 8)), Times.Once);
     }
 
     // ------------------------------------------------------------------
@@ -184,6 +194,7 @@ public class MfaServiceTests
         ReadOnlyCollection<string> rawCodes = Enumerable.Range(1, 8).Select(i => $"code{i:D8}").ToList().AsReadOnly();
         _totpService.Setup(t => t.GenerateBackupCodes()).Returns(rawCodes);
         _passwordHasher.Setup(h => h.Hash(It.IsAny<string>())).Returns<string>(c => $"hashed_{c}");
+        _userRepo.Setup(r => r.AddMfaBackupCodesAsync(It.IsAny<IEnumerable<MfaBackupCode>>())).Returns(Task.CompletedTask);
         _userRepo.Setup(r => r.UpdateAsync(user)).Returns(Task.CompletedTask);
         _uow.Setup(u => u.SaveChangesAsync(default)).ReturnsAsync(1);
 
@@ -195,5 +206,9 @@ public class MfaServiceTests
         // Old code should be cleared; new 8 hashed codes should be present
         user.MfaSettings!.BackupCodes.Should().HaveCount(8);
         user.MfaSettings.BackupCodes.Should().NotContain(c => c.CodeHash == "oldhash");
+        // Brand-new MfaBackupCode rows must be explicitly tracked as Added — see
+        // IUserRepository.AddMfaBackupCodesAsync remarks.
+        _userRepo.Verify(r => r.AddMfaBackupCodesAsync(
+            It.Is<IEnumerable<MfaBackupCode>>(codes => codes.Count() == 8)), Times.Once);
     }
 }

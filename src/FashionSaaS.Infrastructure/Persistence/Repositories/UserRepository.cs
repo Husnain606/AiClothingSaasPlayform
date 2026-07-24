@@ -29,4 +29,10 @@ public class UserRepository(ApplicationDbContext context)
             .Where(a => a.Email == email && !a.IsSuccess && a.CreatedAt >= since)
             .CountAsync();
     }
+
+    public async Task AddMfaSettingsAsync(UserMfaSettings settings)
+        => await Context.Set<UserMfaSettings>().AddAsync(settings);
+
+    public async Task AddMfaBackupCodesAsync(IEnumerable<MfaBackupCode> codes)
+        => await Context.Set<MfaBackupCode>().AddRangeAsync(codes);
 }

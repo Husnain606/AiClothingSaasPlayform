@@ -33,7 +33,8 @@ public class MfaService(
                 TotpSecretEncrypted = fieldEncryption.Encrypt(secret),
                 IsEnrolled = false
             };
-            // Attach to context — normally through a dedicated repo
+            // Explicitly tracked as Added — see IUserRepository.AddMfaSettingsAsync remarks.
+            await userRepository.AddMfaSettingsAsync(mfaSettings);
             user.MfaSettings = mfaSettings;
         }
         else
@@ -67,14 +68,17 @@ public class MfaService(
         user.MfaSettings.IsEnrolled = true;
         user.MfaSettings.BackupCodes.Clear();
 
-        foreach (var code in rawCodes)
+        var backupCodes = rawCodes.Select(code => new MfaBackupCode
         {
-            user.MfaSettings.BackupCodes.Add(new MfaBackupCode
-            {
-                UserMfaSettingsId = user.MfaSettings.Id,
-                CodeHash = passwordHasher.Hash(code)
-            });
-        }
+            UserMfaSettingsId = user.MfaSettings.Id,
+            CodeHash = passwordHasher.Hash(code)
+        }).ToList();
+
+        foreach (MfaBackupCode backupCode in backupCodes)
+            user.MfaSettings.BackupCodes.Add(backupCode);
+
+        // Explicitly tracked as Added — see IUserRepository.AddMfaBackupCodesAsync remarks.
+        await userRepository.AddMfaBackupCodesAsync(backupCodes);
 
         await userRepository.UpdateAsync(user);
         await unitOfWork.SaveChangesAsync();
@@ -90,14 +94,18 @@ public class MfaService(
 
         IReadOnlyList<string> rawCodes = totpService.GenerateBackupCodes();
         user.MfaSettings.BackupCodes.Clear();
-        foreach (var code in rawCodes)
+
+        var backupCodes = rawCodes.Select(code => new MfaBackupCode
         {
-            user.MfaSettings.BackupCodes.Add(new MfaBackupCode
-            {
-                UserMfaSettingsId = user.MfaSettings.Id,
-                CodeHash = passwordHasher.Hash(code)
-            });
-        }
+            UserMfaSettingsId = user.MfaSettings.Id,
+            CodeHash = passwordHasher.Hash(code)
+        }).ToList();
+
+        foreach (MfaBackupCode backupCode in backupCodes)
+            user.MfaSettings.BackupCodes.Add(backupCode);
+
+        // Explicitly tracked as Added — see IUserRepository.AddMfaBackupCodesAsync remarks.
+        await userRepository.AddMfaBackupCodesAsync(backupCodes);
 
         await userRepository.UpdateAsync(user);
         await unitOfWork.SaveChangesAsync();
