@@ -7,3 +7,6 @@ appsettings.*.local.json
 appsettings.Development.json
 **/appsettings.Development.json
 .env
+
+# Local-only dev tooling (references machine-specific paths, e.g. secrets backups)
+scripts/
