@@ -21,6 +21,14 @@ internal static class ApiUrl
         public const string RegenerateBackupCodes = "api/admin/mfa/regenerate-backup-codes";
     }
 
+
+    internal static class TenantMfa
+    {
+        public const string Setup = "api/tenant/mfa/setup";
+        public const string VerifySetup = "api/tenant/mfa/verify-setup";
+        public const string RegenerateBackupCodes = "api/tenant/mfa/regenerate-backup-codes";
+    }
+
     internal static class AdminTenants
     {
         public const string GetAll = "api/admin/tenants";
