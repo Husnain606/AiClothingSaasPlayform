@@ -8,5 +8,9 @@ appsettings.Development.json
 **/appsettings.Development.json
 .env
 
+# Serilog rolling file output (Program.cs: WriteTo.File("logs/fashionsaas-.txt", ...))
+logs/
+**/logs/
+
 # Local-only dev tooling (references machine-specific paths, e.g. secrets backups)
 scripts/
