@@ -218,6 +218,13 @@ internal static class ApiUrl
         public const string RemoveItem = "api/tenant/wishlist/items/{itemId}";
     }
 
+    internal static class AccountWishlist
+    {
+        public const string GetMine = "api/account/wishlist";
+        public const string Add = "api/account/wishlist";
+        public const string Remove = "api/account/wishlist/{itemId}";
+    }
+
     internal static class StoreOrders
     {
         public const string Create = "api/store/orders";

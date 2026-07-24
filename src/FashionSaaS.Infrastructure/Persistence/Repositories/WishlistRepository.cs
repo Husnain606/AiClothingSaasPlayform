@@ -21,4 +21,7 @@ public class WishlistRepository(ApplicationDbContext context)
         Context.Set<WishlistItem>().Remove(item);
         return Task.CompletedTask;
     }
+
+    public async Task AddItemAsync(WishlistItem item)
+        => await Context.Set<WishlistItem>().AddAsync(item);
 }
