@@ -191,6 +191,44 @@ public class TryOnServiceTests
         saved.FailureReason.Should().Contain("429").And.Contain("TooManyRequests");
     }
 
+
+    [Fact]
+    public async Task RenderAsync_GeminiErrorBodyExceedsColumnLimit_TruncatesInsteadOfCrashing()
+    {
+        // Regression test: a real Gemini error body can exceed FailureReason's HasMaxLength(500)
+        // (TryOnRequestConfiguration) - previously this crashed SaveChangesAsync with a SQL
+        // truncation DbUpdateException, masking the actual API error behind an unrelated 500.
+        await using TryOnDbContext dbContext = CreateDbContext();
+        TryOnService service = CreateService(dbContext, aiUsageLimit: 10);
+        TryOnRequestForm form = new() { Photo = CreateFakePhoto(), GarmentImageUrl = "https://example.com/g.jpg", ProductId = Guid.NewGuid() };
+
+        _gemini.Setup(g => g.GenerateContentAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<GeminiGenerateContentRequest>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(await CreateOversizedApiExceptionAsync());
+
+        (var isSuccess, var statusCode, var _, TryOnResultResponse? data) = await service.RenderAsync(form, CancellationToken.None);
+
+        isSuccess.Should().BeFalse();
+        statusCode.Should().Be(502);
+        data.Should().BeNull();
+
+        TryOnRequest saved = await dbContext.TryOnRequests.SingleAsync();
+        saved.Status.Should().Be(TryOnStatus.Failed);
+        saved.FailureReason.Should().NotBeNull();
+        saved.FailureReason!.Length.Should().BeLessThanOrEqualTo(500);
+    }
+
+    private static async Task<ApiException> CreateOversizedApiExceptionAsync()
+    {
+        using HttpRequestMessage request = new(HttpMethod.Post, "https://generativelanguage.googleapis.com/v1beta/models/test-model:generateContent");
+        var oversizedMessage = new string('x', 800);
+        using HttpResponseMessage response = new(HttpStatusCode.TooManyRequests)
+        {
+            Content = new StringContent(
+                "{\"error\":{\"code\":429,\"message\":\"" + oversizedMessage + "\",\"status\":\"RESOURCE_EXHAUSTED\"}}")
+        };
+        return await ApiException.Create(request, HttpMethod.Post, response, new RefitSettings());
+    }
+
     // Refit doesn't expose a public ApiException constructor — the documented way to build one in a
     // test is its internal `Create` factory (accessed via its public static entry point), fed a real
     // HttpResponseMessage carrying the status code/body Refit would have received from Gemini.

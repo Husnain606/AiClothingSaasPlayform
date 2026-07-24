@@ -191,6 +191,42 @@ public class ChatServiceTests
         saved.FailureReason.Should().Contain("429").And.Contain("TooManyRequests");
     }
 
+
+    [Fact]
+    public async Task ChatService_GeminiErrorBodyExceedsColumnLimit_TruncatesInsteadOfCrashing()
+    {
+        // Regression test: a real Gemini error body can exceed FailureReason's HasMaxLength(500)
+        // (ChatRequestConfiguration) - previously this crashed SaveChangesAsync with a SQL
+        // truncation DbUpdateException, masking the actual API error behind an unrelated 500.
+        await using TryOnDbContext dbContext = CreateDbContext();
+        ChatService service = CreateService(dbContext, aiUsageLimit: 10);
+        _gemini.Setup(g => g.GenerateContentAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<GeminiTextGenerateContentRequest>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(await CreateOversizedApiExceptionAsync());
+
+        (var isSuccess, var statusCode, var _, ChatResultResponse? data) = await service.ReplyAsync(CreateDto(), CancellationToken.None);
+
+        isSuccess.Should().BeFalse();
+        statusCode.Should().Be(502);
+        data.Should().BeNull();
+
+        ChatRequest saved = await dbContext.ChatRequests.SingleAsync();
+        saved.Status.Should().Be(ChatRequestStatus.Failed);
+        saved.FailureReason.Should().NotBeNull();
+        saved.FailureReason!.Length.Should().BeLessThanOrEqualTo(500);
+    }
+
+    private static async Task<ApiException> CreateOversizedApiExceptionAsync()
+    {
+        using HttpRequestMessage request = new(HttpMethod.Post, "https://generativelanguage.googleapis.com/v1beta/models/test-text-model:generateContent");
+        var oversizedMessage = new string('x', 800);
+        using HttpResponseMessage response = new(HttpStatusCode.TooManyRequests)
+        {
+            Content = new StringContent(
+                "{\"error\":{\"code\":429,\"message\":\"" + oversizedMessage + "\",\"status\":\"RESOURCE_EXHAUSTED\"}}")
+        };
+        return await ApiException.Create(request, HttpMethod.Post, response, new RefitSettings());
+    }
+
     // Refit doesn't expose a public ApiException constructor — the documented way to build one in a
     // test is its internal `Create` factory (accessed via its public static entry point), fed a real
     // HttpResponseMessage carrying the status code/body Refit would have received from Gemini.

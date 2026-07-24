@@ -162,7 +162,10 @@ public class TryOnService(
             ProductId = form.ProductId,
             ProductVariantId = form.ProductVariantId,
             Status = status,
-            FailureReason = failureReason
+            // Truncated to match TryOnRequestConfiguration's HasMaxLength(500) - an upstream Gemini
+            // ApiException body can be arbitrarily long and previously crashed this save with a SQL
+            // truncation error, masking the real failure behind an unrelated 500.
+            FailureReason = failureReason is { Length: > 500 } ? failureReason[..500] : failureReason
         };
         dbContext.TryOnRequests.Add(entity);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);

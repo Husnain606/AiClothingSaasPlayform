@@ -105,7 +105,10 @@ public class ChatService(
             TenantId = currentContext.TenantId,
             CustomerId = currentContext.CustomerId,
             Status = status,
-            FailureReason = failureReason,
+            // Truncated to match ChatRequestConfiguration's HasMaxLength(500) - an upstream Gemini
+            // ApiException body can be arbitrarily long and previously crashed this save with a SQL
+            // truncation error, masking the real failure behind an unrelated 500.
+            FailureReason = failureReason is { Length: > 500 } ? failureReason[..500] : failureReason,
             MessageLength = messageLength,
             ReplyLength = replyLength,
             HadProductContext = hadProductContext

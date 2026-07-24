@@ -170,7 +170,10 @@ public class MeasurementService(
             TenantId = currentContext.TenantId,
             CustomerId = currentContext.CustomerId,
             Status = status,
-            FailureReason = failureReason,
+            // Truncated to match MeasurementRequestConfiguration's HasMaxLength(500) - an upstream
+            // Gemini ApiException body can be arbitrarily long and previously crashed this save with
+            // a SQL truncation error, masking the real failure behind an unrelated 500.
+            FailureReason = failureReason is { Length: > 500 } ? failureReason[..500] : failureReason,
             HeightCmProvided = form.HeightCm.HasValue,
             ChestCm = result?.ChestCm,
             WaistCm = result?.WaistCm,
