@@ -22,6 +22,7 @@ public class OrderService(
     IProductRepository productRepository,
     IProductVariantRepository variantRepository,
     IStockAdjustmentRepository stockAdjustmentRepository,
+    IDiscountRepository discountRepository,
     IUnitOfWork unitOfWork,
     IAuditLogService auditLogService,
     ICurrentTenantService currentTenant,
@@ -86,12 +87,41 @@ public class OrderService(
                 stockDecrements.Add((variant, line.Quantity));
         }
 
+        Discount? discount = null;
+        var discountAmount = 0m;
+        if (!string.IsNullOrWhiteSpace(request.DiscountCode))
+        {
+            discount = await discountRepository.GetByCodeAsync(tenantId, request.DiscountCode, ct);
+            if (discount is null || !discount.IsActive)
+                return ResponseData<OrderDto>.Failure("Discount code is not valid.", 400);
+
+            DateTime now = DateTime.UtcNow;
+            if (now < discount.StartsAt || now > discount.EndsAt)
+                return ResponseData<OrderDto>.Failure("Discount code has expired or is not yet active.", 400);
+
+            if (discount.MaxRedemptions.HasValue && discount.RedemptionCount >= discount.MaxRedemptions.Value)
+                return ResponseData<OrderDto>.Failure("Discount code has reached its redemption limit.", 400);
+
+            if (discount.MinOrderAmount.HasValue && subtotal < discount.MinOrderAmount.Value)
+            {
+                return ResponseData<OrderDto>.Failure(
+                    $"Order subtotal must be at least {discount.MinOrderAmount.Value:C} to use this discount code.", 400);
+            }
+
+            discountAmount = discount.Type == DiscountType.Percentage
+                ? Math.Round(subtotal * discount.Value / 100m, 2, MidpointRounding.AwayFromZero)
+                : discount.Value;
+            // Never let a fixed-amount discount push the payable subtotal below zero.
+            discountAmount = Math.Min(discountAmount, subtotal);
+        }
+
         Customer customer = await customerRepository.GetOrCreateByEmailAsync(
             tenantId, customerEmail, customerFirstName, customerLastName, customerPhone, ct);
 
-        var tax = Math.Round(subtotal * TaxRate, 2, MidpointRounding.AwayFromZero);
+        var discountedSubtotal = subtotal - discountAmount;
+        var tax = Math.Round(discountedSubtotal * TaxRate, 2, MidpointRounding.AwayFromZero);
         const decimal shippingCost = 0m;
-        var total = subtotal + tax + shippingCost;
+        var total = discountedSubtotal + tax + shippingCost;
 
         var orderNumber = $"ORD-{DateTime.UtcNow.Year}-{(await orderRepository.CountForYearAsync(tenantId, DateTime.UtcNow.Year, ct)) + 1:D6}";
         var cardNumber = request.PaymentInfo.CardNumber ?? string.Empty;
@@ -118,6 +148,9 @@ public class OrderService(
             Tax = tax,
             ShippingCost = shippingCost,
             Total = total,
+            DiscountId = discount?.Id,
+            DiscountCode = discount?.Code,
+            DiscountAmount = discountAmount,
             Items = orderItems
         };
 
@@ -141,6 +174,12 @@ public class OrderService(
                 ResultingQuantity = variant.StockQuantity,
                 AdjustedByUserId = actingUserId
             });
+        }
+
+        if (discount is not null)
+        {
+            discount.RedemptionCount++;
+            await discountRepository.UpdateAsync(discount);
         }
 
         order.AddDomainEvent(new OrderPlacedEvent(order.Id, tenantId, order.OrderNumber, order.Total));

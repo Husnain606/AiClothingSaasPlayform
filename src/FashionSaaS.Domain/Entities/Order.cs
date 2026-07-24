@@ -28,6 +28,12 @@ public class Order : BaseEntity
     public decimal ShippingCost { get; set; }
     public decimal Total { get; set; }
 
+    // Discount snapshot — orders are immutable records, so the applied code/amount are
+    // captured at order time rather than joined live from the (mutable) Discount row.
+    public Guid? DiscountId { get; set; }
+    public string? DiscountCode { get; set; }
+    public decimal DiscountAmount { get; set; }
+
     public string? TrackingNumber { get; set; }
     public string? CancelReason { get; set; }
 

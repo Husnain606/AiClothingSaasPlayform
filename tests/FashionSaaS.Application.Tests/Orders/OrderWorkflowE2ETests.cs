@@ -96,6 +96,7 @@ public class OrderWorkflowE2ETests
         var productRepository = new ProductRepository(ctx);
         var variantRepository = new ProductVariantRepository(ctx);
         var stockAdjustmentRepository = new StockAdjustmentRepository(ctx);
+        var discountRepository = new DiscountRepository(ctx);
 
         var publisher = new Mock<IPublisher>();
         // CA2000 suppressed: UnitOfWork.Dispose() only disposes the shared `ctx`, which the
@@ -115,7 +116,7 @@ public class OrderWorkflowE2ETests
         var orderServiceLogger = new Mock<ILogger<OrderService>>();
         var orderService = new OrderService(
             orderRepository, customerRepository, productRepository, variantRepository,
-            stockAdjustmentRepository, unitOfWork, auditLogService.Object, currentTenant.Object,
+            stockAdjustmentRepository, discountRepository, unitOfWork, auditLogService.Object, currentTenant.Object,
             orderServiceLogger.Object);
 
         var reportRepository = new ReportRepository(ctx);

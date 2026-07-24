@@ -26,6 +26,7 @@ public class OrderServiceTests
     private readonly Mock<IProductRepository> _products = new();
     private readonly Mock<IProductVariantRepository> _variants = new();
     private readonly Mock<IStockAdjustmentRepository> _stockAdjustments = new();
+    private readonly Mock<IDiscountRepository> _discounts = new();
     private readonly Mock<IUnitOfWork> _uow = new();
     private readonly Mock<IAuditLogService> _audit = new();
     private readonly Mock<ICurrentTenantService> _tenant = new();
@@ -38,7 +39,7 @@ public class OrderServiceTests
 
     private OrderService CreateService() => new(
         _orders.Object, _customers.Object, _products.Object, _variants.Object,
-        _stockAdjustments.Object, _uow.Object, _audit.Object, _tenant.Object,
+        _stockAdjustments.Object, _discounts.Object, _uow.Object, _audit.Object, _tenant.Object,
         NullLogger<OrderService>.Instance);
 
     private static ShippingAddressDto ValidAddress() => new()
@@ -232,6 +233,163 @@ public class OrderServiceTests
 
         result.StatusCode.Should().Be(201);
         result.Data!.Subtotal.Should().Be(60m); // 3 * 20 BasePrice, server-computed
+    }
+
+    // ── Discount codes ───────────────────────────────────────────────────────────
+
+    private Discount ActiveDiscount(DiscountType type, decimal value, decimal? minOrderAmount = null,
+        int? maxRedemptions = null, int redemptionCount = 0) => new()
+        {
+            Id = Guid.NewGuid(),
+            TenantId = _tenantId,
+            Code = "SAVE10",
+            Type = type,
+            Value = value,
+            MinOrderAmount = minOrderAmount,
+            MaxRedemptions = maxRedemptions,
+            RedemptionCount = redemptionCount,
+            StartsAt = DateTime.UtcNow.AddDays(-1),
+            EndsAt = DateTime.UtcNow.AddDays(1),
+            IsActive = true
+        };
+
+    private Product SetupOneItemOrder()
+    {
+        var product = new Product { Id = Guid.NewGuid(), TenantId = _tenantId, Name = "Tee", BasePrice = 20m, Status = ProductStatus.Active };
+        _products.Setup(r => r.GetByIdAsync(product.Id)).ReturnsAsync(product);
+        _variants.Setup(r => r.GetByProductAsync(product.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<ProductVariant>());
+        _orders.Setup(r => r.CountForYearAsync(_tenantId, It.IsAny<int>(), It.IsAny<CancellationToken>())).ReturnsAsync(0);
+        SetupCustomer(Customer());
+        return product;
+    }
+
+    [Fact]
+    public async Task CreateAsync_ValidPercentageDiscount_ReducesTotalAndIncrementsRedemptionCount()
+    {
+        Product product = SetupOneItemOrder();
+        Discount discount = ActiveDiscount(DiscountType.Percentage, 10m);
+        _discounts.Setup(r => r.GetByCodeAsync(_tenantId, "SAVE10", It.IsAny<CancellationToken>())).ReturnsAsync(discount);
+
+        CreateOrderRequest request = ValidRequestFor(product.Id, quantity: 2);
+        request.DiscountCode = "SAVE10";
+        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+
+        // Subtotal = 40; discount = 10% of 40 = 4.00; discounted subtotal = 36; tax = round(36*0.10,2) = 3.60; total = 39.60
+        result.StatusCode.Should().Be(201);
+        result.Data!.Subtotal.Should().Be(40m);
+        result.Data.DiscountAmount.Should().Be(4.00m);
+        result.Data.DiscountCode.Should().Be("SAVE10");
+        result.Data.Tax.Should().Be(3.60m);
+        result.Data.Total.Should().Be(39.60m);
+        discount.RedemptionCount.Should().Be(1);
+        _discounts.Verify(r => r.UpdateAsync(discount), Times.Once);
+    }
+
+    [Fact]
+    public async Task CreateAsync_FixedAmountDiscount_CannotExceedSubtotal()
+    {
+        Product product = SetupOneItemOrder();
+        Discount discount = ActiveDiscount(DiscountType.FixedAmount, 1000m);
+        _discounts.Setup(r => r.GetByCodeAsync(_tenantId, "SAVE10", It.IsAny<CancellationToken>())).ReturnsAsync(discount);
+
+        CreateOrderRequest request = ValidRequestFor(product.Id, quantity: 1);
+        request.DiscountCode = "SAVE10";
+        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+
+        // Subtotal = 20; a 1000 fixed discount must clamp to the subtotal, never go negative
+        result.StatusCode.Should().Be(201);
+        result.Data!.DiscountAmount.Should().Be(20m);
+        result.Data.Tax.Should().Be(0m);
+        result.Data.Total.Should().Be(0m);
+    }
+
+    [Fact]
+    public async Task CreateAsync_UnknownDiscountCode_Returns400_AndDoesNotSave()
+    {
+        Product product = SetupOneItemOrder();
+        _discounts.Setup(r => r.GetByCodeAsync(_tenantId, "BOGUS", It.IsAny<CancellationToken>())).ReturnsAsync((Discount?)null);
+
+        CreateOrderRequest request = ValidRequestFor(product.Id, quantity: 1);
+        request.DiscountCode = "BOGUS";
+        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+
+        result.StatusCode.Should().Be(400);
+        _uow.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CreateAsync_InactiveDiscount_Returns400()
+    {
+        Product product = SetupOneItemOrder();
+        Discount discount = ActiveDiscount(DiscountType.Percentage, 10m);
+        discount.IsActive = false;
+        _discounts.Setup(r => r.GetByCodeAsync(_tenantId, "SAVE10", It.IsAny<CancellationToken>())).ReturnsAsync(discount);
+
+        CreateOrderRequest request = ValidRequestFor(product.Id, quantity: 1);
+        request.DiscountCode = "SAVE10";
+        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+
+        result.StatusCode.Should().Be(400);
+    }
+
+    [Fact]
+    public async Task CreateAsync_ExpiredDiscount_Returns400()
+    {
+        Product product = SetupOneItemOrder();
+        Discount discount = ActiveDiscount(DiscountType.Percentage, 10m);
+        discount.EndsAt = DateTime.UtcNow.AddDays(-1);
+        _discounts.Setup(r => r.GetByCodeAsync(_tenantId, "SAVE10", It.IsAny<CancellationToken>())).ReturnsAsync(discount);
+
+        CreateOrderRequest request = ValidRequestFor(product.Id, quantity: 1);
+        request.DiscountCode = "SAVE10";
+        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+
+        result.StatusCode.Should().Be(400);
+    }
+
+    [Fact]
+    public async Task CreateAsync_DiscountBelowMinOrderAmount_Returns400()
+    {
+        Product product = SetupOneItemOrder();
+        Discount discount = ActiveDiscount(DiscountType.Percentage, 10m, minOrderAmount: 100m);
+        _discounts.Setup(r => r.GetByCodeAsync(_tenantId, "SAVE10", It.IsAny<CancellationToken>())).ReturnsAsync(discount);
+
+        CreateOrderRequest request = ValidRequestFor(product.Id, quantity: 1); // subtotal 20 < 100 min
+        request.DiscountCode = "SAVE10";
+        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+
+        result.StatusCode.Should().Be(400);
+        result.Message.Should().Contain("subtotal must be at least");
+    }
+
+    [Fact]
+    public async Task CreateAsync_DiscountRedemptionLimitReached_Returns400()
+    {
+        Product product = SetupOneItemOrder();
+        Discount discount = ActiveDiscount(DiscountType.Percentage, 10m, maxRedemptions: 5, redemptionCount: 5);
+        _discounts.Setup(r => r.GetByCodeAsync(_tenantId, "SAVE10", It.IsAny<CancellationToken>())).ReturnsAsync(discount);
+
+        CreateOrderRequest request = ValidRequestFor(product.Id, quantity: 1);
+        request.DiscountCode = "SAVE10";
+        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+
+        result.StatusCode.Should().Be(400);
+        result.Message.Should().Contain("redemption limit");
+    }
+
+    [Fact]
+    public async Task CreateAsync_NoDiscountCode_TotalsUnaffected()
+    {
+        Product product = SetupOneItemOrder();
+
+        CreateOrderRequest request = ValidRequestFor(product.Id, quantity: 1);
+        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+
+        result.StatusCode.Should().Be(201);
+        result.Data!.DiscountAmount.Should().Be(0m);
+        result.Data.DiscountCode.Should().BeNull();
+        _discounts.Verify(r => r.GetByCodeAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]

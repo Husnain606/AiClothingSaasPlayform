@@ -26,6 +26,8 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
         builder.Property(o => o.Tax).HasPrecision(18, 2);
         builder.Property(o => o.ShippingCost).HasPrecision(18, 2);
         builder.Property(o => o.Total).HasPrecision(18, 2);
+        builder.Property(o => o.DiscountCode).HasMaxLength(50);
+        builder.Property(o => o.DiscountAmount).HasPrecision(18, 2);
 
         builder.HasIndex(o => new { o.TenantId, o.OrderNumber }).IsUnique();
         builder.HasIndex(o => new { o.TenantId, o.OrderDate });

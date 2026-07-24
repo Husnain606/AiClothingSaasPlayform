@@ -37,6 +37,7 @@ public class CreateOrderRequest
     public ShippingAddressDto ShippingAddress { get; set; } = new();
     public CreateOrderPaymentDto PaymentInfo { get; set; } = new();
     public List<CreateOrderItemRequest> Items { get; set; } = [];
+    public string? DiscountCode { get; set; }
 }
 
 public class OrderItemDto
@@ -61,6 +62,8 @@ public class OrderDto
     public decimal Tax { get; set; }
     public decimal ShippingCost { get; set; }
     public decimal Total { get; set; }
+    public string? DiscountCode { get; set; }
+    public decimal DiscountAmount { get; set; }
     public string? TrackingNumber { get; set; }
 }
 
