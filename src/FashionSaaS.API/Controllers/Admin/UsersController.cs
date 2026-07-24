@@ -25,7 +25,7 @@ public class UsersController(UserService userService) : ControllerBase
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetAll([FromQuery] UserFilterRequest filter)
     {
-        ResponseData<PagedResult<UserResponse>> response = await userService.GetByTenantAsync(Guid.Empty, filter);
+        ResponseData<PagedResult<UserResponse>> response = await userService.GetAllAsync(filter);
         return StatusCode(response.StatusCode, response);
     }
 

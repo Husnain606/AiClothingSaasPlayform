@@ -391,4 +391,29 @@ public class UserServiceTests
         result.Data!.Items.Count.Should().Be(5);
         result.Data.TotalCount.Should().Be(12); // 25 users, even indices active: 2,4,6..24 = 12
     }
+
+    // -------------------------------------------------------------------------
+    // GetAllAsync (platform-wide, SuperAdmin)
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task GetAllAsync_SpansEveryTenant_NotJustOne()
+    {
+        // Regression test: the admin controller previously called GetByTenantAsync(Guid.Empty, ...),
+        // which always matched zero users since no real tenant has that id. GetAllAsync must
+        // source from the repository's unscoped GetAllAsync(), covering every tenant.
+        var users = new List<User>
+        {
+            new() { Id = Guid.NewGuid(), FirstName = "A", LastName = "One", Email = "a@tenant1.com", IsActive = true, TenantId = Guid.NewGuid() },
+            new() { Id = Guid.NewGuid(), FirstName = "B", LastName = "Two", Email = "b@tenant2.com", IsActive = true, TenantId = Guid.NewGuid() },
+        };
+        _userRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(users);
+
+        ResponseData<PagedResult<UserResponse>> result = await CreateService().GetAllAsync(
+            new UserFilterRequest { Page = 1, PageSize = 20 });
+
+        result.IsSuccess.Should().BeTrue();
+        result.Data!.TotalCount.Should().Be(2);
+        result.Data.Items.Select(u => u.Email).Should().Contain(["a@tenant1.com", "b@tenant2.com"]);
+    }
 }

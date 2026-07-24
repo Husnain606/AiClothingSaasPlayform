@@ -129,6 +129,38 @@ public class UserService(
         return ResponseData<PagedResult<UserResponse>>.Success(paged);
     }
 
+
+    /// <summary>
+    /// Platform-wide user list for SuperAdmin (spans every tenant) - distinct from
+    /// GetByTenantAsync, which scopes to one tenant. Passing Guid.Empty to
+    /// GetByTenantAsync would silently match zero users (no real tenant has that id).
+    /// </summary>
+    public async Task<ResponseData<PagedResult<UserResponse>>> GetAllAsync(UserFilterRequest filter)
+    {
+        IReadOnlyList<User> users = await userRepository.GetAllAsync();
+        IEnumerable<User> filtered = users.AsEnumerable();
+        if (!string.IsNullOrEmpty(filter.Search))
+        {
+            filtered = filtered.Where(u =>
+                u.Email.Contains(filter.Search, StringComparison.OrdinalIgnoreCase) ||
+                u.FirstName.Contains(filter.Search, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (filter.IsActive.HasValue)
+            filtered = filtered.Where(u => u.IsActive == filter.IsActive.Value);
+
+        var list = filtered.ToList();
+        var paged = new PagedResult<UserResponse>
+        {
+            Items = list.Skip((filter.Page - 1) * filter.PageSize).Take(filter.PageSize)
+                .Select(u => MapToResponse(u, new List<string>())).ToList(),
+            TotalCount = list.Count,
+            Page = filter.Page,
+            PageSize = filter.PageSize
+        };
+        return ResponseData<PagedResult<UserResponse>>.Success(paged);
+    }
+
     public async Task<ResponseData<bool>> AssignRoleAsync(Guid userId, RoleType role,
         Guid adminId, string ipAddress, string userAgent)
     {
