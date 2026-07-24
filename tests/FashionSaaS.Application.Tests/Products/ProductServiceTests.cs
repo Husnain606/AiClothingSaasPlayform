@@ -238,6 +238,7 @@ public class ProductServiceTests
             .ReturnsAsync(new List<ProductVariant> { Variant(id) });
         _images.Setup(r => r.GetByProductAsync(id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<ProductImage> { Image(id) });
+        _products.Setup(r => r.GetByIdWithDetailsAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync(product);
 
         ResponseData<ProductResponse> result = await CreateService().PublishAsync(id, Guid.NewGuid(), "127.0.0.1", "ua");
 
@@ -245,6 +246,35 @@ public class ProductServiceTests
         product.Status.Should().Be(ProductStatus.Active);
         product.DomainEvents.Should().ContainSingle(e => e is ProductPublishedEvent);
         _uow.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task PublishAsync_ResponseReflectsRealVariantAndImageCounts_NotStaleData()
+    {
+        // Regression test: PublishAsync's own response must not read the pre-fetched
+        // GetByIdAsync entity (never Included, so Variants/Images look empty) - it must
+        // re-fetch via GetByIdWithDetailsAsync so VariantCount/PrimaryImageUrl are accurate
+        // in the SAME response, not just on a subsequent GetById call.
+        var id = Guid.NewGuid();
+        var catId = Guid.NewGuid();
+        Product staleProduct = Product(id, catId); // Variants/Images empty, as GetByIdAsync would return
+        _products.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(staleProduct);
+        _categories.Setup(r => r.GetByIdAsync(catId)).ReturnsAsync(Category(catId));
+        _variants.Setup(r => r.GetByProductAsync(id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<ProductVariant> { Variant(id) });
+        _images.Setup(r => r.GetByProductAsync(id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<ProductImage> { Image(id) });
+
+        Product detailedProduct = Product(id, catId);
+        detailedProduct.Variants.Add(Variant(id));
+        detailedProduct.Images.Add(Image(id));
+        _products.Setup(r => r.GetByIdWithDetailsAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync(detailedProduct);
+
+        ResponseData<ProductResponse> result = await CreateService().PublishAsync(id, Guid.NewGuid(), "127.0.0.1", "ua");
+
+        result.IsSuccess.Should().BeTrue();
+        result.Data!.VariantCount.Should().Be(1);
+        result.Data.PrimaryImageUrl.Should().NotBeNullOrEmpty();
     }
 
     // ── Archive ─────────────────────────────────────────────────────────────────
@@ -256,7 +286,7 @@ public class ProductServiceTests
         var catId = Guid.NewGuid();
         Product product = Product(id, catId, ProductStatus.Active);
         _products.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(product);
-        _categories.Setup(r => r.GetByIdAsync(catId)).ReturnsAsync(Category(catId));
+        _products.Setup(r => r.GetByIdWithDetailsAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync(product);
 
         ResponseData<ProductResponse> result = await CreateService().ArchiveAsync(id, Guid.NewGuid(), "127.0.0.1", "ua");
 

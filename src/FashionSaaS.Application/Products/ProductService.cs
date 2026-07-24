@@ -157,7 +157,10 @@ public class ProductService(
             new { Status = ProductStatus.Draft }, new { Status = ProductStatus.Active }, ipAddress, userAgent);
 
         logger.LogInformation("Product {ProductId} published for tenant {TenantId}", product.Id, tenantId);
-        return ResponseData<ProductResponse>.Success(MapToResponse(product, category.Name), "Product published.");
+
+        // Re-fetch with nav graph so VariantCount/PrimaryImageUrl/review stats reflect reality.
+        Product? published = await productRepository.GetByIdWithDetailsAsync(product.Id, ct);
+        return ResponseData<ProductResponse>.Success(MapDetailedResponse(published!), "Product published.");
     }
 
     public async Task<ResponseData<ProductResponse>> ArchiveAsync(Guid id,
@@ -181,9 +184,10 @@ public class ProductService(
             new { Status = previousStatus }, new { Status = ProductStatus.Archived }, ipAddress, userAgent);
 
         logger.LogInformation("Product {ProductId} archived for tenant {TenantId}", product.Id, tenantId);
-        // Category didn't change during archive — resolve name in one fetch; no second category lookup.
-        Category? archivedCategory = await categoryRepository.GetByIdAsync(product.CategoryId);
-        return ResponseData<ProductResponse>.Success(MapToResponse(product, archivedCategory?.Name), "Product archived.");
+
+        // Re-fetch with nav graph so VariantCount/PrimaryImageUrl/review stats reflect reality.
+        Product? archived = await productRepository.GetByIdWithDetailsAsync(product.Id, ct);
+        return ResponseData<ProductResponse>.Success(MapDetailedResponse(archived!), "Product archived.");
     }
 
     public async Task<ResponseData<bool>> DeleteAsync(Guid id,
