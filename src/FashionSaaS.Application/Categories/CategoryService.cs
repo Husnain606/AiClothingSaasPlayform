@@ -87,13 +87,13 @@ public class CategoryService(
         return ResponseData<CategoryResponse>.Success(MapToResponse(category), "Category updated.");
     }
 
-    public async Task<ResponseData<CategoryResponse>> MoveAsync(MoveCategoryRequest request,
+    public async Task<ResponseData<CategoryResponse>> MoveAsync(Guid id, MoveCategoryRequest request,
         Guid movedByUserId, string ipAddress, string userAgent, CancellationToken ct = default)
     {
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<CategoryResponse>.Failure("Tenant could not be resolved.", 400);
 
-        Category? category = await categoryRepository.GetByIdAsync(request.Id);
+        Category? category = await categoryRepository.GetByIdAsync(id);
         if (category is null || category.TenantId != tenantId)
             return ResponseData<CategoryResponse>.Failure("Category not found.", 404);
 

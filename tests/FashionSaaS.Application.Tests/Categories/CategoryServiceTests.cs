@@ -111,7 +111,7 @@ public class CategoryServiceTests
         _repo.Setup(r => r.GetByIdAsync(id)).ReturnsAsync(Cat(id));
 
         ResponseData<CategoryResponse> result = await CreateService().MoveAsync(
-            new MoveCategoryRequest { Id = id, NewParentId = id },
+            id, new MoveCategoryRequest { NewParentId = id },
             Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.StatusCode.Should().Be(400);
@@ -131,7 +131,7 @@ public class CategoryServiceTests
             .ReturnsAsync(new List<Category> { Cat(root), Cat(child, root), Cat(grandchild, child) });
 
         ResponseData<CategoryResponse> result = await CreateService().MoveAsync(
-            new MoveCategoryRequest { Id = root, NewParentId = grandchild },
+            root, new MoveCategoryRequest { NewParentId = grandchild },
             Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.IsSuccess.Should().BeFalse();
@@ -151,7 +151,7 @@ public class CategoryServiceTests
             .ReturnsAsync(new List<Category> { Cat(node), Cat(newParent) });
 
         ResponseData<CategoryResponse> result = await CreateService().MoveAsync(
-            new MoveCategoryRequest { Id = node, NewParentId = newParent },
+            node, new MoveCategoryRequest { NewParentId = newParent },
             Guid.NewGuid(), "127.0.0.1", "ua");
 
         result.IsSuccess.Should().BeTrue();

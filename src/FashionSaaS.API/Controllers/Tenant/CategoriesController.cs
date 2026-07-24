@@ -74,9 +74,7 @@ public class CategoriesController(CategoryService categoryService) : ControllerB
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Move(Guid id, [FromBody] MoveCategoryRequest request)
     {
-        // Bind the route id into the request so route and body cannot disagree.
-        request.Id = id;
-        ResponseData<CategoryResponse> response = await categoryService.MoveAsync(request, UserId, Ip, Ua);
+        ResponseData<CategoryResponse> response = await categoryService.MoveAsync(id, request, UserId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
 

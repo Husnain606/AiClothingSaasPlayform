@@ -8,7 +8,6 @@ namespace FashionSaaS.Application.Tests.Categories;
 public class CategoryValidatorTests
 {
     private readonly CreateCategoryRequestValidator _create = new();
-    private readonly MoveCategoryRequestValidator _move = new();
 
     [Fact]
     public void Create_BlankName_Fails()
@@ -46,20 +45,5 @@ public class CategoryValidatorTests
     {
         ValidationResult result = _create.Validate(new CreateCategoryRequest { Name = "S", Slug = "s", SortOrder = -1 });
         result.IsValid.Should().BeFalse();
-    }
-
-    [Fact]
-    public void Move_NewParentEqualsId_Fails()
-    {
-        var id = Guid.NewGuid();
-        ValidationResult result = _move.Validate(new MoveCategoryRequest { Id = id, NewParentId = id });
-        result.IsValid.Should().BeFalse();
-    }
-
-    [Fact]
-    public void Move_NullNewParent_Passes()
-    {
-        ValidationResult result = _move.Validate(new MoveCategoryRequest { Id = Guid.NewGuid(), NewParentId = null });
-        result.IsValid.Should().BeTrue();
     }
 }
