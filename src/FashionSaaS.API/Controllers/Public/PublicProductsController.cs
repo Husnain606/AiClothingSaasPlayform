@@ -1,5 +1,7 @@
 using FashionSaaS.API.Constants;
 using FashionSaaS.Application.Common;
+using FashionSaaS.Application.ProductVariants;
+using FashionSaaS.Application.ProductVariants.DTOs;
 using FashionSaaS.Application.Products;
 using FashionSaaS.Application.Products.DTOs;
 using FashionSaaS.Domain.Enums;
@@ -23,7 +25,7 @@ namespace FashionSaaS.API.Controllers.Public;
 [ApiController]
 [AllowAnonymous]
 [EnableRateLimiting("PublicPolicy")]
-public class PublicProductsController(ProductService productService) : ControllerBase
+public class PublicProductsController(ProductService productService, ProductVariantService productVariantService) : ControllerBase
 {
     [HttpGet(ApiUrl.PublicCatalog.GetProducts)]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -57,6 +59,28 @@ public class PublicProductsController(ProductService productService) : Controlle
             // Draft/Archived products in the caller's own tenant must be invisible here —
             // reuse the exact 404 shape GetByIdAsync itself returns for a missing product.
             return StatusCode(404, ResponseData<string>.Failure("Product not found.", 404));
+        }
+
+        return StatusCode(response.StatusCode, response);
+    }
+
+    [HttpGet(ApiUrl.PublicCatalog.GetProductVariants)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetVariants(Guid id, CancellationToken ct)
+    {
+        // Same Draft/Archived gating as GetById — never expose variants of a hidden product.
+        ResponseData<ProductResponse> product = await productService.GetByIdAsync(id, ct);
+        if (!product.IsSuccess || product.Data?.Status != ProductStatus.Active)
+            return StatusCode(404, ResponseData<string>.Failure("Product not found.", 404));
+
+        ResponseData<IReadOnlyList<VariantResponse>> response = await productVariantService.GetByProductAsync(id, ct);
+        if (response.IsSuccess && response.Data is not null)
+        {
+            // Customers must never see deactivated variants (out of production, not for sale).
+            IReadOnlyList<VariantResponse> activeOnly = response.Data.Where(v => v.IsActive).ToList();
+            return StatusCode(response.StatusCode, ResponseData<IReadOnlyList<VariantResponse>>.Success(activeOnly));
         }
 
         return StatusCode(response.StatusCode, response);
