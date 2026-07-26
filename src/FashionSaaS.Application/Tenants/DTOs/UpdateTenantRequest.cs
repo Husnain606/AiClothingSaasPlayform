@@ -6,4 +6,5 @@ public class UpdateTenantRequest
     public string? Phone { get; set; }
     public string? LogoUrl { get; set; }
     public string? CoverImageUrl { get; set; }
+    public string? PaymentInstructions { get; set; }
 }

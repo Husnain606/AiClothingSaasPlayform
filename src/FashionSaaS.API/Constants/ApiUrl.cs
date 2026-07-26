@@ -270,5 +270,6 @@ internal static class ApiUrl
         public const string GetProducts = "api/{slug}/products";
         public const string GetProductById = "api/{slug}/products/{id}";
         public const string GetProductVariants = "api/{slug}/products/{id}/variants";
+        public const string GetPaymentInstructions = "api/{slug}/payment-instructions";
     }
 }

@@ -2,6 +2,7 @@ using FashionSaaS.Application.Common;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Application.Tenants;
 using FashionSaaS.Application.Tenants.DTOs;
+using FashionSaaS.Application.Tenants.Validators;
 using FashionSaaS.Domain.Entities;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -116,5 +117,44 @@ public class TenantServiceTests
         result.IsSuccess.Should().BeFalse();
         result.StatusCode.Should().Be(409);
         _tenantRepo.Verify(r => r.UpdateAsync(It.IsAny<Tenant>()), Times.Never);
+    }
+
+
+    [Fact]
+    public async Task UpdateAsync_PersistsPaymentInstructions()
+    {
+        var tenant = new Tenant { Id = Guid.NewGuid(), Name = "Chic", Slug = "chic", Email = "t@example.com" };
+        _tenantRepo.Setup(r => r.GetByIdAsync(tenant.Id)).ReturnsAsync(tenant);
+
+        ResponseData<TenantResponse> result = await CreateService().UpdateAsync(tenant.Id,
+            new UpdateTenantRequest { Name = "Chic", PaymentInstructions = "Transfer to HBL 1234-5678" },
+            Guid.NewGuid(), "127.0.0.1", "ua");
+
+        result.IsSuccess.Should().BeTrue();
+        tenant.PaymentInstructions.Should().Be("Transfer to HBL 1234-5678");
+        result.Data!.PaymentInstructions.Should().Be("Transfer to HBL 1234-5678");
+    }
+
+    [Fact]
+    public void UpdateTenantRequestValidator_InstructionsOverMaxLength_Fails()
+    {
+        var validator = new UpdateTenantRequestValidator();
+
+        FluentValidation.Results.ValidationResult result = validator.Validate(
+            new UpdateTenantRequest { Name = "Chic", PaymentInstructions = new string('x', 2001) });
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == nameof(UpdateTenantRequest.PaymentInstructions));
+    }
+
+    [Fact]
+    public void UpdateTenantRequestValidator_InstructionsAtMaxLength_Passes()
+    {
+        var validator = new UpdateTenantRequestValidator();
+
+        FluentValidation.Results.ValidationResult result = validator.Validate(
+            new UpdateTenantRequest { Name = "Chic", PaymentInstructions = new string('x', 2000) });
+
+        result.IsValid.Should().BeTrue();
     }
 }

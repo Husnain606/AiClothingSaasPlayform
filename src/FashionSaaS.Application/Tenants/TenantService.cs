@@ -64,6 +64,7 @@ public class TenantService(
         tenant.Phone = request.Phone;
         tenant.LogoUrl = request.LogoUrl;
         tenant.CoverImageUrl = request.CoverImageUrl;
+        tenant.PaymentInstructions = request.PaymentInstructions;
 
         await tenantRepository.UpdateAsync(tenant);
         await unitOfWork.SaveChangesAsync();
@@ -190,6 +191,7 @@ public class TenantService(
         Email = t.Email,
         Phone = t.Phone,
         LogoUrl = t.LogoUrl,
+        PaymentInstructions = t.PaymentInstructions,
         IsActive = t.IsActive,
         CreatedAt = t.CreatedAt
     };
