@@ -21,8 +21,6 @@ public class Order : BaseEntity
     public string ShippingZipCode { get; set; } = string.Empty;
     public string ShippingCountry { get; set; } = string.Empty;
 
-    public string CardLast4 { get; set; } = string.Empty; // masked reference ONLY
-
     public decimal Subtotal { get; set; }
     public decimal Tax { get; set; }
     public decimal ShippingCost { get; set; }
@@ -39,6 +37,12 @@ public class Order : BaseEntity
 
     public Customer? Customer { get; set; }
     public ICollection<OrderItem> Items { get; set; } = new List<OrderItem>();
+
+    /// <summary>
+    /// The customer's payment proof. Required before the order can be confirmed —
+    /// see OrderService.TransitionAsync.
+    /// </summary>
+    public OrderPaymentProof? PaymentProof { get; set; }
 
     private static readonly Dictionary<OrderStatus, OrderStatus[]> AllowedTransitions = new()
     {

@@ -91,6 +91,7 @@ public static class DependencyInjection
         services.AddScoped<IReviewRepository, ReviewRepository>();
         services.AddScoped<IWishlistRepository, WishlistRepository>();
         services.AddScoped<IOrderRepository, OrderRepository>();
+        services.AddScoped<IOrderPaymentProofRepository, OrderPaymentProofRepository>();
 
         // Phase 4a — Reporting
         services.AddScoped<IReportRepository, ReportRepository>();

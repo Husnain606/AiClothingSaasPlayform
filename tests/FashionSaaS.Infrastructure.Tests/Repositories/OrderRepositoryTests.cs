@@ -40,7 +40,6 @@ public class OrderRepositoryTests
             ShippingState = "st",
             ShippingZipCode = "z",
             ShippingCountry = "US",
-            CardLast4 = "1111",
             Subtotal = 100m,
             Tax = 10m,
             ShippingCost = 0m,

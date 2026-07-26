@@ -8,6 +8,13 @@ public class Tenant : BaseEntity
     public string? Phone { get; set; }
     public string? LogoUrl { get; set; }
     public string? CoverImageUrl { get; set; }
+
+    /// <summary>
+    /// Free-text instructions telling customers where to send payment (bank details, wallet
+    /// reference, etc.). Authored by the tenant and shown publicly at checkout, which is why
+    /// the encrypted BankAccount record is never exposed to customers.
+    /// </summary>
+    public string? PaymentInstructions { get; set; }
     public bool IsActive { get; set; } = true;
 
     public ICollection<User> Users { get; set; } = new List<User>();

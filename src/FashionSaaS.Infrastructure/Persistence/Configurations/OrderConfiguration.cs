@@ -19,7 +19,6 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
         builder.Property(o => o.ShippingState).HasMaxLength(100).IsRequired();
         builder.Property(o => o.ShippingZipCode).HasMaxLength(20).IsRequired();
         builder.Property(o => o.ShippingCountry).HasMaxLength(2).IsRequired();
-        builder.Property(o => o.CardLast4).HasMaxLength(4).IsRequired();
         builder.Property(o => o.TrackingNumber).HasMaxLength(100);
         builder.Property(o => o.CancelReason).HasMaxLength(500);
         builder.Property(o => o.Subtotal).HasPrecision(18, 2);
