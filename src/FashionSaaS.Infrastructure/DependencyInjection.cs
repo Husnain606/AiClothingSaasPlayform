@@ -29,6 +29,10 @@ public static class DependencyInjection
             .Bind(configuration.GetSection(CloudinarySettings.SectionName))
             .ValidateDataAnnotations()
             .ValidateOnStart();
+        services.AddOptions<PaymentProofStorageSettings>()
+            .Bind(configuration.GetSection(PaymentProofStorageSettings.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
 
         // DbContext
         services.AddDbContext<ApplicationDbContext>(options =>
@@ -51,6 +55,10 @@ public static class DependencyInjection
 
         // Image storage (Cloudinary)
         services.AddScoped<IImageStorageService, CloudinaryImageStorageService>();
+
+        // Payment proof storage — THE Azure swap point. To move to Azure Blob Storage, implement
+        // IPaymentProofStorageService as AzureBlobPaymentProofStorageService and change only this line.
+        services.AddScoped<IPaymentProofStorageService, LocalFilePaymentProofStorageService>();
 
         // Audit log
         services.AddScoped<IAuditLogService, AuditLogService>();
