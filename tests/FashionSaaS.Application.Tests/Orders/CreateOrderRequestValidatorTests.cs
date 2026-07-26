@@ -23,47 +23,8 @@ public class CreateOrderRequestValidatorTests
             ZipCode = "00000",
             Country = "QA"
         },
-        PaymentInfo = new CreateOrderPaymentDto
-        {
-            CardholderName = "Jane Doe",
-            CardNumber = "****1111"
-        },
         Items = [new CreateOrderItemRequest { ProductId = Guid.NewGuid(), Quantity = 1 }]
     };
-
-    [Fact]
-    public async Task MaskedCardNumber_IsAccepted()
-    {
-        CreateOrderRequest request = ValidRequest();
-        request.PaymentInfo.CardNumber = "****1111";
-
-        ValidationResult result = await _validator.ValidateAsync(request);
-
-        result.IsValid.Should().BeTrue();
-    }
-
-    [Fact]
-    public async Task ExactlyFourDigitCardNumber_IsAccepted()
-    {
-        CreateOrderRequest request = ValidRequest();
-        request.PaymentInfo.CardNumber = "1111";
-
-        ValidationResult result = await _validator.ValidateAsync(request);
-
-        result.IsValid.Should().BeTrue();
-    }
-
-    [Fact]
-    public async Task FullSixteenDigitPan_IsRejected()
-    {
-        CreateOrderRequest request = ValidRequest();
-        request.PaymentInfo.CardNumber = "4111111111111111";
-
-        ValidationResult result = await _validator.ValidateAsync(request);
-
-        result.IsValid.Should().BeFalse();
-        result.Errors.Should().Contain(e => e.ErrorMessage == "Full card numbers must not be sent; provide the masked form.");
-    }
 
     [Fact]
     public async Task EmptyItems_IsRejected()
@@ -120,14 +81,4 @@ public class CreateOrderRequestValidatorTests
         result.IsValid.Should().BeFalse();
     }
 
-    [Fact]
-    public async Task EmptyCardholderName_IsRejected()
-    {
-        CreateOrderRequest request = ValidRequest();
-        request.PaymentInfo.CardholderName = "";
-
-        ValidationResult result = await _validator.ValidateAsync(request);
-
-        result.IsValid.Should().BeFalse();
-    }
 }

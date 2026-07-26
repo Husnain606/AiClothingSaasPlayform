@@ -23,6 +23,8 @@ public class OrderService(
     IProductVariantRepository variantRepository,
     IStockAdjustmentRepository stockAdjustmentRepository,
     IDiscountRepository discountRepository,
+    IOrderPaymentProofRepository paymentProofRepository,
+    IPaymentProofStorageService proofStorage,
     IUnitOfWork unitOfWork,
     IAuditLogService auditLogService,
     ICurrentTenantService currentTenant,
@@ -32,10 +34,26 @@ public class OrderService(
 
     public async Task<ResponseData<OrderDto>> CreateAsync(string customerEmail, string customerFirstName,
         string customerLastName, string? customerPhone, CreateOrderRequest request, Guid actingUserId,
-        string ipAddress, string userAgent, CancellationToken ct = default)
+        string ipAddress, string userAgent, Stream proofContent, string proofFileName, string proofContentType,
+        long proofSizeBytes, CancellationToken ct = default)
     {
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<OrderDto>.Failure("Tenant could not be resolved.", 400);
+
+        if (proofSizeBytes <= 0 || proofSizeBytes > PaymentProofContentTypes.MaxFileSizeBytes)
+            return ResponseData<OrderDto>.Failure("Payment proof must be between 1 byte and 10 MB.", 400);
+
+        if (!PaymentProofContentTypes.IsAllowed(proofContentType))
+            return ResponseData<OrderDto>.Failure("Payment proof must be a JPEG, PNG, WebP or PDF file.", 400);
+
+        // Never trust the declared content type: confirm the bytes match it, so a renamed
+        // executable cannot reach storage.
+        var header = new byte[12];
+        var headerLength = await proofContent.ReadAsync(header, ct);
+        if (!PaymentProofContentTypes.HeaderMatches(header.AsSpan(0, headerLength), proofContentType))
+            return ResponseData<OrderDto>.Failure("Payment proof file contents do not match its type.", 400);
+
+        proofContent.Position = 0;
 
         var orderItems = new List<OrderItem>();
         var stockDecrements = new List<(ProductVariant Variant, int Quantity)>();
@@ -124,8 +142,6 @@ public class OrderService(
         var total = discountedSubtotal + tax + shippingCost;
 
         var orderNumber = $"ORD-{DateTime.UtcNow.Year}-{(await orderRepository.CountForYearAsync(tenantId, DateTime.UtcNow.Year, ct)) + 1:D6}";
-        var cardNumber = request.PaymentInfo.CardNumber ?? string.Empty;
-        var cardLast4 = cardNumber.Length >= 4 ? cardNumber[^4..] : cardNumber;
 
         var order = new Order
         {
@@ -143,7 +159,6 @@ public class OrderService(
             ShippingState = request.ShippingAddress.State,
             ShippingZipCode = request.ShippingAddress.ZipCode,
             ShippingCountry = request.ShippingAddress.Country,
-            CardLast4 = cardLast4,
             Subtotal = subtotal,
             Tax = tax,
             ShippingCost = shippingCost,
@@ -185,7 +200,54 @@ public class OrderService(
         order.AddDomainEvent(new OrderPlacedEvent(order.Id, tenantId, order.OrderNumber, order.Total));
 
         await orderRepository.AddAsync(order);
-        await unitOfWork.SaveChangesAsync(ct);
+
+        // Write the binary first so a storage failure aborts before anything is committed.
+        var storageKey = $"{tenantId}/{order.Id}/{Guid.NewGuid():N}{PaymentProofContentTypes.ExtensionFor(proofContentType)}";
+        try
+        {
+            await proofStorage.SaveAsync(proofContent, storageKey, ct);
+        }
+        catch (IOException ex)
+        {
+            logger.LogError(ex, "Payment proof storage failed for tenant {TenantId}", tenantId);
+            return ResponseData<OrderDto>.Failure("We couldn't save your payment proof. Please try again.", 502);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            logger.LogError(ex, "Payment proof storage denied for tenant {TenantId}", tenantId);
+            return ResponseData<OrderDto>.Failure("We couldn't save your payment proof. Please try again.", 502);
+        }
+
+        await paymentProofRepository.AddAsync(new OrderPaymentProof
+        {
+            TenantId = tenantId,
+            OrderId = order.Id,
+            StorageKey = storageKey,
+            ContentType = proofContentType,
+            OriginalFileName = proofFileName,
+            SizeBytes = proofSizeBytes,
+            UploadedAt = DateTime.UtcNow
+        });
+
+        try
+        {
+            // The order, its proof row and the stock decrements commit together — an order can
+            // never be persisted without its proof.
+            await unitOfWork.SaveChangesAsync(ct);
+        }
+        // CA1031 deliberately broad: the Application layer has no dependency on EF Core (or any
+        // persistence-specific exception type) by design, and any save failure — not only a
+        // provider-specific one — must trigger the same orphaned-file cleanup before rethrowing.
+        // Nothing here is swallowed; the exception always propagates.
+#pragma warning disable CA1031
+        catch (Exception)
+        {
+            // The committed state is the source of truth; an orphaned file is harmless, an
+            // order without a proof is not. Cleanup is best-effort and never throws.
+            await proofStorage.DeleteAsync(storageKey, ct);
+            throw;
+        }
+#pragma warning restore CA1031
 
         await auditLogService.LogAsync(actingUserId, tenantId, "OrderCreated", "Order", order.Id,
             null, new { order.OrderNumber, order.Subtotal, order.Tax, order.Total }, ipAddress, userAgent);
@@ -253,6 +315,58 @@ public class OrderService(
         return ResponseData<OrderDto>.Success(order.Adapt<OrderDto>());
     }
 
+    /// <summary>Streams a proof for the owning tenant. Cross-tenant reads return 404, never 403.</summary>
+    public async Task<ResponseData<PaymentProofFileDto>> GetProofForTenantAsync(Guid orderId,
+        CancellationToken ct = default)
+    {
+        if (currentTenant.TenantId is not { } tenantId)
+            return ResponseData<PaymentProofFileDto>.Failure("Tenant could not be resolved.", 400);
+
+        Order? order = await orderRepository.GetByIdWithItemsAsync(orderId, ct);
+        if (order is null || order.TenantId != tenantId)
+            return ResponseData<PaymentProofFileDto>.Failure("Payment proof not found.", 404);
+
+        return await OpenProofAsync(orderId, ct);
+    }
+
+    /// <summary>
+    /// Streams a proof for the customer who placed the order. A non-owner gets the same 404 as a
+    /// missing order — a 403 would confirm the order exists.
+    /// </summary>
+    public async Task<ResponseData<PaymentProofFileDto>> GetProofForCustomerAsync(Guid orderId,
+        string customerEmail, CancellationToken ct = default)
+    {
+        Order? order = await orderRepository.GetByIdWithItemsAsync(orderId, ct);
+        if (order is null || !string.Equals(order.ShippingEmail, customerEmail, StringComparison.OrdinalIgnoreCase))
+            return ResponseData<PaymentProofFileDto>.Failure("Payment proof not found.", 404);
+
+        return await OpenProofAsync(orderId, ct);
+    }
+
+    private async Task<ResponseData<PaymentProofFileDto>> OpenProofAsync(Guid orderId, CancellationToken ct)
+    {
+        OrderPaymentProof? proof = await paymentProofRepository.GetByOrderIdAsync(orderId, ct);
+        if (proof is null)
+            return ResponseData<PaymentProofFileDto>.Failure("Payment proof not found.", 404);
+
+        try
+        {
+            Stream content = await proofStorage.OpenReadAsync(proof.StorageKey, ct);
+            return ResponseData<PaymentProofFileDto>.Success(new PaymentProofFileDto
+            {
+                Content = content,
+                ContentType = proof.ContentType,
+                FileName = proof.OriginalFileName
+            });
+        }
+        catch (FileNotFoundException ex)
+        {
+            // Row exists but the binary is gone — a storage inconsistency, not a client error.
+            logger.LogError(ex, "Payment proof binary missing for order {OrderId}", orderId);
+            return ResponseData<PaymentProofFileDto>.Failure("Payment proof is unavailable.", 502);
+        }
+    }
+
     public Task<ResponseData<OrderDto>> ConfirmAsync(Guid id, Guid actingUserId, string ipAddress, string userAgent,
         CancellationToken ct = default) =>
         TransitionAsync(id, OrderStatus.Confirmed, "confirm", "OrderConfirmed", actingUserId, ipAddress, userAgent, ct);
@@ -276,6 +390,12 @@ public class OrderService(
 
         if (!order.CanTransitionTo(target))
             return ResponseData<OrderDto>.Failure($"Cannot {actionVerb} an order in status {order.Status}", 400);
+
+        if (target == OrderStatus.Confirmed && order.PaymentProof is null)
+        {
+            return ResponseData<OrderDto>.Failure(
+                "Payment proof is required before confirming this order.", 400);
+        }
 
         OrderStatus previousStatus = order.Status;
         order.Status = target;

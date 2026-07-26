@@ -39,6 +39,9 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
 
+    // Phase 9a manual payment proof
+    public DbSet<OrderPaymentProof> OrderPaymentProofs => Set<OrderPaymentProof>();
+
     // Phase 7 notifications
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<NotificationRead> NotificationReads => Set<NotificationRead>();

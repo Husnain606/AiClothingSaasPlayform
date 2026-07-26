@@ -1,3 +1,4 @@
+using System.Text;
 using FashionSaaS.Application.Common;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Application.Mapping;
@@ -27,6 +28,8 @@ public class OrderServiceTests
     private readonly Mock<IProductVariantRepository> _variants = new();
     private readonly Mock<IStockAdjustmentRepository> _stockAdjustments = new();
     private readonly Mock<IDiscountRepository> _discounts = new();
+    private readonly Mock<IOrderPaymentProofRepository> _proofs = new();
+    private readonly Mock<IPaymentProofStorageService> _storage = new();
     private readonly Mock<IUnitOfWork> _uow = new();
     private readonly Mock<IAuditLogService> _audit = new();
     private readonly Mock<ICurrentTenantService> _tenant = new();
@@ -39,8 +42,15 @@ public class OrderServiceTests
 
     private OrderService CreateService() => new(
         _orders.Object, _customers.Object, _products.Object, _variants.Object,
-        _stockAdjustments.Object, _discounts.Object, _uow.Object, _audit.Object, _tenant.Object,
+        _stockAdjustments.Object, _discounts.Object, _proofs.Object, _storage.Object,
+        _uow.Object, _audit.Object, _tenant.Object,
         NullLogger<OrderService>.Instance);
+
+    private static MemoryStream ValidProofStream() => new(Encoding.ASCII.GetBytes("%PDF-1.7 body"));
+
+    private const string ValidProofFileName = "receipt.pdf";
+    private const string ValidProofContentType = "application/pdf";
+    private const long ValidProofSizeBytes = 13L;
 
     private static ShippingAddressDto ValidAddress() => new()
     {
@@ -55,18 +65,11 @@ public class OrderServiceTests
         Country = "QA"
     };
 
-    private static CreateOrderPaymentDto ValidPayment() => new()
-    {
-        CardholderName = "Jane Doe",
-        CardNumber = "****1111"
-    };
-
     private static CreateOrderRequest ValidRequestFor(Guid productId, int quantity, string? size = null, string? color = null)
     {
         return new CreateOrderRequest
         {
             ShippingAddress = ValidAddress(),
-            PaymentInfo = ValidPayment(),
             Items =
             [
                 new CreateOrderItemRequest
@@ -108,7 +111,6 @@ public class OrderServiceTests
         var request = new CreateOrderRequest
         {
             ShippingAddress = ValidAddress(),
-            PaymentInfo = ValidPayment(),
             Items =
             [
                 new CreateOrderItemRequest { ProductId = product1.Id, Quantity = 2, Variant = new OrderVariantDto { Size = "M", Color = "Red" } },
@@ -116,7 +118,7 @@ public class OrderServiceTests
             ]
         };
 
-        ResponseData<OrderDto> result = await CreateService().CreateAsync(customer.Email, customer.FirstName, customer.LastName, null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<OrderDto> result = await CreateService().CreateAsync(customer.Email, customer.FirstName, customer.LastName, null, request, Guid.NewGuid(), "127.0.0.1", "ua", ValidProofStream(), ValidProofFileName, ValidProofContentType, ValidProofSizeBytes);
 
         result.StatusCode.Should().Be(201);
         result.IsSuccess.Should().BeTrue();
@@ -141,7 +143,7 @@ public class OrderServiceTests
         SetupCustomer(Customer());
 
         CreateOrderRequest request = ValidRequestFor(productId, quantity: 1);
-        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua", ValidProofStream(), ValidProofFileName, ValidProofContentType, ValidProofSizeBytes);
 
         result.StatusCode.Should().Be(400);
         _uow.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
@@ -156,7 +158,7 @@ public class OrderServiceTests
         SetupCustomer(Customer());
 
         CreateOrderRequest request = ValidRequestFor(product.Id, quantity: 1);
-        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua", ValidProofStream(), ValidProofFileName, ValidProofContentType, ValidProofSizeBytes);
 
         result.StatusCode.Should().Be(400);
         _uow.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
@@ -173,7 +175,7 @@ public class OrderServiceTests
         SetupCustomer(Customer());
 
         CreateOrderRequest request = ValidRequestFor(product.Id, quantity: 1, size: "M", color: "Red");
-        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua", ValidProofStream(), ValidProofFileName, ValidProofContentType, ValidProofSizeBytes);
 
         result.StatusCode.Should().Be(400);
         _uow.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
@@ -191,7 +193,7 @@ public class OrderServiceTests
         SetupCustomer(Customer());
 
         CreateOrderRequest request = ValidRequestFor(product.Id, quantity: 5, size: "M", color: "Red");
-        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua", ValidProofStream(), ValidProofFileName, ValidProofContentType, ValidProofSizeBytes);
 
         result.StatusCode.Should().Be(400);
         result.Message.Should().Contain("stock");
@@ -210,7 +212,7 @@ public class OrderServiceTests
         SetupCustomer(Customer());
 
         CreateOrderRequest request = ValidRequestFor(product.Id, quantity: 2, size: "M", color: "Red");
-        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua", ValidProofStream(), ValidProofFileName, ValidProofContentType, ValidProofSizeBytes);
 
         result.StatusCode.Should().Be(201);
         // 2 * 15 = 30 (override), not 2 * 20 = 40 (base)
@@ -229,7 +231,7 @@ public class OrderServiceTests
         SetupCustomer(Customer());
 
         CreateOrderRequest request = ValidRequestFor(product.Id, quantity: 3);
-        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua", ValidProofStream(), ValidProofFileName, ValidProofContentType, ValidProofSizeBytes);
 
         result.StatusCode.Should().Be(201);
         result.Data!.Subtotal.Should().Be(60m); // 3 * 20 BasePrice, server-computed
@@ -273,7 +275,7 @@ public class OrderServiceTests
 
         CreateOrderRequest request = ValidRequestFor(product.Id, quantity: 2);
         request.DiscountCode = "SAVE10";
-        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua", ValidProofStream(), ValidProofFileName, ValidProofContentType, ValidProofSizeBytes);
 
         // Subtotal = 40; discount = 10% of 40 = 4.00; discounted subtotal = 36; tax = round(36*0.10,2) = 3.60; total = 39.60
         result.StatusCode.Should().Be(201);
@@ -295,7 +297,7 @@ public class OrderServiceTests
 
         CreateOrderRequest request = ValidRequestFor(product.Id, quantity: 1);
         request.DiscountCode = "SAVE10";
-        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua", ValidProofStream(), ValidProofFileName, ValidProofContentType, ValidProofSizeBytes);
 
         // Subtotal = 20; a 1000 fixed discount must clamp to the subtotal, never go negative
         result.StatusCode.Should().Be(201);
@@ -312,7 +314,7 @@ public class OrderServiceTests
 
         CreateOrderRequest request = ValidRequestFor(product.Id, quantity: 1);
         request.DiscountCode = "BOGUS";
-        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua", ValidProofStream(), ValidProofFileName, ValidProofContentType, ValidProofSizeBytes);
 
         result.StatusCode.Should().Be(400);
         _uow.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
@@ -328,7 +330,7 @@ public class OrderServiceTests
 
         CreateOrderRequest request = ValidRequestFor(product.Id, quantity: 1);
         request.DiscountCode = "SAVE10";
-        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua", ValidProofStream(), ValidProofFileName, ValidProofContentType, ValidProofSizeBytes);
 
         result.StatusCode.Should().Be(400);
     }
@@ -343,7 +345,7 @@ public class OrderServiceTests
 
         CreateOrderRequest request = ValidRequestFor(product.Id, quantity: 1);
         request.DiscountCode = "SAVE10";
-        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua", ValidProofStream(), ValidProofFileName, ValidProofContentType, ValidProofSizeBytes);
 
         result.StatusCode.Should().Be(400);
     }
@@ -357,7 +359,7 @@ public class OrderServiceTests
 
         CreateOrderRequest request = ValidRequestFor(product.Id, quantity: 1); // subtotal 20 < 100 min
         request.DiscountCode = "SAVE10";
-        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua", ValidProofStream(), ValidProofFileName, ValidProofContentType, ValidProofSizeBytes);
 
         result.StatusCode.Should().Be(400);
         result.Message.Should().Contain("subtotal must be at least");
@@ -372,7 +374,7 @@ public class OrderServiceTests
 
         CreateOrderRequest request = ValidRequestFor(product.Id, quantity: 1);
         request.DiscountCode = "SAVE10";
-        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua", ValidProofStream(), ValidProofFileName, ValidProofContentType, ValidProofSizeBytes);
 
         result.StatusCode.Should().Be(400);
         result.Message.Should().Contain("redemption limit");
@@ -384,7 +386,7 @@ public class OrderServiceTests
         Product product = SetupOneItemOrder();
 
         CreateOrderRequest request = ValidRequestFor(product.Id, quantity: 1);
-        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua", ValidProofStream(), ValidProofFileName, ValidProofContentType, ValidProofSizeBytes);
 
         result.StatusCode.Should().Be(201);
         result.Data!.DiscountAmount.Should().Be(0m);
@@ -398,22 +400,38 @@ public class OrderServiceTests
         _tenant.SetupGet(t => t.TenantId).Returns((Guid?)null);
         CreateOrderRequest request = ValidRequestFor(Guid.NewGuid(), quantity: 1);
 
-        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua", ValidProofStream(), ValidProofFileName, ValidProofContentType, ValidProofSizeBytes);
 
         result.StatusCode.Should().Be(400);
     }
 
     // ── Confirm / Ship / Deliver ────────────────────────────────────────────────
 
-    private Order OrderWithStatus(OrderStatus status, string shippingEmail = "customer@example.com") => new()
+    private Order OrderWithStatus(OrderStatus status, string shippingEmail = "customer@example.com")
     {
-        Id = Guid.NewGuid(),
-        TenantId = _tenantId,
-        OrderNumber = "ORD-2026-000001",
-        Status = status,
-        ShippingEmail = shippingEmail,
-        Items = new List<OrderItem>()
-    };
+        var id = Guid.NewGuid();
+        return new Order
+        {
+            Id = id,
+            TenantId = _tenantId,
+            OrderNumber = "ORD-2026-000001",
+            Status = status,
+            ShippingEmail = shippingEmail,
+            Items = new List<OrderItem>(),
+            // Confirm/ship/deliver/cancel behaviour is what these tests exercise, not the proof
+            // requirement itself (that's OrderPaymentProofTests) — default every order to having
+            // a proof so the confirm guard never blocks these unrelated transition assertions.
+            PaymentProof = new OrderPaymentProof
+            {
+                OrderId = id,
+                TenantId = _tenantId,
+                StorageKey = "k",
+                ContentType = "application/pdf",
+                OriginalFileName = "receipt.pdf",
+                SizeBytes = 10
+            }
+        };
+    }
 
     [Fact]
     public async Task ConfirmAsync_FromPending_Succeeds()
@@ -683,7 +701,7 @@ public class OrderServiceTests
         _orders.Setup(r => r.AddAsync(It.IsAny<Order>())).Callback<Order>(o => addedOrder = o).Returns(Task.CompletedTask);
 
         CreateOrderRequest request = ValidRequestFor(product.Id, quantity: 2);
-        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua");
+        ResponseData<OrderDto> result = await CreateService().CreateAsync("customer@example.com", "Jane", "Doe", null, request, Guid.NewGuid(), "127.0.0.1", "ua", ValidProofStream(), ValidProofFileName, ValidProofContentType, ValidProofSizeBytes);
 
         result.StatusCode.Should().Be(201);
         addedOrder.Should().NotBeNull();

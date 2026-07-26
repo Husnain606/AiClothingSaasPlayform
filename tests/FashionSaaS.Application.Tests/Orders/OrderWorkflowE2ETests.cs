@@ -1,3 +1,4 @@
+using System.Text;
 using FashionSaaS.Application.Common;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Application.Mapping;
@@ -113,10 +114,17 @@ public class OrderWorkflowE2ETests
                 It.IsAny<object?>(), It.IsAny<object?>(), It.IsAny<string>(), It.IsAny<string>()))
             .Returns(Task.CompletedTask);
 
+        // Real repository, sharing this test's DbContext, so EF's navigation fixup links the
+        // saved proof row to the order automatically. Storage stays mocked since no assertion
+        // here cares about the saved bytes.
+        var proofRepository = new OrderPaymentProofRepository(ctx);
+        var proofStorage = new Mock<IPaymentProofStorageService>();
+
         var orderServiceLogger = new Mock<ILogger<OrderService>>();
         var orderService = new OrderService(
             orderRepository, customerRepository, productRepository, variantRepository,
-            stockAdjustmentRepository, discountRepository, unitOfWork, auditLogService.Object, currentTenant.Object,
+            stockAdjustmentRepository, discountRepository, proofRepository, proofStorage.Object,
+            unitOfWork, auditLogService.Object, currentTenant.Object,
             orderServiceLogger.Object);
 
         var reportRepository = new ReportRepository(ctx);
@@ -147,11 +155,6 @@ public class OrderWorkflowE2ETests
             ZipCode = "62701",
             Country = "US"
         },
-        PaymentInfo = new CreateOrderPaymentDto
-        {
-            CardholderName = "Jane Doe",
-            CardNumber = "****1111"
-        },
         Items =
         [
             new CreateOrderItemRequest
@@ -163,6 +166,12 @@ public class OrderWorkflowE2ETests
         ]
     };
 
+    private static MemoryStream ValidProofStream() => new(Encoding.ASCII.GetBytes("%PDF-1.7 body"));
+
+    private const string ValidProofFileName = "receipt.pdf";
+    private const string ValidProofContentType = "application/pdf";
+    private const long ValidProofSizeBytes = 13L;
+
     [Fact]
     public async Task FullLifecycle_CreateConfirmShipDeliver_TransitionsAndStock()
     {
@@ -172,7 +181,8 @@ public class OrderWorkflowE2ETests
         // --- Create order for 2 ---
         ResponseData<OrderDto> createResult = await harness.OrderService.CreateAsync(
             "jane.doe@example.com", "Jane", "Doe", "555-0100",
-            BuildRequest(harness.ProductId, 2), _actingUserId, IpAddress, UserAgent);
+            BuildRequest(harness.ProductId, 2), _actingUserId, IpAddress, UserAgent,
+            ValidProofStream(), ValidProofFileName, ValidProofContentType, ValidProofSizeBytes);
 
         createResult.IsSuccess.Should().BeTrue();
         OrderDto order = createResult.Data!;
@@ -205,7 +215,8 @@ public class OrderWorkflowE2ETests
         // --- Second order gets the next sequence number ---
         ResponseData<OrderDto> secondCreateResult = await harness.OrderService.CreateAsync(
             "jane.doe@example.com", "Jane", "Doe", "555-0100",
-            BuildRequest(harness.ProductId, 1), _actingUserId, IpAddress, UserAgent);
+            BuildRequest(harness.ProductId, 1), _actingUserId, IpAddress, UserAgent,
+            ValidProofStream(), ValidProofFileName, ValidProofContentType, ValidProofSizeBytes);
 
         secondCreateResult.IsSuccess.Should().BeTrue();
         secondCreateResult.Data!.OrderId.Should().Be($"ORD-{DateTime.UtcNow.Year}-000002");
@@ -219,7 +230,8 @@ public class OrderWorkflowE2ETests
 
         ResponseData<OrderDto> createResult = await harness.OrderService.CreateAsync(
             "jane.doe@example.com", "Jane", "Doe", "555-0100",
-            BuildRequest(harness.ProductId, 3), _actingUserId, IpAddress, UserAgent);
+            BuildRequest(harness.ProductId, 3), _actingUserId, IpAddress, UserAgent,
+            ValidProofStream(), ValidProofFileName, ValidProofContentType, ValidProofSizeBytes);
 
         createResult.IsSuccess.Should().BeTrue();
         OrderDto order = createResult.Data!;
@@ -256,7 +268,8 @@ public class OrderWorkflowE2ETests
         // Order 1: create -> confirm -> ship -> deliver
         ResponseData<OrderDto> deliveredCreate = await harness.OrderService.CreateAsync(
             "jane.doe@example.com", "Jane", "Doe", "555-0100",
-            BuildRequest(harness.ProductId, 2), _actingUserId, IpAddress, UserAgent);
+            BuildRequest(harness.ProductId, 2), _actingUserId, IpAddress, UserAgent,
+            ValidProofStream(), ValidProofFileName, ValidProofContentType, ValidProofSizeBytes);
         deliveredCreate.IsSuccess.Should().BeTrue();
         OrderDto deliveredOrder = deliveredCreate.Data!;
 
@@ -268,7 +281,8 @@ public class OrderWorkflowE2ETests
         // Order 2: create -> cancel
         ResponseData<OrderDto> cancelledCreate = await harness.OrderService.CreateAsync(
             "jane.doe@example.com", "Jane", "Doe", "555-0100",
-            BuildRequest(harness.ProductId, 1), _actingUserId, IpAddress, UserAgent);
+            BuildRequest(harness.ProductId, 1), _actingUserId, IpAddress, UserAgent,
+            ValidProofStream(), ValidProofFileName, ValidProofContentType, ValidProofSizeBytes);
         cancelledCreate.IsSuccess.Should().BeTrue();
         OrderDto cancelledOrder = cancelledCreate.Data!;
 

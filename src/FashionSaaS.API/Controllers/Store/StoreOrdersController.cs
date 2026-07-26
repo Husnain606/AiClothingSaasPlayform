@@ -19,16 +19,40 @@ public class StoreOrdersController(OrderService orderService) : ControllerBase
     private string Ip => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
     private string Ua => Request.Headers.UserAgent.ToString();
 
+    /// <summary>Maximum accepted payment-proof size (10 MB).</summary>
+    private const long MaxProofBytes = 10485760;
+
     [HttpPost(ApiUrl.StoreOrders.Create)]
+    [RequestSizeLimit(MaxProofBytes)]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
-    public async Task<IActionResult> Create([FromBody] CreateOrderRequest request)
+    public async Task<IActionResult> Create([FromForm] CreateOrderRequest request, IFormFile? paymentProof,
+        CancellationToken ct)
     {
+        if (paymentProof is null || paymentProof.Length == 0)
+            return StatusCode(400, ResponseData<string>.Failure("A payment proof file is required.", 400));
+
+        if (paymentProof.Length > MaxProofBytes)
+            return StatusCode(400, ResponseData<string>.Failure("Payment proof must be 10 MB or smaller.", 400));
+
         var firstName = request.ShippingAddress.FirstName;
         var lastName = request.ShippingAddress.LastName;
+
+        // Buffer to memory so the service can read the magic-number header and then re-read from
+        // the start; the 10 MB cap above bounds this. IFormFile streams are not reliably seekable.
+        using var buffered = new MemoryStream();
+        await using (Stream upload = paymentProof.OpenReadStream())
+        {
+            await upload.CopyToAsync(buffered, ct);
+        }
+
+        buffered.Position = 0;
+
         ResponseData<OrderDto> response = await orderService.CreateAsync(Email, firstName, lastName,
-            request.ShippingAddress.Phone, request, UserId, Ip, Ua);
+            request.ShippingAddress.Phone, request, UserId, Ip, Ua,
+            buffered, paymentProof.FileName, paymentProof.ContentType, paymentProof.Length, ct);
+
         return StatusCode(response.StatusCode, response);
     }
 

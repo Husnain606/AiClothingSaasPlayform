@@ -26,16 +26,9 @@ public class OrderVariantDto
     public string? Color { get; set; }
 }
 
-public class CreateOrderPaymentDto
-{
-    public string CardholderName { get; set; } = string.Empty;
-    public string CardNumber { get; set; } = string.Empty; // masked "****1111" from storefront; validator enforces
-}
-
 public class CreateOrderRequest
 {
     public ShippingAddressDto ShippingAddress { get; set; } = new();
-    public CreateOrderPaymentDto PaymentInfo { get; set; } = new();
     public List<CreateOrderItemRequest> Items { get; set; } = [];
     public string? DiscountCode { get; set; }
 }

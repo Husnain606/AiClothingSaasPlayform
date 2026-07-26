@@ -1,10 +1,9 @@
-using System.Text.RegularExpressions;
 using FashionSaaS.Application.Orders.DTOs;
 using FluentValidation;
 
 namespace FashionSaaS.Application.Orders.Validators;
 
-public partial class CreateOrderRequestValidator : AbstractValidator<CreateOrderRequest>
+public class CreateOrderRequestValidator : AbstractValidator<CreateOrderRequest>
 {
     public CreateOrderRequestValidator()
     {
@@ -30,30 +29,5 @@ public partial class CreateOrderRequestValidator : AbstractValidator<CreateOrder
         RuleFor(x => x.ShippingAddress.Country)
             .NotEmpty().WithMessage("Country is required.")
             .Length(2).WithMessage("Country must be a 2-letter code.");
-
-        RuleFor(x => x.PaymentInfo.CardholderName)
-            .NotEmpty().WithMessage("CardholderName is required.");
-
-        RuleFor(x => x.PaymentInfo.CardNumber)
-            .NotEmpty().WithMessage("CardNumber is required.")
-            .Must(NotBeAFullPan).WithMessage("Full card numbers must not be sent; provide the masked form.")
-            .Must(BeMaskedOrLastFour).WithMessage("CardNumber must be a masked value (e.g. ****1111) or exactly 4 digits.");
     }
-
-    private static bool NotBeAFullPan(string cardNumber) =>
-        !ThirteenOrMoreConsecutiveDigits().IsMatch(cardNumber ?? string.Empty);
-
-    private static bool BeMaskedOrLastFour(string cardNumber) =>
-        MaskedCardPattern().IsMatch(cardNumber ?? string.Empty);
-
-    // MA0009 false positive: [GeneratedRegex] is source-generated at compile time and has no
-    // constructor overload to attach a timeout to. Neither pattern has a nested/unbounded
-    // quantifier that could backtrack catastrophically. — 2026-07-11
-#pragma warning disable MA0009
-    [GeneratedRegex(@"\d{13,}")]
-    private static partial Regex ThirteenOrMoreConsecutiveDigits();
-
-    [GeneratedRegex(@"^([*]+\d{4}|\d{4})$")]
-    private static partial Regex MaskedCardPattern();
-#pragma warning restore MA0009
 }
