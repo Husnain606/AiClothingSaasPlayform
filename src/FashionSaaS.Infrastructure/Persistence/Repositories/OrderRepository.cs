@@ -10,7 +10,7 @@ public class OrderRepository(ApplicationDbContext context) : IOrderRepository
     public async Task AddAsync(Order order) => await context.Orders.AddAsync(order);
 
     public Task<Order?> GetByIdWithItemsAsync(Guid id, CancellationToken ct = default) =>
-        context.Orders.Include(o => o.Items).FirstOrDefaultAsync(o => o.Id == id, ct);
+        context.Orders.Include(o => o.Items).Include(o => o.PaymentProof).FirstOrDefaultAsync(o => o.Id == id, ct);
 
     public async Task<(IReadOnlyList<Order> Items, int TotalCount)> GetPagedAsync(
         OrderFilter filter, CancellationToken ct = default)
