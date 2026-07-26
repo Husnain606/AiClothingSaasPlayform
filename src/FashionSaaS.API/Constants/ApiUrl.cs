@@ -231,6 +231,7 @@ internal static class ApiUrl
         public const string GetMine = "api/store/orders";
         public const string GetById = "api/store/orders/{id}";
         public const string Cancel = "api/store/orders/{id}/cancel";
+        public const string GetPaymentProof = "api/store/orders/{id}/payment-proof";
     }
 
     internal static class StoreReviews
@@ -246,6 +247,7 @@ internal static class ApiUrl
         public const string Ship = "api/tenant/orders/{id}/ship";
         public const string Deliver = "api/tenant/orders/{id}/deliver";
         public const string Cancel = "api/tenant/orders/{id}/cancel";
+        public const string GetPaymentProof = "api/tenant/orders/{id}/payment-proof";
     }
 
     internal static class TenantReports

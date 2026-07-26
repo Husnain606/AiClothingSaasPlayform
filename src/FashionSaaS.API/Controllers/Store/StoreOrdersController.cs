@@ -85,4 +85,21 @@ public class StoreOrdersController(OrderService orderService) : ControllerBase
         ResponseData<OrderDto> response = await orderService.CancelAsync(id, body.Reason, asCustomer: true, Email, UserId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
+
+    /// <summary>
+    /// Streams the caller's own payment proof. A non-owner receives 404 rather than 403 so the
+    /// existence of another customer's order is never disclosed.
+    /// </summary>
+    [HttpGet(ApiUrl.StoreOrders.GetPaymentProof)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> GetPaymentProof(Guid id, CancellationToken ct)
+    {
+        ResponseData<PaymentProofFileDto> response = await orderService.GetProofForCustomerAsync(id, Email, ct);
+        if (!response.IsSuccess || response.Data is null)
+            return StatusCode(response.StatusCode, ResponseData<string>.Failure(response.Message, response.StatusCode));
+
+        return File(response.Data.Content, response.Data.ContentType, response.Data.FileName);
+    }
 }

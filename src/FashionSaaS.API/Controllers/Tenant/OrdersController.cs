@@ -81,4 +81,21 @@ public class OrdersController(OrderService orderService) : ControllerBase
         ResponseData<OrderDto> response = await orderService.CancelAsync(id, body.Reason, asCustomer: false, null, UserId, Ip, Ua);
         return StatusCode(response.StatusCode, response);
     }
+
+    /// <summary>
+    /// Streams the payment proof for one of this tenant's orders, for manual review before
+    /// confirming. Another tenant's order returns 404.
+    /// </summary>
+    [HttpGet(ApiUrl.TenantOrders.GetPaymentProof)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> GetPaymentProof(Guid id, CancellationToken ct)
+    {
+        ResponseData<PaymentProofFileDto> response = await orderService.GetProofForTenantAsync(id, ct);
+        if (!response.IsSuccess || response.Data is null)
+            return StatusCode(response.StatusCode, ResponseData<string>.Failure(response.Message, response.StatusCode));
+
+        return File(response.Data.Content, response.Data.ContentType, response.Data.FileName);
+    }
 }
