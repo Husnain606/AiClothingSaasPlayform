@@ -64,7 +64,11 @@ public class TenantService(
         tenant.Phone = request.Phone;
         tenant.LogoUrl = request.LogoUrl;
         tenant.CoverImageUrl = request.CoverImageUrl;
-        tenant.PaymentInstructions = request.PaymentInstructions;
+
+        // Only overwrite when explicitly provided — until every tenant-profile-editing UI sends
+        // this field, an omitted value must not silently erase a previously-set instructions string.
+        if (request.PaymentInstructions is not null)
+            tenant.PaymentInstructions = request.PaymentInstructions;
 
         await tenantRepository.UpdateAsync(tenant);
         await unitOfWork.SaveChangesAsync();

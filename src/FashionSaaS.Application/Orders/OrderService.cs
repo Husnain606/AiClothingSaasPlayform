@@ -1,4 +1,5 @@
 using FashionSaaS.Application.Common;
+using FashionSaaS.Application.Configuration;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Application.Orders.DTOs;
 using FashionSaaS.Domain.Entities;
@@ -6,6 +7,7 @@ using FashionSaaS.Domain.Enums;
 using FashionSaaS.Domain.Events;
 using Mapster;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace FashionSaaS.Application.Orders;
 
@@ -25,6 +27,7 @@ public class OrderService(
     IDiscountRepository discountRepository,
     IOrderPaymentProofRepository paymentProofRepository,
     IPaymentProofStorageService proofStorage,
+    IOptions<PaymentProofStorageSettings> proofStorageSettings,
     IUnitOfWork unitOfWork,
     IAuditLogService auditLogService,
     ICurrentTenantService currentTenant,
@@ -32,6 +35,14 @@ public class OrderService(
 {
     private const decimal TaxRate = 0.10m;
 
+    /// <summary>
+    /// Creates an order, including the mandatory payment proof. There is no FluentValidation
+    /// validator for the proof itself: it arrives as a sibling <c>IFormFile</c> action-method
+    /// parameter, not a member of <see cref="CreateOrderRequest"/>, so FluentValidation's
+    /// auto-validation pipeline (which only validates model-bound DTOs) cannot reach it — the
+    /// presence, content-type, magic-number and size checks below are this feature's boundary
+    /// validation instead, mirroring the precedent in <c>UploadImageRequestValidator</c>.
+    /// </summary>
     public async Task<ResponseData<OrderDto>> CreateAsync(string customerEmail, string customerFirstName,
         string customerLastName, string? customerPhone, CreateOrderRequest request, Guid actingUserId,
         string ipAddress, string userAgent, Stream proofContent, string proofFileName, string proofContentType,
@@ -40,8 +51,15 @@ public class OrderService(
         if (currentTenant.TenantId is not { } tenantId)
             return ResponseData<OrderDto>.Failure("Tenant could not be resolved.", 400);
 
-        if (proofSizeBytes <= 0 || proofSizeBytes > PaymentProofContentTypes.MaxFileSizeBytes)
-            return ResponseData<OrderDto>.Failure("Payment proof must be between 1 byte and 10 MB.", 400);
+        // The enforced business limit is config-driven (PaymentProofStorage:MaxFileSizeBytes) so it
+        // can be raised without a redeploy. PaymentProofContentTypes.MaxFileSizeBytes is only the
+        // compile-time ceiling used by the controller's [RequestSizeLimit] and as the config default.
+        var maxProofSizeBytes = proofStorageSettings.Value.MaxFileSizeBytes;
+        if (proofSizeBytes <= 0 || proofSizeBytes > maxProofSizeBytes)
+        {
+            return ResponseData<OrderDto>.Failure(
+                $"Payment proof must be between 1 byte and {maxProofSizeBytes / (1024 * 1024)} MB.", 400);
+        }
 
         if (!PaymentProofContentTypes.IsAllowed(proofContentType))
             return ResponseData<OrderDto>.Failure("Payment proof must be a JPEG, PNG, WebP or PDF file.", 400);

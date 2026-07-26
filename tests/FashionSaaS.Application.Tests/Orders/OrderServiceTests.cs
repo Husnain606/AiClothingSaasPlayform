@@ -1,5 +1,6 @@
 using System.Text;
 using FashionSaaS.Application.Common;
+using FashionSaaS.Application.Configuration;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Application.Mapping;
 using FashionSaaS.Application.Orders;
@@ -9,6 +10,7 @@ using FashionSaaS.Domain.Enums;
 using FashionSaaS.Domain.Events;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Moq;
 
 namespace FashionSaaS.Application.Tests.Orders;
@@ -43,6 +45,7 @@ public class OrderServiceTests
     private OrderService CreateService() => new(
         _orders.Object, _customers.Object, _products.Object, _variants.Object,
         _stockAdjustments.Object, _discounts.Object, _proofs.Object, _storage.Object,
+        Options.Create(new PaymentProofStorageSettings { RootPath = "." }),
         _uow.Object, _audit.Object, _tenant.Object,
         NullLogger<OrderService>.Instance);
 

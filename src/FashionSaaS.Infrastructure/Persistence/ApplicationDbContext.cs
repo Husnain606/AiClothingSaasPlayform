@@ -89,6 +89,10 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         modelBuilder.Entity<Order>()
             .HasQueryFilter(o => o.TenantId == currentTenantService.TenantId);
 
+        // Phase 9a manual payment proof — same dynamic tenant filter pattern as Order above.
+        modelBuilder.Entity<OrderPaymentProof>()
+            .HasQueryFilter(p => p.TenantId == currentTenantService.TenantId);
+
         // Phase 7 notifications — TenantId is nullable (null = platform/SuperAdmin-scoped row).
         // Strict equality, matching the BankAccount/catalog pattern above: fail-closed means a
         // null-TenantId row is visible ONLY when the current context is also tenant-less

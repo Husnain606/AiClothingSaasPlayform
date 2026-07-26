@@ -1,5 +1,6 @@
 using System.Text;
 using FashionSaaS.Application.Common;
+using FashionSaaS.Application.Configuration;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Application.Orders;
 using FashionSaaS.Application.Orders.DTOs;
@@ -7,6 +8,7 @@ using FashionSaaS.Domain.Entities;
 using FashionSaaS.Domain.Enums;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Moq;
 
 namespace FashionSaaS.Application.Tests.Orders;
@@ -151,7 +153,8 @@ public class OrderPaymentProofTests
         // Only the collaborators these tests exercise are configured; the rest are loose mocks.
         // Constructor order established by this task: orderRepository, customerRepository,
         // productRepository, variantRepository, stockAdjustmentRepository, discountRepository,
-        // paymentProofRepository, proofStorage, unitOfWork, auditLogService, currentTenant, logger.
+        // paymentProofRepository, proofStorage, proofStorageSettings, unitOfWork, auditLogService,
+        // currentTenant, logger.
         return new OrderService(
             _orders.Object,
             Mock.Of<ICustomerRepository>(),
@@ -161,6 +164,7 @@ public class OrderPaymentProofTests
             Mock.Of<IDiscountRepository>(),
             _proofs.Object,
             _storage.Object,
+            Options.Create(new PaymentProofStorageSettings { RootPath = "." }),
             _uow.Object,
             Mock.Of<IAuditLogService>(),
             Mock.Of<ICurrentTenantService>(),

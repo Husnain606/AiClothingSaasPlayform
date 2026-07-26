@@ -10,7 +10,14 @@ namespace FashionSaaS.Application.Orders;
 /// </summary>
 public static class PaymentProofContentTypes
 {
-    /// <summary>Maximum accepted proof size (10 MB).</summary>
+    /// <summary>
+    /// Compile-time ceiling (10 MB) used only for the controller's <c>[RequestSizeLimit]</c>
+    /// attribute (which must be a compile-time constant) and as the config default for
+    /// <see cref="FashionSaaS.Application.Configuration.PaymentProofStorageSettings.MaxFileSizeBytes"/>.
+    /// The actual enforced business limit is read from that config value at runtime in
+    /// <c>OrderService.CreateAsync</c>, so raising it in configuration changes enforced behavior
+    /// without a redeploy — this constant is not the enforced limit.
+    /// </summary>
     public const long MaxFileSizeBytes = 10485760;
 
     public const string Jpeg = "image/jpeg";

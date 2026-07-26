@@ -1,5 +1,6 @@
 using System.Text;
 using FashionSaaS.Application.Common;
+using FashionSaaS.Application.Configuration;
 using FashionSaaS.Application.Interfaces;
 using FashionSaaS.Application.Mapping;
 using FashionSaaS.Application.Orders;
@@ -14,6 +15,7 @@ using FluentAssertions;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 
 namespace FashionSaaS.Application.Tests.Orders;
@@ -120,11 +122,14 @@ public class OrderWorkflowE2ETests
         var proofRepository = new OrderPaymentProofRepository(ctx);
         var proofStorage = new Mock<IPaymentProofStorageService>();
 
+        IOptions<PaymentProofStorageSettings> proofStorageSettings = Options.Create(
+            new PaymentProofStorageSettings { RootPath = "." });
+
         var orderServiceLogger = new Mock<ILogger<OrderService>>();
         var orderService = new OrderService(
             orderRepository, customerRepository, productRepository, variantRepository,
             stockAdjustmentRepository, discountRepository, proofRepository, proofStorage.Object,
-            unitOfWork, auditLogService.Object, currentTenant.Object,
+            proofStorageSettings, unitOfWork, auditLogService.Object, currentTenant.Object,
             orderServiceLogger.Object);
 
         var reportRepository = new ReportRepository(ctx);

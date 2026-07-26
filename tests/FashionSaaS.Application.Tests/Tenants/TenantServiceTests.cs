@@ -136,6 +136,32 @@ public class TenantServiceTests
     }
 
     [Fact]
+    public async Task UpdateAsync_OmittedPaymentInstructions_DoesNotOverwriteExistingValue()
+    {
+        // Neither the storefront settings form nor the platform-admin form populates
+        // paymentInstructions today — an update from either UI must not silently wipe out a
+        // value previously set via a direct API call.
+        var tenant = new Tenant
+        {
+            Id = Guid.NewGuid(),
+            Name = "Chic",
+            Slug = "chic",
+            Email = "t@example.com",
+            PaymentInstructions = "Transfer to HBL 1234-5678"
+        };
+        _tenantRepo.Setup(r => r.GetByIdAsync(tenant.Id)).ReturnsAsync(tenant);
+
+        ResponseData<TenantResponse> result = await CreateService().UpdateAsync(tenant.Id,
+            new UpdateTenantRequest { Name = "Chic Rebrand", PaymentInstructions = null },
+            Guid.NewGuid(), "127.0.0.1", "ua");
+
+        result.IsSuccess.Should().BeTrue();
+        tenant.PaymentInstructions.Should().Be("Transfer to HBL 1234-5678");
+        result.Data!.PaymentInstructions.Should().Be("Transfer to HBL 1234-5678");
+        tenant.Name.Should().Be("Chic Rebrand");
+    }
+
+    [Fact]
     public void UpdateTenantRequestValidator_InstructionsOverMaxLength_Fails()
     {
         var validator = new UpdateTenantRequestValidator();

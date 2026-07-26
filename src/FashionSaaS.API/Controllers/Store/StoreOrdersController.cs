@@ -19,22 +19,34 @@ public class StoreOrdersController(OrderService orderService) : ControllerBase
     private string Ip => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
     private string Ua => Request.Headers.UserAgent.ToString();
 
-    /// <summary>Maximum accepted payment-proof size (10 MB).</summary>
-    private const long MaxProofBytes = 10485760;
+    /// <summary>
+    /// Bounds the ENTIRE multipart request body (file bytes + boundaries + all the
+    /// ShippingAddress.*/Items[] form fields), not just the file — deliberately larger than
+    /// <see cref="PaymentProofContentTypes.MaxFileSizeBytes"/> to leave headroom for the
+    /// surrounding multipart fields. It cannot read configuration: attribute arguments must be
+    /// compile-time constants. The TRUE business-rule file-size cap is config-driven
+    /// (<see cref="FashionSaaS.Application.Configuration.PaymentProofStorageSettings.MaxFileSizeBytes"/>) and is enforced
+    /// inside <c>OrderService.CreateAsync</c>, which returns the proper <see cref="ResponseData{T}"/>
+    /// 400 envelope instead of a bare 413.
+    /// </summary>
+    private const long MultipartRequestSizeLimitBytes = 11_000_000;
 
     [HttpPost(ApiUrl.StoreOrders.Create)]
-    [RequestSizeLimit(MaxProofBytes)]
+    [RequestSizeLimit(MultipartRequestSizeLimitBytes)]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ResponseData<string>), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Create([FromForm] CreateOrderRequest request, IFormFile? paymentProof,
         CancellationToken ct)
     {
+        // No FluentValidation validator exists for the payment proof: IFormFile paymentProof is a
+        // sibling action-method parameter, not a member of CreateOrderRequest, and FluentValidation's
+        // auto-validation pipeline only validates model-bound DTOs — it cannot reach a parameter
+        // outside the bound body. Presence is checked here; the true content-type, magic-number and
+        // config-driven size checks happen in OrderService.CreateAsync (see PaymentProofContentTypes
+        // and PaymentProofStorageSettings), which is the boundary that can actually read configuration.
         if (paymentProof is null || paymentProof.Length == 0)
             return StatusCode(400, ResponseData<string>.Failure("A payment proof file is required.", 400));
-
-        if (paymentProof.Length > MaxProofBytes)
-            return StatusCode(400, ResponseData<string>.Failure("Payment proof must be 10 MB or smaller.", 400));
 
         var firstName = request.ShippingAddress.FirstName;
         var lastName = request.ShippingAddress.LastName;
