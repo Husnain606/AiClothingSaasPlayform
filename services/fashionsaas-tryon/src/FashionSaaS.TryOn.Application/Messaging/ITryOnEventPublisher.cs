@@ -3,9 +3,8 @@ namespace FashionSaaS.TryOn.Application.Messaging;
 public interface ITryOnEventPublisher
 {
     /// <summary>
-    /// Publishes a TryOnCompleted event. Implementations must never throw — a messaging
-    /// outage must not fail the customer-facing try-on request (spec §9: publish-only,
-    /// side-channel, not the source of truth).
+    /// Publishes a try-on result (success or failure). Implementations must never throw — a
+    /// messaging outage must not fail the underlying try-on request.
     /// </summary>
-    Task PublishAsync(TryOnCompletedEvent @event, CancellationToken cancellationToken);
+    Task PublishAsync(TryOnResultEvent @event, CancellationToken cancellationToken);
 }

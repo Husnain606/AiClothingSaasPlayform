@@ -13,7 +13,7 @@ public class ServiceBusTryOnEventPublisher(
 {
     private readonly string _topicName = settings.Value.TopicName;
 
-    public async Task PublishAsync(TryOnCompletedEvent @event, CancellationToken cancellationToken)
+    public async Task PublishAsync(TryOnResultEvent @event, CancellationToken cancellationToken)
     {
         try
         {
@@ -30,7 +30,7 @@ public class ServiceBusTryOnEventPublisher(
 #pragma warning disable CA1031
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Failed to publish TryOnCompleted event for TryOnRequestId {TryOnRequestId}", @event.TryOnRequestId);
+            logger.LogWarning(ex, "Failed to publish TryOnResult event for TryOnRequestId {TryOnRequestId}", @event.TryOnRequestId);
         }
 #pragma warning restore CA1031
     }

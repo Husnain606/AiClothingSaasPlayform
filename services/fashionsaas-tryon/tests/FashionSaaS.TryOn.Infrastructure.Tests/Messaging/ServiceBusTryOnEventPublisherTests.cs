@@ -25,7 +25,8 @@ public class ServiceBusTryOnEventPublisherTests
         IOptions<ServiceBusSettings> settings = Options.Create(new ServiceBusSettings { ConnectionString = unreachableConnectionString, TopicName = "tryon-events" });
         var publisher = new ServiceBusTryOnEventPublisher(client, settings, NullLogger<ServiceBusTryOnEventPublisher>.Instance);
 
-        var @event = new TryOnCompletedEvent(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), DateTime.UtcNow);
+        var @event = new TryOnResultEvent(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), DateTime.UtcNow,
+            IsSuccess: true, ResultImageUrl: "https://example.hf.space/file=result.png", FailureReason: null);
 
         Func<Task> act = async () => await publisher.PublishAsync(@event, CancellationToken.None);
 
@@ -51,7 +52,8 @@ public class ServiceBusTryOnEventPublisherTests
         IOptions<ServiceBusSettings> settings = Options.Create(new ServiceBusSettings { ConnectionString = unreachableConnectionString, TopicName = "tryon-events" });
         var publisher = new ServiceBusTryOnEventPublisher(client, settings, NullLogger<ServiceBusTryOnEventPublisher>.Instance);
 
-        var @event = new TryOnCompletedEvent(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), DateTime.UtcNow);
+        var @event = new TryOnResultEvent(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), DateTime.UtcNow,
+            IsSuccess: false, ResultImageUrl: null, FailureReason: "Render failed");
 
         Func<Task> act = async () => await publisher.PublishAsync(@event, CancellationToken.None);
 
