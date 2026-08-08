@@ -1,4 +1,6 @@
 using System.Text.Json.Serialization;
+using Azure.Messaging.ServiceBus;
+using FashionSaaS.API.BackgroundJobs;
 using FashionSaaS.API.Extensions;
 using FashionSaaS.API.Handlers;
 using FashionSaaS.API.Hubs;
@@ -8,6 +10,7 @@ using FashionSaaS.Application.Configuration;
 using FashionSaaS.Infrastructure;
 using FluentValidation;
 using FluentValidation.AspNetCore;
+using Microsoft.Extensions.Options;
 using Microsoft.OpenApi;
 using Serilog;
 using Serilog.Events;
@@ -45,6 +48,19 @@ builder.Services.AddJwtAuthentication(builder.Configuration);
 
 // SignalR (real-time notifications hub) — in-framework, no new server NuGet package
 builder.Services.AddSignalR();
+
+// Try-on results consumer: reads the try-on microservice's TryOnResultEvent off Service Bus and
+// turns it into a Notification + live push. Registered here rather than in AddInfrastructure
+// because it depends on IHubContext<NotificationsHub>, which only exists once SignalR is added.
+builder.Services.AddOptions<ServiceBusSettings>()
+    .Bind(builder.Configuration.GetSection(ServiceBusSettings.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+builder.Services.AddSingleton(sp =>
+    new ServiceBusClient(sp.GetRequiredService<IOptions<ServiceBusSettings>>().Value.ConnectionString));
+
+builder.Services.AddHostedService<TryOnResultConsumer>();
 
 // Authorization policies — MfaVerified requires mfa_verified=true claim in JWT
 builder.Services.AddAuthorization(options =>

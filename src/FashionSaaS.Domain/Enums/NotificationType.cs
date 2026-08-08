@@ -6,5 +6,7 @@ public enum NotificationType
     OrderStatusChanged,
     PaymentConfirmed,
     LowStock,
-    ReviewSubmitted
+    ReviewSubmitted,
+    TryOnCompleted,
+    TryOnFailed
 }
