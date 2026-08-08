@@ -1,6 +1,5 @@
 using System.Net;
-using FashionSaaS.TryOn.Application.Gemini;
-using FashionSaaS.TryOn.Application.Messaging;
+using FashionSaaS.TryOn.Application.HuggingFace;
 using FashionSaaS.TryOn.Application.Quota;
 using FashionSaaS.TryOn.Application.TryOn;
 using FashionSaaS.TryOn.Domain;
@@ -9,17 +8,14 @@ using FashionSaaS.TryOn.Infrastructure.TryOn;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 using Moq;
-using Refit;
 
 namespace FashionSaaS.TryOn.Application.Tests.TryOn;
 
 public class TryOnServiceTests
 {
     private readonly Mock<ICurrentTryOnContext> _context = new();
-    private readonly Mock<IGeminiImageClient> _gemini = new();
-    private readonly Mock<ITryOnEventPublisher> _eventPublisher = new();
+    private readonly Mock<IHuggingFaceTryOnClient> _huggingFace = new();
     private readonly Mock<IUsageQuotaService> _usageQuota = new();
     private readonly Guid _tenantId = Guid.NewGuid();
 
@@ -32,27 +28,19 @@ public class TryOnServiceTests
         _context.Setup(c => c.CustomerId).Returns(Guid.NewGuid());
         _context.Setup(c => c.AiUsageLimit).Returns(aiUsageLimit);
 
-        // The quota-exceeded test (RenderAsync_QuotaExceeded_ReturnsFailureWithoutCallingGemini) still
-        // seeds a Completed TryOnRequest row directly into dbContext and asserts on it — but the SERVICE
-        // no longer counts it itself; it asks IUsageQuotaService. So that test must also stub the mock
-        // to return a used-count reflecting the seeded row (1), keeping the test's existing assertions
-        // (429, no Gemini call, Failed row persisted) valid. Evaluated lazily (at invocation time,
-        // not CreateService time) because some tests seed their Completed row after CreateService.
         _usageQuota.Setup(q => q.GetUsedThisMonthAsync(_tenantId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(() => dbContext.TryOnRequests.Count(t => t.TenantId == _tenantId && t.Status == TryOnStatus.Completed));
+            .ReturnsAsync(() => dbContext.TryOnRequests.Count(t => t.TenantId == _tenantId && t.Status != TryOnStatus.Failed));
 
         // CA2000 suppressed: the handler/HttpClient are test doubles handed to the mocked
         // IHttpClientFactory; TryOnService disposes the HttpClient itself (via its own `using`
-        // block) once RenderAsync runs, and each test creates a fresh instance — no real leak.
+        // block) once SubmitAsync runs, and each test creates a fresh instance — no real leak.
 #pragma warning disable CA2000
         HttpMessageHandler handler = garmentHandler ?? new StubHandler(HttpStatusCode.OK, [1, 2, 3]);
         Mock<IHttpClientFactory> factory = new();
         factory.Setup(f => f.CreateClient(It.IsAny<string>())).Returns(new HttpClient(handler));
 #pragma warning restore CA2000
 
-        IOptions<GeminiSettings> options = Options.Create(new GeminiSettings { ApiKey = "test-key", Model = "test-model" });
-
-        return new TryOnService(dbContext, _context.Object, _gemini.Object, factory.Object, options, _eventPublisher.Object, _usageQuota.Object);
+        return new TryOnService(dbContext, _context.Object, _huggingFace.Object, factory.Object, _usageQuota.Object);
     }
 
     private static FormFile CreateFakePhoto()
@@ -63,7 +51,7 @@ public class TryOnServiceTests
     }
 
     [Fact]
-    public async Task RenderAsync_QuotaExceeded_ReturnsFailureWithoutCallingGemini()
+    public async Task SubmitAsync_QuotaExceeded_ReturnsFailureWithoutCallingHuggingFace()
     {
         await using TryOnDbContext dbContext = CreateDbContext();
         dbContext.TryOnRequests.Add(new TryOnRequest { TenantId = _tenantId, Status = TryOnStatus.Completed, CreatedAt = DateTime.UtcNow });
@@ -72,72 +60,50 @@ public class TryOnServiceTests
         TryOnService service = CreateService(dbContext, aiUsageLimit: 1);
         TryOnRequestForm form = new() { Photo = CreateFakePhoto(), GarmentImageUrl = "https://example.com/g.jpg", ProductId = Guid.NewGuid() };
 
-        (var isSuccess, var statusCode, var _, TryOnResultResponse? data) = await service.RenderAsync(form, CancellationToken.None);
+        (var isSuccess, var statusCode, var _, TryOnSubmittedResponse? data) = await service.SubmitAsync(form, CancellationToken.None);
 
         isSuccess.Should().BeFalse();
         statusCode.Should().Be(429);
         data.Should().BeNull();
-        _gemini.Verify(g => g.GenerateContentAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<GeminiGenerateContentRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+        _huggingFace.Verify(h => h.SubmitAsync(It.IsAny<byte[]>(), It.IsAny<byte[]>(), It.IsAny<CancellationToken>()), Times.Never);
 
-        // Spec §15: a quota-exceeded attempt still gets its own audit row (Status=Failed,
-        // so it never counts toward the quota itself) — helps evaluate whether limits are sane.
         TryOnRequest failedRow = await dbContext.TryOnRequests.SingleAsync(t => t.Status == TryOnStatus.Failed);
         failedRow.FailureReason.Should().Be("Monthly AI try-on quota exceeded.");
     }
 
     [Fact]
-    public async Task RenderAsync_Success_PersistsCompletedRowAndReturnsDataUri()
+    public async Task SubmitAsync_Success_PersistsProcessingRowWithJobId_Returns202()
     {
         await using TryOnDbContext dbContext = CreateDbContext();
         TryOnService service = CreateService(dbContext, aiUsageLimit: 10);
         TryOnRequestForm form = new() { Photo = CreateFakePhoto(), GarmentImageUrl = "https://example.com/g.jpg", ProductId = Guid.NewGuid() };
 
-        _gemini.Setup(g => g.GenerateContentAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<GeminiGenerateContentRequest>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new GeminiGenerateContentResponse(
-            [
-                new GeminiCandidate(new GeminiContent([new GeminiPart(InlineData: new GeminiInlineData("image/png", "QUJD"))]))
-            ]));
+        _huggingFace.Setup(h => h.SubmitAsync(It.IsAny<byte[]>(), It.IsAny<byte[]>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("evt-123");
 
-        (var isSuccess, var statusCode, var _, TryOnResultResponse? data) = await service.RenderAsync(form, CancellationToken.None);
+        (var isSuccess, var statusCode, var _, TryOnSubmittedResponse? data) = await service.SubmitAsync(form, CancellationToken.None);
 
         isSuccess.Should().BeTrue();
-        statusCode.Should().Be(200);
-        data!.ResultImageDataUri.Should().Be("data:image/png;base64,QUJD");
+        statusCode.Should().Be(202);
+        data.Should().NotBeNull();
 
         TryOnRequest saved = await dbContext.TryOnRequests.SingleAsync();
-        saved.Status.Should().Be(TryOnStatus.Completed);
-        saved.TenantId.Should().Be(_tenantId);
-
-        _eventPublisher.Verify(p => p.PublishAsync(
-            It.Is<TryOnCompletedEvent>(e => e.TryOnRequestId == saved.Id && e.TenantId == _tenantId),
-            It.IsAny<CancellationToken>()), Times.Once);
+        saved.Status.Should().Be(TryOnStatus.Processing);
+        saved.ExternalJobId.Should().Be("evt-123");
+        saved.Id.Should().Be(data!.RequestId);
     }
 
     [Fact]
-    public async Task RenderAsync_Failure_NeverPublishesEvent()
-    {
-        await using TryOnDbContext dbContext = CreateDbContext();
-        TryOnService service = CreateService(dbContext, aiUsageLimit: 1);
-        dbContext.TryOnRequests.Add(new TryOnRequest { TenantId = _tenantId, Status = TryOnStatus.Completed, CreatedAt = DateTime.UtcNow });
-        await dbContext.SaveChangesAsync();
-        TryOnRequestForm form = new() { Photo = CreateFakePhoto(), GarmentImageUrl = "https://example.com/g.jpg", ProductId = Guid.NewGuid() };
-
-        await service.RenderAsync(form, CancellationToken.None);
-
-        _eventPublisher.Verify(p => p.PublishAsync(It.IsAny<TryOnCompletedEvent>(), It.IsAny<CancellationToken>()), Times.Never);
-    }
-
-    [Fact]
-    public async Task RenderAsync_GeminiReturnsNoImage_PersistsFailedRowWithReason()
+    public async Task SubmitAsync_HuggingFaceSubmitThrows_PersistsFailedRowWithoutProcessingState()
     {
         await using TryOnDbContext dbContext = CreateDbContext();
         TryOnService service = CreateService(dbContext, aiUsageLimit: 10);
         TryOnRequestForm form = new() { Photo = CreateFakePhoto(), GarmentImageUrl = "https://example.com/g.jpg", ProductId = Guid.NewGuid() };
 
-        _gemini.Setup(g => g.GenerateContentAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<GeminiGenerateContentRequest>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new GeminiGenerateContentResponse([new GeminiCandidate(new GeminiContent([new GeminiPart(Text: "no image")]))]));
+        _huggingFace.Setup(h => h.SubmitAsync(It.IsAny<byte[]>(), It.IsAny<byte[]>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new HttpRequestException("Space unreachable"));
 
-        (var isSuccess, var statusCode, var _, TryOnResultResponse? data) = await service.RenderAsync(form, CancellationToken.None);
+        (var isSuccess, var statusCode, var _, TryOnSubmittedResponse? data) = await service.SubmitAsync(form, CancellationToken.None);
 
         isSuccess.Should().BeFalse();
         statusCode.Should().Be(502);
@@ -145,11 +111,11 @@ public class TryOnServiceTests
 
         TryOnRequest saved = await dbContext.TryOnRequests.SingleAsync();
         saved.Status.Should().Be(TryOnStatus.Failed);
-        saved.FailureReason.Should().Be("Gemini returned no image.");
+        saved.ExternalJobId.Should().BeNull();
     }
 
     [Fact]
-    public async Task RenderAsync_GarmentImageFetchFails_PersistsFailedRowWithoutCallingGemini()
+    public async Task SubmitAsync_GarmentImageFetchFails_PersistsFailedRowWithoutCallingHuggingFace()
     {
         await using TryOnDbContext dbContext = CreateDbContext();
 #pragma warning disable CA2000 // see justification in CreateService above — TryOnService owns disposal
@@ -157,89 +123,15 @@ public class TryOnServiceTests
 #pragma warning restore CA2000
         TryOnRequestForm form = new() { Photo = CreateFakePhoto(), GarmentImageUrl = "https://example.com/missing.jpg", ProductId = Guid.NewGuid() };
 
-        (var isSuccess, var statusCode, var _, TryOnResultResponse? data) = await service.RenderAsync(form, CancellationToken.None);
+        (var isSuccess, var statusCode, var _, TryOnSubmittedResponse? data) = await service.SubmitAsync(form, CancellationToken.None);
 
         isSuccess.Should().BeFalse();
         statusCode.Should().Be(502);
         data.Should().BeNull();
-        _gemini.Verify(g => g.GenerateContentAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<GeminiGenerateContentRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+        _huggingFace.Verify(h => h.SubmitAsync(It.IsAny<byte[]>(), It.IsAny<byte[]>(), It.IsAny<CancellationToken>()), Times.Never);
 
         TryOnRequest saved = await dbContext.TryOnRequests.SingleAsync();
         saved.Status.Should().Be(TryOnStatus.Failed);
-    }
-
-
-    [Fact]
-    public async Task RenderAsync_GeminiReturnsRateLimitError_PersistsFailedRowWithReason()
-    {
-        await using TryOnDbContext dbContext = CreateDbContext();
-        TryOnService service = CreateService(dbContext, aiUsageLimit: 10);
-        TryOnRequestForm form = new() { Photo = CreateFakePhoto(), GarmentImageUrl = "https://example.com/g.jpg", ProductId = Guid.NewGuid() };
-
-        _gemini.Setup(g => g.GenerateContentAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<GeminiGenerateContentRequest>(), It.IsAny<CancellationToken>()))
-            .ThrowsAsync(await CreateRateLimitApiExceptionAsync());
-
-        (var isSuccess, var statusCode, var message, TryOnResultResponse? data) = await service.RenderAsync(form, CancellationToken.None);
-
-        isSuccess.Should().BeFalse();
-        statusCode.Should().Be(502);
-        message.Should().Be("The AI service is temporarily busy — please try again shortly.");
-        data.Should().BeNull();
-
-        TryOnRequest saved = await dbContext.TryOnRequests.SingleAsync();
-        saved.Status.Should().Be(TryOnStatus.Failed);
-        saved.FailureReason.Should().Contain("429").And.Contain("TooManyRequests");
-    }
-
-
-    [Fact]
-    public async Task RenderAsync_GeminiErrorBodyExceedsColumnLimit_TruncatesInsteadOfCrashing()
-    {
-        // Regression test: a real Gemini error body can exceed FailureReason's HasMaxLength(500)
-        // (TryOnRequestConfiguration) - previously this crashed SaveChangesAsync with a SQL
-        // truncation DbUpdateException, masking the actual API error behind an unrelated 500.
-        await using TryOnDbContext dbContext = CreateDbContext();
-        TryOnService service = CreateService(dbContext, aiUsageLimit: 10);
-        TryOnRequestForm form = new() { Photo = CreateFakePhoto(), GarmentImageUrl = "https://example.com/g.jpg", ProductId = Guid.NewGuid() };
-
-        _gemini.Setup(g => g.GenerateContentAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<GeminiGenerateContentRequest>(), It.IsAny<CancellationToken>()))
-            .ThrowsAsync(await CreateOversizedApiExceptionAsync());
-
-        (var isSuccess, var statusCode, var _, TryOnResultResponse? data) = await service.RenderAsync(form, CancellationToken.None);
-
-        isSuccess.Should().BeFalse();
-        statusCode.Should().Be(502);
-        data.Should().BeNull();
-
-        TryOnRequest saved = await dbContext.TryOnRequests.SingleAsync();
-        saved.Status.Should().Be(TryOnStatus.Failed);
-        saved.FailureReason.Should().NotBeNull();
-        saved.FailureReason!.Length.Should().BeLessThanOrEqualTo(500);
-    }
-
-    private static async Task<ApiException> CreateOversizedApiExceptionAsync()
-    {
-        using HttpRequestMessage request = new(HttpMethod.Post, "https://generativelanguage.googleapis.com/v1beta/models/test-model:generateContent");
-        var oversizedMessage = new string('x', 800);
-        using HttpResponseMessage response = new(HttpStatusCode.TooManyRequests)
-        {
-            Content = new StringContent(
-                "{\"error\":{\"code\":429,\"message\":\"" + oversizedMessage + "\",\"status\":\"RESOURCE_EXHAUSTED\"}}")
-        };
-        return await ApiException.Create(request, HttpMethod.Post, response, new RefitSettings());
-    }
-
-    // Refit doesn't expose a public ApiException constructor — the documented way to build one in a
-    // test is its internal `Create` factory (accessed via its public static entry point), fed a real
-    // HttpResponseMessage carrying the status code/body Refit would have received from Gemini.
-    private static async Task<ApiException> CreateRateLimitApiExceptionAsync()
-    {
-        using HttpRequestMessage request = new(HttpMethod.Post, "https://generativelanguage.googleapis.com/v1beta/models/test-model:generateContent");
-        using HttpResponseMessage response = new(HttpStatusCode.TooManyRequests)
-        {
-            Content = new StringContent("""{"error":{"code":429,"message":"Resource has been exhausted","status":"RESOURCE_EXHAUSTED"}}""")
-        };
-        return await ApiException.Create(request, HttpMethod.Post, response, new RefitSettings());
     }
 }
 

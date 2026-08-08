@@ -12,15 +12,10 @@ public class GeminiSettings
     [Required]
     public string BaseUrl { get; init; } = "https://generativelanguage.googleapis.com";
 
-    [Required]
-    public string Model { get; init; } = "gemini-2.5-flash-image";
-
     /// <summary>
     /// Model used for text-generation calls (chatbot replies, and measurement's structured-JSON
-    /// response) — distinct from <see cref="Model"/>, which is the image-generation model used by
-    /// try-on. Both share the same generateContent endpoint shape but are different model families
-    /// (see Phase 6 design spec §5, §7 for the verified API shape difference). Decided default,
-    /// not provisional — confirmed against Google's current model catalog (design spec §7).
+    /// response). Decided default, not provisional — confirmed against Google's current model
+    /// catalog (design spec §7).
     /// </summary>
     [Required]
     public string TextModel { get; init; } = "gemini-2.5-flash";

@@ -20,11 +20,11 @@ public class TryOnController(TryOnService tryOnService) : ControllerBase
     [RequestSizeLimit(15_000_000)]
     public async Task<IActionResult> PostAsync([FromForm] TryOnRequestForm form, CancellationToken cancellationToken)
     {
-        (var isSuccess, var statusCode, var message, TryOnResultResponse? data) = await tryOnService.RenderAsync(form, cancellationToken);
+        (var isSuccess, var statusCode, var message, TryOnSubmittedResponse? data) = await tryOnService.SubmitAsync(form, cancellationToken);
 
-        ResponseData<TryOnResultResponse> response = isSuccess
-            ? ResponseData<TryOnResultResponse>.Success(data!, message, statusCode)
-            : ResponseData<TryOnResultResponse>.Failure(message, statusCode);
+        ResponseData<TryOnSubmittedResponse> response = isSuccess
+            ? ResponseData<TryOnSubmittedResponse>.Success(data!, message, statusCode)
+            : ResponseData<TryOnSubmittedResponse>.Failure(message, statusCode);
 
         return StatusCode(response.StatusCode, response);
     }

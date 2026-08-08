@@ -1,5 +1,8 @@
 using FashionSaaS.TryOn.Application.Gemini;
+using FashionSaaS.TryOn.Application.HuggingFace;
 using FashionSaaS.TryOn.Infrastructure;
+using FashionSaaS.TryOn.Infrastructure.BackgroundJobs;
+using FashionSaaS.TryOn.Infrastructure.HuggingFace;
 using FluentValidation;
 using FluentValidation.AspNetCore;
 using Microsoft.Extensions.Options;
@@ -16,12 +19,10 @@ builder.Services.AddOptions<GeminiSettings>()
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
-builder.Services.AddRefitClient<IGeminiImageClient>()
-    .ConfigureHttpClient((sp, client) =>
-    {
-        GeminiSettings settings = sp.GetRequiredService<IOptions<GeminiSettings>>().Value;
-        client.BaseAddress = new Uri(settings.BaseUrl);
-    });
+builder.Services.AddOptions<HuggingFaceSettings>()
+    .Bind(builder.Configuration.GetSection(HuggingFaceSettings.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
 
 builder.Services.AddRefitClient<IGeminiTextClient>()
     .ConfigureHttpClient((sp, client) =>
@@ -29,6 +30,17 @@ builder.Services.AddRefitClient<IGeminiTextClient>()
         GeminiSettings settings = sp.GetRequiredService<IOptions<GeminiSettings>>().Value;
         client.BaseAddress = new Uri(settings.BaseUrl);
     });
+
+builder.Services.AddHttpClient<IHuggingFaceTryOnClient, HuggingFaceTryOnClient>((sp, client) =>
+{
+    HuggingFaceSettings settings = sp.GetRequiredService<IOptions<HuggingFaceSettings>>().Value;
+    client.BaseAddress = new Uri(settings.SpaceUrl);
+    // Free-tier CPU rendering can genuinely take minutes; the default 100s HttpClient timeout
+    // would abort a slow-but-successful poll response.
+    client.Timeout = TimeSpan.FromMinutes(2);
+});
+
+builder.Services.AddHostedService<TryOnPollingWorker>();
 
 builder.Services.AddHttpClient(); // plain named client for the garment-image GET (TryOnService's IHttpClientFactory.CreateClient())
 

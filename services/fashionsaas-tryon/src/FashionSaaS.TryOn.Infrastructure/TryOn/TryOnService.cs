@@ -1,41 +1,34 @@
-using System.Net;
 using FashionSaaS.TryOn.Application;
-using FashionSaaS.TryOn.Application.Gemini;
-using FashionSaaS.TryOn.Application.Messaging;
+using FashionSaaS.TryOn.Application.HuggingFace;
 using FashionSaaS.TryOn.Application.Quota;
 using FashionSaaS.TryOn.Application.TryOn;
 using FashionSaaS.TryOn.Domain;
 using FashionSaaS.TryOn.Infrastructure.Persistence;
-using Microsoft.Extensions.Options;
-using Refit;
 
 // This type lives in Infrastructure (not Application, as an earlier plan draft suggested) because
 // it depends on the concrete TryOnDbContext, which lives in Infrastructure.Persistence. Infrastructure
 // already references Application (for ICurrentTryOnContext/JwtSettings, from Phase 2) — an Application
 // -> Infrastructure reference here would be circular (confirmed: MSBuild error MSB4006 when attempted).
 // Placing the orchestration service here, alongside its DbContext dependency, keeps the layering acyclic
-// while still depending only on Application abstractions (ICurrentTryOnContext, IGeminiImageClient) for
-// everything else — 2026-07-17.
+// while still depending only on Application abstractions (ICurrentTryOnContext, IHuggingFaceTryOnClient)
+// for everything else — 2026-07-17.
+//
+// Publishing TryOnResultEvent is TryOnPollingWorker's job (it fires once the Hugging Face job
+// actually resolves), not this class's — SubmitAsync only ever gets the job as far as Processing.
 namespace FashionSaaS.TryOn.Infrastructure.TryOn;
 
 public class TryOnService(
     TryOnDbContext dbContext,
     ICurrentTryOnContext currentContext,
-    IGeminiImageClient geminiClient,
+    IHuggingFaceTryOnClient huggingFaceClient,
     IHttpClientFactory httpClientFactory,
-    IOptions<GeminiSettings> geminiOptions,
-    ITryOnEventPublisher eventPublisher,
     IUsageQuotaService usageQuotaService)
 {
-    private const string ResultMimeType = "image/png";
-
     // Mirrors TryOnController's [RequestSizeLimit(15_000_000)] on the inbound photo upload, applied here
     // to the server-side garment-image fetch so a malicious/misbehaving host can't force an unbounded download.
     private const long MaxGarmentImageBytes = 15_000_000;
 
-    private readonly GeminiSettings _gemini = geminiOptions.Value;
-
-    public async Task<(bool IsSuccess, int StatusCode, string Message, TryOnResultResponse? Data)> RenderAsync(
+    public async Task<(bool IsSuccess, int StatusCode, string Message, TryOnSubmittedResponse? Data)> SubmitAsync(
         TryOnRequestForm form, CancellationToken cancellationToken)
     {
         var usedThisMonth = await usageQuotaService.GetUsedThisMonthAsync(currentContext.TenantId, cancellationToken)
@@ -43,7 +36,7 @@ public class TryOnService(
 
         if (usedThisMonth >= currentContext.AiUsageLimit)
         {
-            await RecordAsync(form, TryOnStatus.Failed, "Monthly AI try-on quota exceeded.", cancellationToken).ConfigureAwait(false);
+            await RecordFailureAsync(form, "Monthly AI try-on quota exceeded.", cancellationToken).ConfigureAwait(false);
             return (false, 429, "You've reached this month's try-on limit. Upgrade your plan or try again next month.", null);
         }
 
@@ -71,7 +64,7 @@ public class TryOnService(
             var declaredLength = garmentResponse.Content.Headers.ContentLength;
             if (declaredLength is > MaxGarmentImageBytes)
             {
-                await RecordAsync(form, TryOnStatus.Failed, "Garment image exceeds the maximum allowed size.", cancellationToken).ConfigureAwait(false);
+                await RecordFailureAsync(form, "Garment image exceeds the maximum allowed size.", cancellationToken).ConfigureAwait(false);
                 return (false, 502, "We couldn't load the product image right now. Please try again.", null);
             }
 
@@ -85,7 +78,7 @@ public class TryOnService(
                 totalRead += bytesRead;
                 if (totalRead > MaxGarmentImageBytes)
                 {
-                    await RecordAsync(form, TryOnStatus.Failed, "Garment image exceeds the maximum allowed size.", cancellationToken).ConfigureAwait(false);
+                    await RecordFailureAsync(form, "Garment image exceeds the maximum allowed size.", cancellationToken).ConfigureAwait(false);
                     return (false, 502, "We couldn't load the product image right now. Please try again.", null);
                 }
 
@@ -96,64 +89,37 @@ public class TryOnService(
         }
         catch (HttpRequestException ex)
         {
-            await RecordAsync(form, TryOnStatus.Failed, $"Could not fetch garment image: {ex.Message}", cancellationToken).ConfigureAwait(false);
+            await RecordFailureAsync(form, $"Could not fetch garment image: {ex.Message}", cancellationToken).ConfigureAwait(false);
             return (false, 502, "We couldn't load the product image right now. Please try again.", null);
         }
 
-        GeminiGenerateContentResponse response;
+        string jobId;
         try
         {
-            GeminiGenerateContentRequest request = new(
-                Contents:
-                [
-                    new GeminiContent(
-                    [
-                        new GeminiPart(InlineData: new GeminiInlineData("image/jpeg", Convert.ToBase64String(photoBytes))),
-                        new GeminiPart(InlineData: new GeminiInlineData(ResultMimeType, Convert.ToBase64String(garmentBytes))),
-                        new GeminiPart(Text: "Composite the second image (a clothing item) onto the person in the first image, keeping their pose and background. Return only the resulting image.")
-                    ])
-                ],
-                GenerationConfig: new GeminiGenerationConfig(["IMAGE"]));
-
-            response = await geminiClient.GenerateContentAsync(_gemini.Model, _gemini.ApiKey, request, cancellationToken).ConfigureAwait(false);
+            jobId = await huggingFaceClient.SubmitAsync(photoBytes, garmentBytes, cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or ApiException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
-            // Refit throws ApiException (distinct from HttpRequestException) for any non-2xx Gemini
-            // response — it carries the real status code and body, which HttpRequestException does not.
-            // Persist a status-aware reason for later debugging even though the client-facing message
-            // stays generic (except for a 429, which gets its own clearer message).
-            var failureReason = ex is ApiException apiEx
-                ? $"Gemini API error: {(int)apiEx.StatusCode} {apiEx.StatusCode} - {apiEx.Content ?? apiEx.Message}"
-                : $"Gemini API error: {ex.Message}";
-            var clientMessage = ex is ApiException { StatusCode: HttpStatusCode.TooManyRequests }
-                ? "The AI service is temporarily busy — please try again shortly."
-                : "The try-on render failed. Please try again in a moment.";
-
-            await RecordAsync(form, TryOnStatus.Failed, failureReason, cancellationToken).ConfigureAwait(false);
-            return (false, 502, clientMessage, null);
+            await RecordFailureAsync(form, $"Hugging Face submit error: {ex.Message}", cancellationToken).ConfigureAwait(false);
+            return (false, 502, "The try-on service is temporarily unavailable. Please try again shortly.", null);
         }
 
-        GeminiPart? resultPart = response.Candidates?
-            .SelectMany(c => c.Content?.Parts ?? [])
-            .FirstOrDefault(p => p.InlineData is not null);
-
-        if (resultPart?.InlineData is null)
+        TryOnRequest saved = new()
         {
-            await RecordAsync(form, TryOnStatus.Failed, "Gemini returned no image.", cancellationToken).ConfigureAwait(false);
-            return (false, 502, "The try-on render failed. Please try again in a moment.", null);
-        }
+            TenantId = currentContext.TenantId,
+            CustomerId = currentContext.CustomerId,
+            ProductId = form.ProductId,
+            ProductVariantId = form.ProductVariantId,
+            Status = TryOnStatus.Processing,
+            ExternalJobId = jobId
+        };
+        dbContext.TryOnRequests.Add(saved);
+        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        TryOnRequest saved = await RecordAsync(form, TryOnStatus.Completed, null, cancellationToken).ConfigureAwait(false);
-        await eventPublisher.PublishAsync(
-            new TryOnCompletedEvent(saved.Id, saved.TenantId, saved.CustomerId, saved.ProductId, saved.CreatedAt),
-            cancellationToken).ConfigureAwait(false);
-
-        var dataUri = $"data:{resultPart.InlineData.MimeType};base64,{resultPart.InlineData.Data}";
-        return (true, 200, "Success", new TryOnResultResponse(dataUri));
+        return (true, 202, "Your try-on is being generated.", new TryOnSubmittedResponse(saved.Id));
     }
 
-    private async Task<TryOnRequest> RecordAsync(TryOnRequestForm form, TryOnStatus status, string? failureReason, CancellationToken cancellationToken)
+    private async Task RecordFailureAsync(TryOnRequestForm form, string failureReason, CancellationToken cancellationToken)
     {
         TryOnRequest entity = new()
         {
@@ -161,14 +127,13 @@ public class TryOnService(
             CustomerId = currentContext.CustomerId,
             ProductId = form.ProductId,
             ProductVariantId = form.ProductVariantId,
-            Status = status,
-            // Truncated to match TryOnRequestConfiguration's HasMaxLength(500) - an upstream Gemini
-            // ApiException body can be arbitrarily long and previously crashed this save with a SQL
-            // truncation error, masking the real failure behind an unrelated 500.
+            Status = TryOnStatus.Failed,
+            // Truncated to match TryOnRequestConfiguration's HasMaxLength(500) - an upstream
+            // Hugging Face error body can be arbitrarily long and previously (with Gemini) crashed
+            // this save with a SQL truncation error, masking the real failure behind an unrelated 500.
             FailureReason = failureReason is { Length: > 500 } ? failureReason[..500] : failureReason
         };
         dbContext.TryOnRequests.Add(entity);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-        return entity;
     }
 }
