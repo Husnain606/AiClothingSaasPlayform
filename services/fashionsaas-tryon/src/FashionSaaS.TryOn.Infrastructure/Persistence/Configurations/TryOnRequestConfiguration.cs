@@ -10,6 +10,8 @@ public class TryOnRequestConfiguration : IEntityTypeConfiguration<TryOnRequest>
     {
         builder.HasKey(t => t.Id);
         builder.Property(t => t.FailureReason).HasMaxLength(500);
+        builder.Property(t => t.ExternalJobId).HasMaxLength(200);
+        builder.Property(t => t.ResultImageUrl).HasMaxLength(2000);
 
         // Quota-counting query filters on these three; CreatedAt additionally orders the
         // month-window scan (D8's COUNT(*) WHERE TenantId = X AND Status = Completed AND
