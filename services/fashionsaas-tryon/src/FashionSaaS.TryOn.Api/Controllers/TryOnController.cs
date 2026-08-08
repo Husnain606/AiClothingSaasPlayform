@@ -28,4 +28,20 @@ public class TryOnController(TryOnService tryOnService) : ControllerBase
 
         return StatusCode(response.StatusCode, response);
     }
+
+    /// <summary>
+    /// Fetches a submitted render's current state. The SignalR push only says "something
+    /// finished" — the storefront calls this to get the actual result URL or failure reason.
+    /// </summary>
+    [HttpGet("{id:guid}")]
+    public async Task<IActionResult> GetAsync(Guid id, CancellationToken cancellationToken)
+    {
+        (var isSuccess, var statusCode, var message, TryOnStatusResponse? data) = await tryOnService.GetStatusAsync(id, cancellationToken);
+
+        ResponseData<TryOnStatusResponse> response = isSuccess
+            ? ResponseData<TryOnStatusResponse>.Success(data!, message, statusCode)
+            : ResponseData<TryOnStatusResponse>.Failure(message, statusCode);
+
+        return StatusCode(response.StatusCode, response);
+    }
 }

@@ -4,6 +4,7 @@ using FashionSaaS.TryOn.Application.Quota;
 using FashionSaaS.TryOn.Application.TryOn;
 using FashionSaaS.TryOn.Domain;
 using FashionSaaS.TryOn.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 
 // This type lives in Infrastructure (not Application, as an earlier plan draft suggested) because
 // it depends on the concrete TryOnDbContext, which lives in Infrastructure.Persistence. Infrastructure
@@ -117,6 +118,28 @@ public class TryOnService(
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         return (true, 202, "Your try-on is being generated.", new TryOnSubmittedResponse(saved.Id));
+    }
+
+    /// <summary>
+    /// Fetches a try-on request's current state. Scoped to the requesting customer AND tenant —
+    /// a request that exists but isn't theirs returns the same 404 as one that doesn't exist at
+    /// all, so this never confirms another customer's request exists.
+    /// </summary>
+    public async Task<(bool IsSuccess, int StatusCode, string Message, TryOnStatusResponse? Data)> GetStatusAsync(
+        Guid requestId, CancellationToken cancellationToken)
+    {
+        TryOnRequest? request = await dbContext.TryOnRequests
+            .AsNoTracking()
+            .FirstOrDefaultAsync(r => r.Id == requestId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (request is null || request.TenantId != currentContext.TenantId || request.CustomerId != currentContext.CustomerId)
+        {
+            return (false, 404, "Try-on request not found.", null);
+        }
+
+        return (true, 200, "Success",
+            new TryOnStatusResponse(request.Status.ToString(), request.ResultImageUrl, request.FailureReason));
     }
 
     private async Task RecordFailureAsync(TryOnRequestForm form, string failureReason, CancellationToken cancellationToken)

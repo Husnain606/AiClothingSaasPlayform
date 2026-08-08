@@ -18,6 +18,7 @@ public class TryOnServiceTests
     private readonly Mock<IHuggingFaceTryOnClient> _huggingFace = new();
     private readonly Mock<IUsageQuotaService> _usageQuota = new();
     private readonly Guid _tenantId = Guid.NewGuid();
+    private readonly Guid _customerId = Guid.NewGuid();
 
     private static TryOnDbContext CreateDbContext() =>
         new(new DbContextOptionsBuilder<TryOnDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
@@ -25,7 +26,7 @@ public class TryOnServiceTests
     private TryOnService CreateService(TryOnDbContext dbContext, int aiUsageLimit, HttpMessageHandler? garmentHandler = null)
     {
         _context.Setup(c => c.TenantId).Returns(_tenantId);
-        _context.Setup(c => c.CustomerId).Returns(Guid.NewGuid());
+        _context.Setup(c => c.CustomerId).Returns(_customerId);
         _context.Setup(c => c.AiUsageLimit).Returns(aiUsageLimit);
 
         _usageQuota.Setup(q => q.GetUsedThisMonthAsync(_tenantId, It.IsAny<CancellationToken>()))
@@ -132,6 +133,102 @@ public class TryOnServiceTests
 
         TryOnRequest saved = await dbContext.TryOnRequests.SingleAsync();
         saved.Status.Should().Be(TryOnStatus.Failed);
+    }
+
+    [Fact]
+    public async Task GetStatusAsync_OwnCompletedRequest_ReturnsStatusAndResultUrl()
+    {
+        await using TryOnDbContext dbContext = CreateDbContext();
+        TryOnService service = CreateService(dbContext, aiUsageLimit: 10);
+        var request = new TryOnRequest
+        {
+            TenantId = _tenantId,
+            CustomerId = _customerId,
+            Status = TryOnStatus.Completed,
+            ResultImageUrl = "https://space.hf.space/file=result.png"
+        };
+        dbContext.TryOnRequests.Add(request);
+        await dbContext.SaveChangesAsync();
+
+        (var isSuccess, var statusCode, var _, TryOnStatusResponse? data) =
+            await service.GetStatusAsync(request.Id, CancellationToken.None);
+
+        isSuccess.Should().BeTrue();
+        statusCode.Should().Be(200);
+        data!.Status.Should().Be("Completed");
+        data.ResultImageUrl.Should().Be("https://space.hf.space/file=result.png");
+    }
+
+    [Fact]
+    public async Task GetStatusAsync_AnotherCustomersRequest_Returns404()
+    {
+        await using TryOnDbContext dbContext = CreateDbContext();
+        TryOnService service = CreateService(dbContext, aiUsageLimit: 10);
+        var request = new TryOnRequest { TenantId = _tenantId, CustomerId = Guid.NewGuid(), Status = TryOnStatus.Completed };
+        dbContext.TryOnRequests.Add(request);
+        await dbContext.SaveChangesAsync();
+
+        (var isSuccess, var statusCode, var _, TryOnStatusResponse? data) =
+            await service.GetStatusAsync(request.Id, CancellationToken.None);
+
+        isSuccess.Should().BeFalse();
+        statusCode.Should().Be(404, "another customer's request must be indistinguishable from a missing one");
+        data.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetStatusAsync_AnotherTenantsRequest_Returns404()
+    {
+        await using TryOnDbContext dbContext = CreateDbContext();
+        TryOnService service = CreateService(dbContext, aiUsageLimit: 10);
+        var request = new TryOnRequest { TenantId = Guid.NewGuid(), CustomerId = _customerId, Status = TryOnStatus.Completed };
+        dbContext.TryOnRequests.Add(request);
+        await dbContext.SaveChangesAsync();
+
+        (var isSuccess, var statusCode, var _, TryOnStatusResponse? data) =
+            await service.GetStatusAsync(request.Id, CancellationToken.None);
+
+        isSuccess.Should().BeFalse();
+        statusCode.Should().Be(404);
+        data.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetStatusAsync_UnknownId_Returns404()
+    {
+        await using TryOnDbContext dbContext = CreateDbContext();
+        TryOnService service = CreateService(dbContext, aiUsageLimit: 10);
+
+        (var isSuccess, var statusCode, var _, TryOnStatusResponse? data) =
+            await service.GetStatusAsync(Guid.NewGuid(), CancellationToken.None);
+
+        isSuccess.Should().BeFalse();
+        statusCode.Should().Be(404);
+        data.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetStatusAsync_FailedRequest_ReturnsFailureReason()
+    {
+        await using TryOnDbContext dbContext = CreateDbContext();
+        TryOnService service = CreateService(dbContext, aiUsageLimit: 10);
+        var request = new TryOnRequest
+        {
+            TenantId = _tenantId,
+            CustomerId = _customerId,
+            Status = TryOnStatus.Failed,
+            FailureReason = "Try-on render timed out."
+        };
+        dbContext.TryOnRequests.Add(request);
+        await dbContext.SaveChangesAsync();
+
+        (var isSuccess, var _, var _, TryOnStatusResponse? data) =
+            await service.GetStatusAsync(request.Id, CancellationToken.None);
+
+        isSuccess.Should().BeTrue();
+        data!.Status.Should().Be("Failed");
+        data.ResultImageUrl.Should().BeNull();
+        data.FailureReason.Should().Be("Try-on render timed out.");
     }
 }
 
