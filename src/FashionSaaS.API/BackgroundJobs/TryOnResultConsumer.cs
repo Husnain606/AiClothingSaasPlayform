@@ -35,7 +35,7 @@ internal sealed record TryOnResultMessage(
 /// domain event.
 /// </summary>
 public class TryOnResultConsumer(
-    NotificationService notificationService,
+    IServiceScopeFactory scopeFactory,
     IHubContext<NotificationsHub> hubContext,
     ILogger<TryOnResultConsumer> logger,
     ServiceBusClient client,
@@ -101,6 +101,13 @@ public class TryOnResultConsumer(
         var body = evt.IsSuccess
             ? "Your virtual try-on has finished rendering."
             : $"Your try-on couldn't be completed: {evt.FailureReason}";
+
+        // A BackgroundService is a SINGLETON, so NotificationService (scoped, and holding a scoped
+        // ApplicationDbContext) must be resolved from a per-message scope rather than injected -
+        // injecting it directly is a captive dependency that fails DI scope validation at startup,
+        // and would also let one DbContext accumulate tracked entities for the process's lifetime.
+        using IServiceScope scope = scopeFactory.CreateScope();
+        NotificationService notificationService = scope.ServiceProvider.GetRequiredService<NotificationService>();
 
         // RecipientUserId is the customer's User id: the try-on service resolves CustomerId from
         // the JWT's NameIdentifier claim, the same claim NotificationsHub keys user groups by.

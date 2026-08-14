@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json;
 using Azure.Messaging.ServiceBus;
 using FashionSaaS.API.BackgroundJobs;
@@ -9,6 +10,8 @@ using FashionSaaS.Domain.Entities;
 using FashionSaaS.Domain.Enums;
 using FluentAssertions;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -38,11 +41,26 @@ public class TryOnResultConsumerTests
         _hubContext.Setup(h => h.Clients).Returns(_hubClients.Object);
     }
 
-    private TryOnResultConsumer CreateConsumer()
+    /// <summary>
+    /// Registers NotificationService as SCOPED, exactly as the real app does
+    /// (ServiceCollectionExtensions.AddApplicationServices), so these tests exercise the same
+    /// scope-resolution path production uses instead of handing the consumer a captured instance.
+    /// </summary>
+    private ServiceProvider BuildContainer()
     {
-        NotificationService notificationService = new(
-            _notifications.Object, _uow.Object, _tenant.Object, NullLogger<NotificationService>.Instance);
+        ServiceCollection services = new();
+        services.AddSingleton(_notifications.Object);
+        services.AddSingleton(_uow.Object);
+        services.AddSingleton(_tenant.Object);
+        services.AddSingleton<ILogger<NotificationService>>(NullLogger<NotificationService>.Instance);
+        services.AddScoped<NotificationService>();
 
+        // validateScopes mirrors what WebApplicationBuilder.Build() enables in Development.
+        return services.BuildServiceProvider(validateScopes: true);
+    }
+
+    private TryOnResultConsumer CreateConsumer(ServiceProvider provider)
+    {
 #pragma warning disable CA2000 // never connects (ExecuteAsync is not started); disposed at process exit
         ServiceBusClient client = new(UnreachableConnectionString);
 #pragma warning restore CA2000
@@ -55,7 +73,11 @@ public class TryOnResultConsumerTests
         });
 
         return new TryOnResultConsumer(
-            notificationService, _hubContext.Object, NullLogger<TryOnResultConsumer>.Instance, client, settings);
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            _hubContext.Object,
+            NullLogger<TryOnResultConsumer>.Instance,
+            client,
+            settings);
     }
 
     // Mirrors ServiceBusTryOnEventPublisher's plain JsonSerializer.Serialize(@event) — no naming
@@ -84,7 +106,8 @@ public class TryOnResultConsumerTests
             FailureReason = (string?)null
         });
 
-        using TryOnResultConsumer consumer = CreateConsumer();
+        using ServiceProvider provider = BuildContainer();
+        using TryOnResultConsumer consumer = CreateConsumer(provider);
         await consumer.HandleMessageAsync(message, CancellationToken.None);
 
         _notifications.Verify(r => r.AddAsync(It.Is<Notification>(n =>
@@ -113,7 +136,8 @@ public class TryOnResultConsumerTests
             FailureReason = "Render failed"
         });
 
-        using TryOnResultConsumer consumer = CreateConsumer();
+        using ServiceProvider provider = BuildContainer();
+        using TryOnResultConsumer consumer = CreateConsumer(provider);
         await consumer.HandleMessageAsync(message, CancellationToken.None);
 
         _notifications.Verify(r => r.AddAsync(It.Is<Notification>(n =>
@@ -139,7 +163,8 @@ public class TryOnResultConsumerTests
             FailureReason = (string?)null
         });
 
-        using TryOnResultConsumer consumer = CreateConsumer();
+        using ServiceProvider provider = BuildContainer();
+        using TryOnResultConsumer consumer = CreateConsumer(provider);
         Func<Task> act = async () => await consumer.HandleMessageAsync(message, CancellationToken.None);
 
         await act.Should().NotThrowAsync();
@@ -148,12 +173,30 @@ public class TryOnResultConsumerTests
     }
 
     [Fact]
+    public void Consumer_ResolvesNotificationServicePerMessage_NotAsACapturedSingletonDependency()
+    {
+        // Regression guard. TryOnResultConsumer is registered via AddHostedService, i.e. a SINGLETON,
+        // while NotificationService is scoped (AddApplicationServices) and holds a scoped
+        // ApplicationDbContext. Taking NotificationService as a constructor parameter is a captive
+        // dependency: WebApplicationBuilder.Build() enables scope validation in Development and the
+        // whole API then throws "Cannot consume scoped service ... from singleton" at startup.
+        // The earlier version of this class did exactly that, and every test here missed it because
+        // they constructed the consumer with `new` and never went through the container.
+        ConstructorInfo ctor = typeof(TryOnResultConsumer).GetConstructors().Single();
+
+        ctor.GetParameters().Should().NotContain(p => p.ParameterType == typeof(NotificationService),
+            "a singleton BackgroundService must not capture a scoped service; resolve it from IServiceScopeFactory per message");
+        ctor.GetParameters().Should().Contain(p => p.ParameterType == typeof(IServiceScopeFactory));
+    }
+
+    [Fact]
     public async Task HandleMessageAsync_UndeserializableBody_DoesNotThrowAndCreatesNoNotification()
     {
         ServiceBusReceivedMessage message = ServiceBusModelFactory.ServiceBusReceivedMessage(
             BinaryData.FromString("not json at all"));
 
-        using TryOnResultConsumer consumer = CreateConsumer();
+        using ServiceProvider provider = BuildContainer();
+        using TryOnResultConsumer consumer = CreateConsumer(provider);
         Func<Task> act = async () => await consumer.HandleMessageAsync(message, CancellationToken.None);
 
         await act.Should().NotThrowAsync();
