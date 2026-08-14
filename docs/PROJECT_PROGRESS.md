@@ -1,9 +1,15 @@
 # FashionSaaS — Project Progress Tracking
 
 **Project:** Multi-Brand Fashion eCommerce SaaS Platform  
-**Updated:** 2026-06-30  
-**Total Phases:** 8  
-**Current Status:** Phase 2 COMPLETE ✅ | Phase 3 IN PROGRESS 📋
+**Updated:** 2026-08-15  
+**Total Phases:** 8 (+ 9a)  
+**Current Status:** All 8 phases + 9a COMPLETE ✅ | free-Hugging-Face try-on on branch, pending live verification
+
+> **Note on this file's history:** between 2026-06-30 and 2026-08-15 it was not updated, so it
+> claimed Phase 3 was `PLANNED 0%` and Phases 4-8 `QUEUED 0%` while all of them had in fact
+> shipped — it even contradicted its own body, which already marked Phase 4a/4b COMPLETE. The
+> table below is now derived from git history and the plan documents rather than from the
+> previous summary. Root `README.md` was correct (see commit `0d1a792`, "all 8 phases complete").
 
 ---
 
@@ -13,8 +19,23 @@
 |-------|--------|-----------|---------|
 | **Phase 1** | ✅ COMPLETE | 100% | Core SaaS backend, authentication, multi-tenancy (26 tasks) |
 | **Phase 2** | ✅ COMPLETE | 100% | Product catalog, variants, inventory, discounts, reviews (30+ tasks + Mappster migration) |
-| **Phase 3** | 📋 PLANNED | 0% | Customer storefront (Angular 20) — Ready to implement |
-| Phase 4-8 | 📅 QUEUED | 0% | Admin dashboard, AI features, real-time, deployment |
+| **Phase 3** | ✅ COMPLETE | 100% | Customer storefront (Angular). `features/`: auth, catalog, cart, checkout, account, chat |
+| **Phase 4a** | ✅ COMPLETE | 100% | Orders + reporting backend |
+| **Phase 4b** | ✅ COMPLETE | 100% | Role-routed admin area. `admin/`: dashboard, catalog, orders, customers, inventory, discounts, notifications |
+| **Phase 5** | ✅ COMPLETE | 100% | AI virtual try-on microservice (`services/fashionsaas-tryon`) + storefront Try It On UI |
+| **Phase 6** | ✅ COMPLETE | 100% | AI body measurement + fashion chatbot |
+| **Phase 7** | ✅ COMPLETE | 100% | SignalR real-time + notifications |
+| **Phase 8** | ✅ COMPLETE | 100% | Dockerfiles, docker-compose, GitHub Actions CI, Azure Bicep |
+| **Phase 9a** | ✅ COMPLETE | 100% | Order payment proof (card fields removed, proof upload + review) |
+| Free HF try-on | 🔬 ON BRANCH | code complete | Replaces Gemini image gen with a free Hugging Face Space; async submit → poll → Service Bus → SignalR. **Not merged** — awaiting a real Space for live verification |
+
+### Current test counts (measured 2026-08-15)
+
+| Suite | Result |
+|---|---|
+| Main API (`FashionSaaS.sln`) | 579/579 passing · build 0 warnings / 0 errors |
+| Try-on service (`FashionSaaS.TryOn.sln`) | 88/88 passing · build 0 warnings / 0 errors |
+| Storefront (Angular, vitest) | 890 passing / 5 failing — the 5 are pre-existing test-authoring bugs in `account.service.spec.ts` and `product.service.spec.ts` (wrong response envelope in the test, not the service) |
 
 ---
 
@@ -103,29 +124,26 @@
 
 ---
 
-## Phase 3: Customer Storefront (Angular 20) 📋 PLANNED
+## Phase 3: Customer Storefront (Angular) ✅ COMPLETE
 
-**Estimated Start:** 2026-07-01  
-**Estimated Duration:** 6-8 weeks  
-**Scope:** Frontend web application for customers to browse, search, add to cart, checkout
+**Plan:** `docs/superpowers/plans/2026-07-01-phase3-customer-storefront.md`  
+**Location:** `fashionsaas-storefront/` (nested repo, tracked from the root as a gitlink)  
+**Scope:** Customer-facing web app — browse, search, cart, checkout, account
 
-### Planning Status:
-- 📋 Implementation plan created (see docs/superpowers/plans/2026-07-01-phase3-customer-storefront.md)
-- 📋 Technology stack finalized (Angular 20, TypeScript, RxJS, Bootstrap 5)
-- 📋 API contract defined (consumption of Phase 2 REST endpoints)
-- 📋 UI/UX wireframes pending
-- 📋 Task breakdown: ~25-30 tasks estimated
+### Implemented (verified on disk, `src/app/features/`):
+- ✅ `auth` — customer registration and login
+- ✅ `catalog` — product list, search/filter, product detail (incl. Try It On, Find My Size)
+- ✅ `cart` — cart management
+- ✅ `checkout` — checkout flow (payment proof upload since Phase 9a)
+- ✅ `account` — order history, wishlist, account settings
+- ✅ `chat` — fashion chatbot surface (Phase 6)
+- ✅ Zoneless change detection (`provideZonelessChangeDetection()`), standalone components
+- ✅ SignalR notification client (`core/services/notification-hub.service.ts`, Phase 7)
 
-### Key Features (Planned):
-- Customer registration and login
-- Browse product catalog
-- Advanced search and filtering
-- Shopping cart management
-- Checkout and payment integration
-- Order history and tracking
-- Account settings and wishlist management
-- Product reviews and ratings
-- Responsive design (mobile-first)
+### Known issues:
+- 5 pre-existing spec failures (`account.service.spec.ts`, `product.service.spec.ts`) — the tests
+  flush the wrong response envelope shape; the services are correct. Whole-suite compilation was
+  itself broken until 2026-08-15 by stale `Product.tags` / `WishlistItem` fixtures, now repaired.
 
 ---
 
@@ -238,33 +256,50 @@
 
 ## Next Steps
 
-### Immediate (End of Day 2026-06-30):
-1. ✅ Mappster migration complete and code review passed
-2. ✅ Phase 2 backend merged to main
-3. 📋 Update all memory files with current progress
-4. 📋 Create Phase 3 implementation plan
+### Blocked on Dan (free Hugging Face try-on, branch `worktree-tryon-huggingface`):
+1. Create a Hugging Face account and **duplicate a virtual try-on Space** (e.g. Kolors-Virtual-Try-On)
+2. Fill in `HuggingFaceSettings:SpaceUrl` + `ApiToken` in the try-on service's dev config
+3. Confirm the Space's real API shape against its "Use via API" panel — the Gradio protocol in
+   `HuggingFaceTryOnClient` (upload → `/call/{api_name}` → SSE poll) is **written but unverified**,
+   deliberately isolated so only that one class should need changing
+4. Then: live end-to-end run (submit → processing → SignalR push → result renders)
 
-### Week of 2026-07-01:
-1. Create Angular 20 project scaffolding
-2. Set up development environment (Node.js, npm, Angular CLI)
-3. Configure API consumption layer (HttpClient, services)
-4. Begin UI/UX design and component library
-5. Start Phase 3 Task 1: Project scaffolding and authentication flow
+### Open engineering items (deferred, not blockers):
+- `infra/modules/containerApps.bicep` `minReplicas: 0` — scale-to-zero can stop the polling worker
+  mid-render; cold start then force-fails those renders as "timed out". Needs a scaling decision.
+- Commit-then-publish in `TryOnPollingWorker`: the event publisher swallows all exceptions by
+  contract, so a crash between `SaveChangesAsync` and publish loses the notification. The row stays
+  terminal and readable via `GET api/tryon/{id}`. A proper fix needs an outbox or reconciliation.
+- A missed SignalR push leaves the try-on UI waiting with no fallback poll, and a result that lands
+  while the customer is off the product page is dropped.
+- `TryOnRequests` has no index supporting the 15-second `WHERE Status = Processing` poll (the
+  existing index leads with `TenantId`). Wants a migration plus a real query-plan measurement.
+- 5 pre-existing storefront spec failures (see Phase 3 known issues).
+- Repo-wide `IDE1006` on `private static readonly` PascalCase fields: the `.editorconfig` naming
+  rule doesn't carve out `static readonly`, so it flags the established convention (9+ existing
+  sites, e.g. `GlobalExceptionHandler.JsonOptions`). Config/convention mismatch, not code defects.
 
 ### Ongoing:
-- Code review all Phase 3 PRs
-- Maintain test coverage (target: 80%+ for Phase 3)
-- Document Angular patterns and conventions
-- Prepare Phase 4 planning document
+- Keep this file in sync with git — it went ~7 phases stale between 2026-06-30 and 2026-08-15
+- Verification gate for any `.cs` change: `dotnet build` (warnings-as-errors) **and** Serena
+  `get_diagnostics_for_file` (`min_severity: 2`) — build alone misses IDE naming rules
 
 ---
 
 ## Key Contacts & Documentation
 
-### Planning Documents:
+### Planning Documents (`docs/superpowers/plans/`, one per phase):
 - Phase 1 Spec: `docs/superpowers/specs/2026-06-18-phase1-core-saas-backend-design.md`
 - Phase 2 Spec: `docs/superpowers/specs/2026-06-24-phase2-product-catalog-backend-design.md`
-- Phase 3 Plan: `docs/superpowers/plans/2026-07-01-phase3-customer-storefront.md`
+- Phase 3: `2026-07-01-phase3-customer-storefront.md`
+- Phase 4a: `2026-07-02-phase4a-orders-reporting-backend.md`
+- Phase 4b: `2026-07-04-phase4b-admin-area.md`
+- Phase 6: `2026-07-18-phase6-ai-measurement-chatbot.md`
+- Phase 7: `2026-07-18-phase7-signalr-notifications.md`
+- Phase 8: `2026-07-18-phase8-docker-ci-azure.md`
+- Phase 9a: `2026-07-25-phase9a-order-payment-proof.md`
+- Free HF try-on: `2026-07-26-tryon-free-huggingface.md`
+  (spec: `docs/superpowers/specs/2026-07-26-tryon-free-huggingface-design.md`)
 
 ### Implementation Guides:
 - .NET Conventions: `memory/dotnet-conventions.md`
@@ -277,6 +312,8 @@
 
 ---
 
-**Last Updated:** 2026-06-30 16:30 UTC  
+**Last Updated:** 2026-08-15  
 **Prepared By:** Claude (Senior Developer + QA Engineer)  
-**Status:** Ready for Phase 3 Implementation
+**Status:** All 8 phases + 9a shipped. Free-Hugging-Face try-on is code-complete on
+`worktree-tryon-huggingface` (unmerged) and blocked only on a real Hugging Face Space for live
+verification — see "Blocked on Dan" above.
