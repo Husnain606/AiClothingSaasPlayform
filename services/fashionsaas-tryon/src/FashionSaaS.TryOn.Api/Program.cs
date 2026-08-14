@@ -3,6 +3,7 @@ using FashionSaaS.TryOn.Application.HuggingFace;
 using FashionSaaS.TryOn.Infrastructure;
 using FashionSaaS.TryOn.Infrastructure.BackgroundJobs;
 using FashionSaaS.TryOn.Infrastructure.HuggingFace;
+using FashionSaaS.TryOn.Infrastructure.TryOn;
 using FluentValidation;
 using FluentValidation.AspNetCore;
 using Microsoft.Extensions.Options;
@@ -42,7 +43,14 @@ builder.Services.AddHttpClient<IHuggingFaceTryOnClient, HuggingFaceTryOnClient>(
 
 builder.Services.AddHostedService<TryOnPollingWorker>();
 
-builder.Services.AddHttpClient(); // plain named client for the garment-image GET (TryOnService's IHttpClientFactory.CreateClient())
+// Garment-image fetch. Redirects are DISABLED deliberately: the host allowlist
+// (TryOnRequestFormValidator) only vets the URL as submitted, so following a redirect would let an
+// open redirect on an allowlisted host walk this server onto an internal address. With
+// AllowAutoRedirect off a 3xx fails EnsureSuccessStatusCode and is recorded as a fetch failure.
+builder.Services.AddHttpClient(TryOnService.GarmentHttpClientName)
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+
+builder.Services.AddHttpClient();
 
 builder.Services.AddFluentValidationAutoValidation();
 builder.Services.AddValidatorsFromAssembly(typeof(FashionSaaS.TryOn.Application.TryOn.TryOnRequestFormValidator).Assembly);

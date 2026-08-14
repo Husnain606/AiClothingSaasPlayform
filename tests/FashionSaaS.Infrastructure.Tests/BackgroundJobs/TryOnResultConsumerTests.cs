@@ -80,9 +80,14 @@ public class TryOnResultConsumerTests
             settings);
     }
 
-    // Mirrors ServiceBusTryOnEventPublisher's plain JsonSerializer.Serialize(@event) — no naming
-    // policy, so the wire format is PascalCase. Keeping this shape in the test is what proves the
-    // two independently-deployed services still agree on the contract.
+    // Mirrors ServiceBusTryOnEventPublisher's plain JsonSerializer.Serialize(@event) - no naming
+    // policy, so the wire format is PascalCase.
+    //
+    // NOTE, honestly: this pins down what THIS service accepts; it does NOT prove the try-on
+    // service still sends it. The two live in separate solutions with no shared assembly, so if
+    // TryOnResultEvent changes there, nothing here fails - the payload just stops deserializing at
+    // runtime. Deserialization is case-insensitive, which absorbs casing drift but not renames.
+    // A real guard would need a shared contract package or a cross-service integration test.
     private static ServiceBusReceivedMessage BuildMessage(object payload) =>
         ServiceBusModelFactory.ServiceBusReceivedMessage(
             BinaryData.FromBytes(JsonSerializer.SerializeToUtf8Bytes(payload)));

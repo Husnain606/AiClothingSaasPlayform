@@ -17,7 +17,8 @@
                 "Properties": {
                   "DefaultMessageTimeToLive": "PT1H",
                   "LockDuration": "PT30S",
-                  "MaxDeliveryCount": 5
+                  "MaxDeliveryCount": 5,
+                  "DeadLetteringOnMessageExpiration": true
                 }
               }
             ]

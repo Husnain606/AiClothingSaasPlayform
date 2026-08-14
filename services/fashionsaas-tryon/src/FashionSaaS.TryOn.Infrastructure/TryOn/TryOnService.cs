@@ -29,6 +29,15 @@ public class TryOnService(
     // to the server-side garment-image fetch so a malicious/misbehaving host can't force an unbounded download.
     private const long MaxGarmentImageBytes = 15_000_000;
 
+    /// <summary>
+    /// Named client for the garment-image fetch, registered with redirects DISABLED (see Program.cs).
+    /// TryOnRequestFormValidator only allowlists the host of the URL as submitted; with the default
+    /// redirect-following client, an open redirect on an allowlisted host would let that check be
+    /// bypassed and send this server anywhere - cloud metadata (169.254.169.254), localhost, internal
+    /// services. Refusing to follow redirects keeps the allowlisted host the ONLY host contacted.
+    /// </summary>
+    public const string GarmentHttpClientName = "garment-image";
+
     public async Task<(bool IsSuccess, int StatusCode, string Message, TryOnSubmittedResponse? Data)> SubmitAsync(
         TryOnRequestForm form, CancellationToken cancellationToken)
     {
@@ -52,7 +61,7 @@ public class TryOnService(
         byte[] garmentBytes;
         try
         {
-            using HttpClient httpClient = httpClientFactory.CreateClient();
+            using HttpClient httpClient = httpClientFactory.CreateClient(GarmentHttpClientName);
             using HttpResponseMessage garmentResponse = await httpClient
                 .GetAsync(new Uri(form.GarmentImageUrl), HttpCompletionOption.ResponseHeadersRead, cancellationToken)
                 .ConfigureAwait(false);

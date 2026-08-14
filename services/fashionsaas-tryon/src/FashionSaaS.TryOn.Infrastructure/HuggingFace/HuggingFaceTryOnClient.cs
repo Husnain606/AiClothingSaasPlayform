@@ -98,6 +98,19 @@ public class HuggingFaceTryOnClient : IHuggingFaceTryOnClient
                     {
                         using var doc = JsonDocument.Parse(data);
                         var resultUrl = doc.RootElement[0].GetProperty("path").GetString();
+
+                        // Gradio's `path` is not guaranteed to be an absolute URL - it can be a
+                        // server-side file path. The storefront binds this straight into <img [src]>,
+                        // where a relative value would silently resolve against the STOREFRONT's
+                        // origin and render a broken image. Only accept an absolute http(s) URL.
+                        if (!Uri.TryCreate(resultUrl, UriKind.Absolute, out Uri? parsed)
+                            || (!string.Equals(parsed.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal)
+                                && !string.Equals(parsed.Scheme, Uri.UriSchemeHttp, StringComparison.Ordinal)))
+                        {
+                            return new HuggingFaceJobResult(HuggingFaceJobState.Failed, null,
+                                $"Hugging Face returned a result path that is not an absolute http(s) URL: '{resultUrl}'");
+                        }
+
                         return new HuggingFaceJobResult(HuggingFaceJobState.Complete, resultUrl, null);
                     }
 
@@ -110,7 +123,11 @@ public class HuggingFaceTryOnClient : IHuggingFaceTryOnClient
 
             return new HuggingFaceJobResult(HuggingFaceJobState.Pending, null, null);
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException)
+        // `ct.IsCancellationRequested` excluded deliberately: on shutdown the caller's token is what
+        // cancelled us, and swallowing that as "Pending" would hide a real cancellation from the
+        // worker and keep it looping. Only a timeout/transport failure counts as retryable here.
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException
+                                   && !ct.IsCancellationRequested)
         {
             _logger.LogWarning(ex, "Transient error polling Hugging Face job {JobId}; will retry", jobId);
             return new HuggingFaceJobResult(HuggingFaceJobState.Pending, null, null);
