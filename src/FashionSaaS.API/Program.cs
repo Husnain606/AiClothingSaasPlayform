@@ -46,8 +46,16 @@ builder.Services.AddApplicationServices();
 // JWT bearer auth (HS256)
 builder.Services.AddJwtAuthentication(builder.Configuration);
 
-// SignalR (real-time notifications hub) — in-framework, no new server NuGet package
-builder.Services.AddSignalR();
+// SignalR (real-time notifications hub) — in-framework, no new server NuGet package.
+// JsonStringEnumConverter must be registered SEPARATELY here: hub payloads are serialized by
+// JsonHubProtocolOptions.PayloadSerializerOptions, which AddControllers().AddJsonOptions(...)
+// below does NOT touch. Without it a pushed Notification serializes Type numerically ("type":5),
+// while every storefront consumer compares it against string names ('TryOnCompleted',
+// 'OrderStatusChanged', ...) — so those comparisons silently never match and the UI waits forever.
+// Locked by NotificationPushContractTests.
+builder.Services.AddSignalR()
+    .AddJsonProtocol(options =>
+        options.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
 // Try-on results consumer: reads the try-on microservice's TryOnResultEvent off Service Bus and
 // turns it into a Notification + live push. Registered here rather than in AddInfrastructure
