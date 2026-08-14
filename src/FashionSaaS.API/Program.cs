@@ -127,6 +127,16 @@ builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new() { Title = "FashionSaaS API", Version = "v1" });
 
+    // Swashbuckle keys schemas by SHORT type name by default, so two nested request types with the
+    // same name collide and abort generation for the whole document — `/swagger/v1/swagger.json`
+    // then returns 500 and Swagger UI is entirely unusable. That was live: both
+    // Tenant.TenantMfaController+VerifySetupRequest and Admin.MfaController+VerifySetupRequest are
+    // called VerifySetupRequest. Qualifying nested types with their declaring type keeps ids
+    // readable (TenantMfaControllerVerifySetupRequest) while making collisions impossible.
+    c.CustomSchemaIds(type => type.DeclaringType is null
+        ? type.Name
+        : $"{type.DeclaringType.Name}{type.Name}");
+
     // Swashbuckle 10 / OpenApi 2.x: AddSecurityDefinition takes IOpenApiSecurityScheme
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
