@@ -63,7 +63,25 @@ public class TryOnResultConsumer(
             return Task.CompletedTask;
         };
 
-        await processor.StartProcessingAsync(stoppingToken);
+        // A BackgroundService whose ExecuteAsync throws takes the WHOLE HOST down: HostOptions
+        // .BackgroundServiceExceptionBehavior defaults to StopHost and this app does not override it.
+        // StartProcessingAsync does network I/O, so an unreachable broker (emulator not running
+        // locally, transient Azure fault) would otherwise kill the entire storefront API. Try-on
+        // result notifications are a side-channel: losing them must degrade this one feature, not
+        // the API. The result row is still persisted and readable via GET /api/tryon/{id}.
+#pragma warning disable CA1031
+        try
+        {
+            await processor.StartProcessingAsync(stoppingToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "TryOnResultConsumer could not start processing {Topic}/{Subscription}; try-on result notifications are disabled for this process",
+                config.TopicName, config.SubscriptionName);
+            return;
+        }
+#pragma warning restore CA1031
 
         try
         {

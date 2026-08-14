@@ -4,8 +4,12 @@
 //   - DefaultMessageTimeToLive: PT1H
 //   - DuplicateDetectionHistoryTimeWindow: PT20S
 //   - RequiresDuplicateDetection: false
-//   - No subscriptions — publish-only (D10 locked decision: the try-on service only ever
-//     publishes to this topic; consumers, if any are added later, own their own subscription).
+//   - main-api-tryon-results subscription — the main API's TryOnResultConsumer. D10's original
+//     "publish-only, no subscriptions" decision anticipated this ("consumers, if any are added
+//     later, own their own subscription"); the free-Hugging-Face async try-on flow added that
+//     consumer. This is NOT optional: an Azure Service Bus topic with no subscription DISCARDS
+//     every message, so without it every TryOnResultEvent would vanish in production and the
+//     consumer could never attach.
 //
 // API version note: 2021-11-01 is a stable (non-preview) Microsoft.ServiceBus version I'm
 // confident is valid. Not compiled in this environment — verify against current docs before
@@ -37,6 +41,19 @@ resource topic 'Microsoft.ServiceBus/namespaces/topics@2021-11-01' = {
     defaultMessageTimeToLive: 'PT1H'
     duplicateDetectionHistoryTimeWindow: 'PT20S'
     requiresDuplicateDetection: false
+  }
+}
+
+// Mirrors the local emulator's subscription (servicebus-emulator-config.json) so dev and Azure
+// agree on the name the main API binds to (ServiceBusSettings.SubscriptionName).
+resource mainApiSubscription 'Microsoft.ServiceBus/namespaces/topics/subscriptions@2021-11-01' = {
+  parent: topic
+  name: 'main-api-tryon-results'
+  properties: {
+    defaultMessageTimeToLive: 'PT1H'
+    lockDuration: 'PT30S'
+    maxDeliveryCount: 5
+    deadLetteringOnMessageExpiration: true
   }
 }
 
