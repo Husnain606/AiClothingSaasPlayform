@@ -52,31 +52,64 @@ public class TryOnPollingWorker(
 
         List<TryOnRequest> processing = await dbContext.TryOnRequests
             .Where(t => t.Status == TryOnStatus.Processing)
-            .ToListAsync(ct);
+            .ToListAsync(ct).ConfigureAwait(false);
 
         foreach (TryOnRequest request in processing)
         {
-            if (DateTime.UtcNow - request.CreatedAt > ProcessingTimeout)
+            // Per-job isolation: without it, ONE job throwing (e.g. a Space returning a body
+            // PollAsync can't parse) would abort the whole tick, so every other job in the batch
+            // went unpolled - every tick - and eventually got force-failed as "timed out" despite
+            // having rendered fine. One bad job must not starve the rest.
+#pragma warning disable CA1031
+            try
             {
-                await FailAsync(dbContext, eventPublisher, request, "Try-on render timed out.", ct);
-                continue;
+                await PollOneAsync(dbContext, huggingFaceClient, eventPublisher, request, ct).ConfigureAwait(false);
             }
-
-            HuggingFaceJobResult result = await huggingFaceClient.PollAsync(request.ExternalJobId!, ct);
-
-            switch (result.State)
+            catch (OperationCanceledException)
             {
-                case HuggingFaceJobState.Complete:
-                    await CompleteAsync(dbContext, eventPublisher, request, result.ResultImageUrl!, ct);
-                    break;
-                case HuggingFaceJobState.Failed:
-                    await FailAsync(dbContext, eventPublisher, request, result.ErrorMessage ?? "Hugging Face render failed.", ct);
-                    break;
-                case HuggingFaceJobState.Pending:
-                    break; // leave it Processing, try again next tick
-                default:
-                    throw new InvalidOperationException($"Unknown HuggingFaceJobState: {result.State}");
+                throw;
             }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to poll try-on request {TryOnRequestId}; other requests continue", request.Id);
+            }
+#pragma warning restore CA1031
+        }
+    }
+
+    private static async Task PollOneAsync(
+        TryOnDbContext dbContext,
+        IHuggingFaceTryOnClient huggingFaceClient,
+        ITryOnEventPublisher eventPublisher,
+        TryOnRequest request,
+        CancellationToken ct)
+    {
+        if (DateTime.UtcNow - request.CreatedAt > ProcessingTimeout)
+        {
+            await FailAsync(dbContext, eventPublisher, request, "Try-on render timed out.", ct);
+            return;
+        }
+
+        HuggingFaceJobResult result = await huggingFaceClient.PollAsync(request.ExternalJobId!, ct);
+
+        switch (result.State)
+        {
+            // A Complete carrying no path is not a success: storing a null ResultImageUrl while
+            // publishing IsSuccess:true would leave the row self-contradictory and give the
+            // storefront a "Completed" render with nothing to show.
+            case HuggingFaceJobState.Complete when !string.IsNullOrWhiteSpace(result.ResultImageUrl):
+                await CompleteAsync(dbContext, eventPublisher, request, result.ResultImageUrl, ct);
+                break;
+            case HuggingFaceJobState.Complete:
+                await FailAsync(dbContext, eventPublisher, request, "Hugging Face reported completion without a result image.", ct);
+                break;
+            case HuggingFaceJobState.Failed:
+                await FailAsync(dbContext, eventPublisher, request, result.ErrorMessage ?? "Hugging Face render failed.", ct);
+                break;
+            case HuggingFaceJobState.Pending:
+                break; // leave it Processing, try again next tick
+            default:
+                throw new InvalidOperationException($"Unknown HuggingFaceJobState: {result.State}");
         }
     }
 
@@ -85,12 +118,15 @@ public class TryOnPollingWorker(
     {
         request.Status = TryOnStatus.Completed;
         request.ResultImageUrl = resultImageUrl;
-        await dbContext.SaveChangesAsync(ct);
+        // Resolution now happens minutes after creation, so UpdatedAt is the only record of WHEN
+        // the render actually finished; BaseEntity only stamps it at construction.
+        request.UpdatedAt = DateTime.UtcNow;
+        await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
 
         await eventPublisher.PublishAsync(
             new TryOnResultEvent(request.Id, request.TenantId, request.CustomerId, request.ProductId, request.CreatedAt,
                 IsSuccess: true, resultImageUrl, FailureReason: null),
-            ct);
+            ct).ConfigureAwait(false);
     }
 
     private static async Task FailAsync(TryOnDbContext dbContext, ITryOnEventPublisher eventPublisher,
@@ -100,11 +136,12 @@ public class TryOnPollingWorker(
         // Same 500-char cap as TryOnService.RecordFailureAsync - an upstream error body here can
         // be arbitrarily long and would otherwise crash this exact SaveChangesAsync call.
         request.FailureReason = reason is { Length: > 500 } ? reason[..500] : reason;
-        await dbContext.SaveChangesAsync(ct);
+        request.UpdatedAt = DateTime.UtcNow;
+        await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
 
         await eventPublisher.PublishAsync(
             new TryOnResultEvent(request.Id, request.TenantId, request.CustomerId, request.ProductId, request.CreatedAt,
                 IsSuccess: false, ResultImageUrl: null, request.FailureReason),
-            ct);
+            ct).ConfigureAwait(false);
     }
 }

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FashionSaaS.TryOn.Application.HuggingFace;
 using FashionSaaS.TryOn.Application.Messaging;
 using FashionSaaS.TryOn.Domain;
@@ -145,6 +146,80 @@ public class TryOnPollingWorkerTests
         reloaded.FailureReason.Should().Be("Try-on render timed out.");
 
         _eventPublisher.Verify(p => p.PublishAsync(It.Is<TryOnResultEvent>(e => !e.IsSuccess), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RunOnceAsync_CompleteWithoutResultUrl_IsTreatedAsFailureNotSuccess()
+    {
+        (TryOnDbContext dbContext, IServiceScopeFactory scopeFactory) = CreateScopedDbContext();
+        var request = new TryOnRequest { TenantId = Guid.NewGuid(), CustomerId = Guid.NewGuid(), Status = TryOnStatus.Processing, ExternalJobId = "evt-6" };
+        dbContext.TryOnRequests.Add(request);
+        await dbContext.SaveChangesAsync();
+
+        _huggingFace.Setup(h => h.PollAsync("evt-6", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new HuggingFaceJobResult(HuggingFaceJobState.Complete, null, null));
+
+        using TryOnPollingWorker worker = new(scopeFactory, NullLogger<TryOnPollingWorker>.Instance);
+        await worker.RunOnceAsync(CancellationToken.None);
+
+        TryOnRequest reloaded = await dbContext.TryOnRequests.AsNoTracking().SingleAsync(t => t.Id == request.Id);
+        reloaded.Status.Should().Be(TryOnStatus.Failed, "a completion with no image is not a usable result");
+        reloaded.ResultImageUrl.Should().BeNull();
+
+        _eventPublisher.Verify(p => p.PublishAsync(It.Is<TryOnResultEvent>(e => !e.IsSuccess), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RunOnceAsync_OneJobThrows_StillPollsTheOthers()
+    {
+        (TryOnDbContext dbContext, IServiceScopeFactory scopeFactory) = CreateScopedDbContext();
+        var bad = new TryOnRequest { TenantId = Guid.NewGuid(), CustomerId = Guid.NewGuid(), Status = TryOnStatus.Processing, ExternalJobId = "evt-bad" };
+        var good = new TryOnRequest { TenantId = Guid.NewGuid(), CustomerId = Guid.NewGuid(), Status = TryOnStatus.Processing, ExternalJobId = "evt-good" };
+        dbContext.TryOnRequests.AddRange(bad, good);
+        await dbContext.SaveChangesAsync();
+
+        _huggingFace.Setup(h => h.PollAsync("evt-bad", It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new JsonException("unparseable Space response"));
+        _huggingFace.Setup(h => h.PollAsync("evt-good", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new HuggingFaceJobResult(HuggingFaceJobState.Complete, "https://space.hf.space/file=ok.png", null));
+
+        using TryOnPollingWorker worker = new(scopeFactory, NullLogger<TryOnPollingWorker>.Instance);
+        await worker.RunOnceAsync(CancellationToken.None);
+
+        // Without per-job isolation the throwing job aborted the whole tick, so this one would
+        // still be Processing - and would eventually be force-failed as a bogus "timeout".
+        TryOnRequest reloadedGood = await dbContext.TryOnRequests.AsNoTracking().SingleAsync(t => t.Id == good.Id);
+        reloadedGood.Status.Should().Be(TryOnStatus.Completed);
+
+        TryOnRequest reloadedBad = await dbContext.TryOnRequests.AsNoTracking().SingleAsync(t => t.Id == bad.Id);
+        reloadedBad.Status.Should().Be(TryOnStatus.Processing, "a transient parse failure should be retried next tick, not marked terminal");
+    }
+
+    [Fact]
+    public async Task RunOnceAsync_TerminalTransition_StampsUpdatedAt()
+    {
+        (TryOnDbContext dbContext, IServiceScopeFactory scopeFactory) = CreateScopedDbContext();
+        DateTime createdAt = DateTime.UtcNow.AddMinutes(-3);
+        var request = new TryOnRequest
+        {
+            TenantId = Guid.NewGuid(),
+            CustomerId = Guid.NewGuid(),
+            Status = TryOnStatus.Processing,
+            ExternalJobId = "evt-7",
+            CreatedAt = createdAt,
+            UpdatedAt = createdAt
+        };
+        dbContext.TryOnRequests.Add(request);
+        await dbContext.SaveChangesAsync();
+
+        _huggingFace.Setup(h => h.PollAsync("evt-7", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new HuggingFaceJobResult(HuggingFaceJobState.Complete, "https://space.hf.space/file=r.png", null));
+
+        using TryOnPollingWorker worker = new(scopeFactory, NullLogger<TryOnPollingWorker>.Instance);
+        await worker.RunOnceAsync(CancellationToken.None);
+
+        TryOnRequest reloaded = await dbContext.TryOnRequests.AsNoTracking().SingleAsync(t => t.Id == request.Id);
+        reloaded.UpdatedAt.Should().BeAfter(createdAt, "resolution happens minutes after creation, so it needs its own timestamp");
     }
 
     [Fact]

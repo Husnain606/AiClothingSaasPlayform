@@ -60,15 +60,32 @@ builder.Services.AddSignalR()
 // Try-on results consumer: reads the try-on microservice's TryOnResultEvent off Service Bus and
 // turns it into a Notification + live push. Registered here rather than in AddInfrastructure
 // because it depends on IHubContext<NotificationsHub>, which only exists once SignalR is added.
-builder.Services.AddOptions<ServiceBusSettings>()
-    .Bind(builder.Configuration.GetSection(ServiceBusSettings.SectionName))
-    .ValidateDataAnnotations()
-    .ValidateOnStart();
+// Registered ONLY when a connection string is actually configured. Consuming try-on results is a
+// side-channel: the render is already persisted and readable via GET /api/tryon/{id}, so a missing
+// or unset Service Bus config must disable this one feature - never stop the whole storefront API
+// from booting. Binding it unconditionally with [Required] + ValidateOnStart() would do exactly
+// that, and infra/modules/containerApps.bicep injects no ServiceBus env var into the api container.
+var serviceBusConnectionString = builder.Configuration
+    .GetSection(ServiceBusSettings.SectionName)[nameof(ServiceBusSettings.ConnectionString)];
 
-builder.Services.AddSingleton(sp =>
-    new ServiceBusClient(sp.GetRequiredService<IOptions<ServiceBusSettings>>().Value.ConnectionString));
+if (string.IsNullOrWhiteSpace(serviceBusConnectionString))
+{
+    Log.Warning(
+        "{Section}:{Key} is not configured - live try-on result notifications are disabled. Results remain available via GET api/tryon/{{id}}.",
+        ServiceBusSettings.SectionName, nameof(ServiceBusSettings.ConnectionString));
+}
+else
+{
+    builder.Services.AddOptions<ServiceBusSettings>()
+        .Bind(builder.Configuration.GetSection(ServiceBusSettings.SectionName))
+        .ValidateDataAnnotations()
+        .ValidateOnStart();
 
-builder.Services.AddHostedService<TryOnResultConsumer>();
+    builder.Services.AddSingleton(sp =>
+        new ServiceBusClient(sp.GetRequiredService<IOptions<ServiceBusSettings>>().Value.ConnectionString));
+
+    builder.Services.AddHostedService<TryOnResultConsumer>();
+}
 
 // Authorization policies — MfaVerified requires mfa_verified=true claim in JWT
 builder.Services.AddAuthorization(options =>

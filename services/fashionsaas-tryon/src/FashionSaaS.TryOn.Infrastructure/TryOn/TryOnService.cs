@@ -128,12 +128,19 @@ public class TryOnService(
     public async Task<(bool IsSuccess, int StatusCode, string Message, TryOnStatusResponse? Data)> GetStatusAsync(
         Guid requestId, CancellationToken cancellationToken)
     {
+        // Tenant/customer scoping belongs in the SQL predicate, not a post-fetch check: this
+        // DbContext has no global tenant query filter, so filtering in memory would mean another
+        // tenant's row is actually read out of the database before being rejected. Composed here so
+        // the query can only ever return a row this caller owns (fail closed).
         TryOnRequest? request = await dbContext.TryOnRequests
             .AsNoTracking()
-            .FirstOrDefaultAsync(r => r.Id == requestId, cancellationToken)
+            .Where(r => r.Id == requestId
+                        && r.TenantId == currentContext.TenantId
+                        && r.CustomerId == currentContext.CustomerId)
+            .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        if (request is null || request.TenantId != currentContext.TenantId || request.CustomerId != currentContext.CustomerId)
+        if (request is null)
         {
             return (false, 404, "Try-on request not found.", null);
         }
